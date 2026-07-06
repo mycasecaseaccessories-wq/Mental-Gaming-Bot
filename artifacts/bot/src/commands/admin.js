@@ -21,10 +21,11 @@ const os = require('os');
 const GUIDE_INTRO =
   `📖 *Admin Guide — Mental Gaming Store*\n` +
   `━━━━━━━━━━━━━━━━━━━━━\n` +
-  `_အကန့်တစ်ခုချင်း button နှိပ်ပြီး ရှင်းလင်းချက် ဖတ်ပါ။_\n\n` +
+  `_အကန့်တစ်ခုချင်း button နှိပ်ပြီး ရှင်းလင်းချက် + 🎬 လက်တွေ့ ဥပမာ ဖတ်ပါ။_\n\n` +
   `👑 *Owner* — အားလုံး ထိန်းချုပ်\n` +
   `🧑‍💼 *Manager* — analytics, product, rate, broadcast\n` +
-  `🧑‍🔧 *Staff* — order, support ticket`;
+  `🧑‍🔧 *Staff* — order, support ticket\n\n` +
+  `💡 အကန့်တိုင်းမှာ *🎬 ဥပမာ* — ဘယ် button/command နှိပ် → ဘာဖြစ်မယ် ဆိုတာ အဆင့်လိုက် ပြထားပါတယ်။`;
 
 const GUIDE_SECTIONS = [
   {
@@ -36,6 +37,10 @@ const GUIDE_SECTIONS = [
       `👑 *Owner* — အရာအားလုံး\n` +
       `🧑‍💼 *Manager* — product, rate, analytics, broadcast\n` +
       `🧑‍🔧 *Staff* — order စီမံ, support ticket\n\n` +
+      `🎬 *ဥပမာ — Admin Panel ဖွင့်နည်း:*\n` +
+      `1️⃣ chat ထဲ \`/admin\` ရိုက် (သို့) အောက်က ⌨️ menu က *🔧 Admin Panel* နှိပ်\n` +
+      `2️⃣ → Pending order / active product / user အရေအတွက် ပါတဲ့ panel ပေါ်လာမယ်\n` +
+      `3️⃣ လိုချင်တဲ့ အကန့် button (📦 Orders / 🛍️ Products…) ဆက်နှိပ်\n\n` +
       `_ဒီ Guide ထဲက အကန့်တစ်ခုချင်း ရွေးဖတ်နိုင်ပါတယ်။_`,
   },
   {
@@ -46,7 +51,11 @@ const GUIDE_SECTIONS = [
       `• Pending / Processing order အရေအတွက်\n` +
       `• Active product, စုစုပေါင်း user\n` +
       `• Payment gateway အခြေအနေ panel\n\n` +
-      `နေ့စဉ် ပထမဆုံး ဝင်ကြည့်သင့်တဲ့ နေရာ။`,
+      `🎬 *ဥပမာ — ဒီနေ့ အခြေအနေ စစ်နည်း:*\n` +
+      `1️⃣ \`/dashboard\` ရိုက် (သို့ menu → *📊 Dashboard*)\n` +
+      `2️⃣ → "Pending: 3 | Processing: 1 | Users: 250" စတဲ့ live card ပေါ်မယ်\n` +
+      `3️⃣ Pending အရေအတွက် ရှိရင် → *📦 Manage Orders* သွားပြီး ဆက်ကိုင်\n\n` +
+      `_နေ့စဉ် ပထမဆုံး ဝင်ကြည့်သင့်တဲ့ နေရာ။_`,
   },
   {
     key: 'orders', label: '📦 Manage Orders',
@@ -57,7 +66,13 @@ const GUIDE_SECTIONS = [
       `• ✅ *Complete* → delivery receipt ပို့\n` +
       `• ❌ *Cancel & Refund* → wallet ပြန်အမ်း + အကြောင်းပြ\n` +
       `• ကြာနေတဲ့ order (default ၃၀ မိနစ်) → support alert\n\n` +
-      `Order တစ်ခုချင်းအတွက် status thread ကို ဝယ်သူ chat ထဲ auto ဖန်တီးပေးတယ်။`,
+      `🎬 *ဥပမာ — order တစ်ခု ပြီးအောင် ကိုင်နည်း:*\n` +
+      `1️⃣ ဝယ်သူ order တင်ပြီး → menu က *📦 Manage Orders* နှိပ်\n` +
+      `2️⃣ Pending order ကို နှိပ် → အသေးစိတ် (Game ID, ပမာဏ) ပေါ်မယ်\n` +
+      `3️⃣ *🔄 Processing* နှိပ် → ဝယ်သူ chat ထဲ "🔄 လုပ်ဆောင်နေပါပြီ" auto ရောက်\n` +
+      `4️⃣ ဂိမ်းထဲ ဖြည့်ပြီးရင် *✅ Complete* နှိပ် → ဝယ်သူဆီ delivery receipt + timeline ရောက်\n` +
+      `❌ *ပြဿနာရှိရင်:* *Cancel & Refund* နှိပ် → အကြောင်းရိုက်ထည့် → ဝယ်သူ wallet ကို ငွေ auto ပြန်ဝင်\n\n` +
+      `_Order တစ်ခုချင်းအတွက် status thread ကို ဝယ်သူ chat ထဲ auto ဖန်တီးပေးတယ်။_`,
   },
   {
     key: 'products', label: '🛍️ Manage Products',
@@ -67,7 +82,14 @@ const GUIDE_SECTIONS = [
       `• ➕ *Add Product* — တစ်ခုချင်း အသစ် (category → နာမည် → စျေး…)\n` +
       `• 📦 *Bulk Import* — အများကြီး တစ်ခါတည်း (template သို့ ကိုယ့် list \`နာမည် - စျေး\` paste)\n` +
       `• ⚡ *Flash Sale* — အချိန်ကန့် စျေးလျှော့\n` +
-      `• 🎁 *Add Codes* — gift card / account code သိမ်း (auto delivery)`,
+      `• 🎁 *Add Codes* — gift card / account code သိမ်း (auto delivery)\n\n` +
+      `🎬 *ဥပမာ ၁ — product အသစ် ထည့်နည်း:*\n` +
+      `1️⃣ menu → *🛍️ Manage Products* → *➕ Add Product* နှိပ်\n` +
+      `2️⃣ category ရွေး (ဥပမာ "MLBB Diamonds") → နာမည်ရိုက် ("86 💎") → စျေးရိုက် ("4500")\n` +
+      `3️⃣ → product က shop ထဲ ချက်ချင်း ပေါ်လာမယ်\n\n` +
+      `🎬 *ဥပမာ ၂ — Flash Sale ဖွင့်နည်း:*\n` +
+      `1️⃣ *⚡ Flash Sale* နှိပ် → product ရွေး → လျှော့စျေး + ကြာချိန် ထည့်\n` +
+      `2️⃣ → ဝယ်သူ shop မှာ ⚡ တံဆိပ်နဲ့ လျှော့စျေး တန်းပေါ်မယ် (အချိန်ပြည့်ရင် auto ပြန်ပုံမှန်)`,
   },
   {
     key: 'catalogs', label: '📂 Catalogs (Category)',
@@ -83,6 +105,11 @@ const GUIDE_SECTIONS = [
       `• 📌 *Pin Top* — ချက်ချင်း ထိပ်ဆုံးတင်\n` +
       `• ⚡ *Quick-Setup* — checkout field (Game ID/Server ID) အမြန်ထည့်\n` +
       `• 🖼 *Set Image*, 🔀 *Toggle Active*, 🗑 *Delete*\n\n` +
+      `🎬 *ဥပမာ — category + sub-category ဖွဲ့နည်း:*\n` +
+      `1️⃣ *📂 Catalogs* → *➕ Add Catalog* → "Mobile Legends" ရိုက်\n` +
+      `2️⃣ "Mobile Legends" button နှိပ်ဝင် → *➕ Add Sub-Category* → "Diamonds" ရိုက်\n` +
+      `3️⃣ *⚡ Quick-Setup* နှိပ် → Game ID + Server ID checkout field ချက်ချင်း ထည့်\n` +
+      `4️⃣ → ဝယ်သူ shop မှာ Mobile Legends ▸ Diamonds ဖြင့် တွေ့ရမယ်\n\n` +
       `_Product ရှိမှ category က shop ထဲ ပေါ်မယ်။ အစီအစဉ်က shop chat + Open Store နှစ်ခုစလုံး သက်ရောက်တယ်။_`,
   },
   {
@@ -94,7 +121,13 @@ const GUIDE_SECTIONS = [
       `• ⚠️ *Warn* / Unwarn, 🚫 *Ban* / Unban\n` +
       `• 🔒 *Restrict* (order/topup/spin) / 🔓 Remove\n` +
       `• 💳 *Adjust Balance* — လက်ဖြင့် ငွေထည့်/နုတ် (audit ချက်ချင်း)\n` +
-      `• \`/penalize\` — fraud ဒဏ်`,
+      `• \`/penalize\` — fraud ဒဏ်\n\n` +
+      `🎬 *ဥပမာ ၁ — user ကို ငွေ ထည့်ပေးနည်း:*\n` +
+      `1️⃣ \`/users John\` ရိုက် (သို့ user ID) → user card ပေါ်မယ်\n` +
+      `2️⃣ *💳 Adjust Balance* နှိပ် → "+5000" ရိုက် → အကြောင်းရိုက်\n` +
+      `3️⃣ → user wallet ကို 5000 KS ဝင် + audit log မှာ auto မှတ်\n\n` +
+      `🎬 *ဥပမာ ၂ — မကောင်းတဲ့ user ban လုပ်နည်း:*\n` +
+      `1️⃣ \`/users <id>\` → *🚫 Ban* နှိပ် → user က bot သုံးလို့ မရတော့ (Unban နဲ့ ပြန်ဖွင့်နိုင်)`,
   },
   {
     key: 'rates', label: '💱 Manage Rates',
@@ -103,7 +136,10 @@ const GUIDE_SECTIONS = [
       `• \`/rates\` — လက်ရှိ နှုန်း ကြည့်\n` +
       `• \`/fetchrates\` — USD/CNY/THB live ဆွဲ\n` +
       `• \`/managerates\` — အားလုံး တစ်ခါတည်း approve + product အလိုက် ပြင်\n\n` +
-      `နှုန်း ပြောင်းရင် သက်ဆိုင်ရာ product စျေးတွေ auto တွက်ပေးတယ်။`,
+      `🎬 *ဥပမာ — နှုန်း update လုပ်နည်း:*\n` +
+      `1️⃣ \`/fetchrates\` ရိုက် → live USD/CNY/THB နှုန်း ဆွဲလာမယ်\n` +
+      `2️⃣ \`/managerates\` ရိုက် → နှုန်းသစ်တွေ ပြ → *✅ Approve* နှိပ်\n` +
+      `3️⃣ → အဲ့ ငွေကြေးနဲ့ ချိတ်ထားတဲ့ product စျေးတွေ auto ပြန်တွက်ပေးမယ်`,
   },
   {
     key: 'broadcast', label: '📢 Broadcast',
@@ -112,7 +148,14 @@ const GUIDE_SECTIONS = [
       `• *Broadcast* — user အားလုံး / tier အလိုက် / active (၃၀ ရက်) ဆီ message (စာ + ပုံ)\n` +
       `• \`/addchannelpost\` — channel ကို နေ့စဉ် auto post (HH:MM MMT)\n` +
       `• \`/listchannelposts\`, \`/sendchannelpost\`, \`/togglechannelpost\`, \`/delchannelpost\`\n` +
-      `• \`/setseason\` — အခါသမယ theme (Thingyan/Christmas…)`,
+      `• \`/setseason\` — အခါသမယ theme (Thingyan/Christmas…)\n\n` +
+      `🎬 *ဥပမာ ၁ — user အားလုံးဆီ message ပို့နည်း:*\n` +
+      `1️⃣ menu → *📢 Broadcast* နှိပ် → ဘယ်သူဆီပို့မလဲ ရွေး (👥 All / tier / active)\n` +
+      `2️⃣ ပို့မယ့် စာ (ဒါမှမဟုတ် ပုံ+စာ) ရိုက်ထည့် → *✅ Send* အတည်ပြု\n` +
+      `3️⃣ → ရွေးထားတဲ့ user တိုင်းဆီ တစ်ပြိုင်တည်း ရောက်မယ်\n\n` +
+      `🎬 *ဥပမာ ၂ — channel ကို နေ့စဉ် auto-post:*\n` +
+      `1️⃣ \`/addchannelpost\` → channel ရွေး → စာ ရိုက် → အချိန် "09:00" ထည့်\n` +
+      `2️⃣ → နေ့တိုင်း မနက် ၉ နာရီ (MMT) channel မှာ auto တင်ပေးမယ်`,
   },
   {
     key: 'promotions', label: '🎟 Promotions',
@@ -120,7 +163,11 @@ const GUIDE_SECTIONS = [
       `🎟 *Promotions* _(Owner)_\n\n` +
       `• \`/createpromo\` — Flat/Percent လျှော့, အနည်းဆုံး order, အသုံးအကြိမ်, သက်တမ်း\n` +
       `• \`/listpromos\`, \`/deletepromo\`\n\n` +
-      `ဝယ်သူတွေ promo code ရိုက်ထည့်ပြီး လျှော့ရနိုင်တယ်။`,
+      `🎬 *ဥပမာ — promo code ဖန်တီးနည်း:*\n` +
+      `1️⃣ \`/createpromo\` ရိုက် → code ("YKKO10") → အမျိုးအစား (Percent 10%)\n` +
+      `2️⃣ အနည်းဆုံး order (5000) + အသုံးအကြိမ် (100) + သက်တမ်း ထည့်\n` +
+      `3️⃣ → ဝယ်သူတွေ checkout မှာ "YKKO10" ရိုက်ရင် 10% လျှော့ရမယ်\n` +
+      `_(စာရင်းကြည့်: \`/listpromos\` — ဖျက်: \`/deletepromo\`)_`,
   },
   {
     key: 'rewards', label: '🎁 Rewards & Codes',
@@ -135,10 +182,15 @@ const GUIDE_SECTIONS = [
       `• *🎟 Redeem Codes* → *➕ Add Code* — ကုဒ် အသစ် (\`auto\` ရိုက်ရင် အလိုအလျောက် ထုတ်ပေး → product သို့ coupon)\n` +
       `• ကုဒ်တစ်ခုချင်းဘေးက *🔴 Off / 🟢 On* — ဖွင့်/ပိတ်\n` +
       `• *🗑* — ဖျက် (အတည်ပြုချက် တောင်းမယ်)\n\n` +
+      `🎬 *ဥပမာ ၁ — MC နဲ့ လဲလို့ရတဲ့ ဆု ထည့်နည်း:*\n` +
+      `1️⃣ *🎁 Rewards* → *🎁 Reward Items* → *➕ Add Reward*\n` +
+      `2️⃣ နာမည် ("Free 11💎") → MC စျေး (500) → အမျိုးအစား (📦 Product) ရွေး\n` +
+      `3️⃣ → ဝယ်သူ 🎁 Coin Rewards မှာ MC 500 နဲ့ လဲယူနိုင်\n\n` +
+      `🎬 *ဥပမာ ၂ — redeem code ထုတ်နည်း:*\n` +
+      `1️⃣ *🎟 Redeem Codes* → *➕ Add Code* → code မှာ \`auto\` ရိုက် (bot က code auto ထုတ်)\n` +
+      `2️⃣ → ဝယ်သူ က checkout ရဲ့ 🎟 Promo Code နေရာ (သို့) \`/redeem\` မှာ ရိုက်ထည့်ရင် ဆု ချက်ချင်းရ\n\n` +
       `ဆု ၂ မျိုး: 📦 *Product* (order auto ဖန်တီး → Manage Orders မှာ complete လုပ်) / 🎟 *Coupon* (ဝယ်သူဆီ personal code ချက်ချင်း ရောက်)။\n` +
-      `_Command အဖြစ်လည်း ရ: \`/addreward\` \`/listrewards\` \`/addcode\` \`/listcodes\`_\n` +
-      `_ဝယ်သူဘက်: menu → 🎁 Coin Rewards (သို့) \`/rewards\`, ကုဒ်အတွက် \`/redeem\`_\n` +
-      `💡 *Redeem code (coupon)* ကို ဝယ်သူက checkout ရဲ့ 🎟 Promo Code နေရာမှာ တိုက်ရိုက် ရိုက်ထည့်ရုံနဲ့ လျှော့ဈေး ချက်ချင်း ရပါတယ် (/redeem သီးသန့် သွားစရာ မလိုတော့)။`,
+      `_Command အဖြစ်လည်း ရ: \`/addreward\` \`/listrewards\` \`/addcode\` \`/listcodes\`_`,
   },
   {
     key: 'support', label: '🎫 Support Tickets',
@@ -148,7 +200,11 @@ const GUIDE_SECTIONS = [
       `• \`/tickets all\` — resolved/archived ပါ\n` +
       `• Reply / Resolve / Assign / Archive / Urgent\n` +
       `• 📜 Template library — အမြန် ပြန်ဖြေ\n\n` +
-      `ဝယ်သူ မေးခွန်းတွေကို AI က ရှေ့ဆုံးဖြေ၊ မဖြေနိုင်ရင် ticket auto ဖွင့်ပေးတယ်။`,
+      `🎬 *ဥပမာ — ticket တစ်ခု ဖြေရှင်းနည်း:*\n` +
+      `1️⃣ \`/tickets\` ရိုက် → Open ticket စာရင်း ပေါ်မယ်\n` +
+      `2️⃣ ticket နှိပ် → *✍️ Reply* နှိပ် → ဖြေမယ့်စာ ရိုက် (သို့ 📜 Template ရွေး)\n` +
+      `3️⃣ ပြီးရင် *✅ Resolve* နှိပ် → ticket ပိတ်\n\n` +
+      `_ဝယ်သူ မေးခွန်းတွေကို AI က ရှေ့ဆုံးဖြေ၊ မဖြေနိုင်ရင် ticket auto ဖွင့်ပေးတယ်။_`,
   },
   {
     key: 'analytics', label: '📈 Analytics & AI',
@@ -158,7 +214,11 @@ const GUIDE_SECTIONS = [
       `• \`/analyticsai\` — 🤖 Gemini စီးပွားရေး report\n` +
       `• \`/forecast\` — ၇ ရက် ရောင်းအား ခန့်မှန်း\n` +
       `• \`/sentimentreport\` — review စိတ်ခံစားမှု\n` +
-      `• \`/exportdetail\` — CSV (orders/transactions/users)`,
+      `• \`/exportdetail\` — CSV (orders/transactions/users)\n\n` +
+      `🎬 *ဥပမာ — အပတ်စဉ် ဝင်ငွေ ကြည့်နည်း:*\n` +
+      `1️⃣ \`/analytics week\` ရိုက် → ၇ ရက်စာ ဝင်ငွေ/အမြတ်/order dashboard ပေါ်မယ်\n` +
+      `2️⃣ ပိုနက်နဲတဲ့ analysis လိုရင် \`/analyticsai\` → 🤖 Gemini က စီးပွားရေး report ရေးပေးမယ်\n` +
+      `3️⃣ Excel/CSV လိုရင် \`/exportdetail\` → orders/transactions/users ဖိုင် ရနိုင်`,
   },
   {
     key: 'spin', label: '🎰 Spin & Referral',
@@ -171,8 +231,14 @@ const GUIDE_SECTIONS = [
       `• \`/setreftiers 1:2 6:3 16:5\` — commission tier\n` +
       `• \`/reftiers\` — ကြည့်\n` +
       `• \`/togglereferral\` — ရပ်/ဖွင့်\n` +
-      `• \`/reffraud\` — fraud စစ်\n` +
-      `_(Referral commission + welcome bonus ကို MC အဖြစ်ပဲ ပေးပါတယ်။)_`,
+      `• \`/reffraud\` — fraud စစ်\n\n` +
+      `🎬 *ဥပမာ ၁ — Spin ဆု အသစ် ထည့်နည်း:*\n` +
+      `1️⃣ \`/dashboard\` → *🎰 Spin* → *➕ Add Custom Reward*\n` +
+      `2️⃣ label ("50 MC") → amount (50) → weight (probability) ထည့်\n` +
+      `3️⃣ → ဝယ်သူ spin လှည့်ရင် အဲ့ဆု ပါလာနိုင်\n\n` +
+      `🎬 *ဥပမာ ၂ — referral commission သတ်မှတ်နည်း:*\n` +
+      `1️⃣ \`/setreftiers 1:2 6:3 16:5\` ရိုက် → Bronze 2%, Silver 3%, Gold 5%\n` +
+      `2️⃣ \`/reftiers\` နဲ့ ပြန်စစ် → referral ဖိတ်တဲ့သူဆီ commission ကို *MC* နဲ့ ပေးမယ်`,
   },
   {
     key: 'coins', label: '🪙 Coins & Tiers',
@@ -185,11 +251,15 @@ const GUIDE_SECTIONS = [
       `• 🏷 *Edit Tier Discounts* — tier အလိုက် စျေးလျှော့ %\n` +
       `• 🏆 *Loyalty Tiers* — Profile ထဲက tier (🥉 Bronze→💎 Diamond) များ ပြင်ဆင်/အသစ်ထည့်\n` +
       `• 💳 *Adjust User Balance* — user balance ချိန်ညှိ\n\n` +
+      `🎬 *ဥပမာ — tier discount ပြင်နည်း:*\n` +
+      `1️⃣ \`/coinsconfig\` (သို့ menu → *🪙 Coins & Tiers*) → *🏷 Edit Tier Discounts*\n` +
+      `2️⃣ tier ရွေး (ဥပမာ 🥇 Gold) → discount % ("5") ရိုက်\n` +
+      `3️⃣ → Gold user တိုင်း order တိုင်းမှာ 5% auto လျှော့ရမယ်\n\n` +
       `*🏆 Loyalty Tiers editor:*\n` +
       `• tier တစ်ခုကို နှိပ်ပြီး — 📊 Min Spend / 🪙 Bonus % / 😀 Emoji / 🎁 Benefits ပြင်နိုင်\n` +
       `• *➕ Add Tier* — tier အသစ် ထည့်နိုင် (name → min → bonus% → emoji)\n` +
       `• *🗑 Delete Tier* — tier ဖျက်နိုင် (နောက်ဆုံး တစ်ခုတည်း ကျန်ရင် မဖျက်နိုင်)\n` +
-      `• *♻️ Reset to Default* — မူရင်း tier များ ပြန်ထား\n` +
+      `• *♻️ Reset to Default* — မူရင်း tier များ ပြန်ထား\n\n` +
       `_ပြင်ပြီးရင် customer ရဲ့ tier က နောက် order ပြီးချိန်မှာ အလိုအလျောက် ပြန်တွက်ပါတယ်။_`,
   },
   {
@@ -203,6 +273,11 @@ const GUIDE_SECTIONS = [
       `• \`/systemhealth\` — gateway + system\n` +
       `• \`/setgateway <method> <Online|Busy|Offline>\`\n` +
       `• \`/setbackupchan\`, \`/setstalesupport <min>\`\n\n` +
+      `🎬 *ဥပမာ ၁ — data backup လက်ဖြင့် ဆွဲနည်း:*\n` +
+      `1️⃣ \`/runbackup\` ရိုက် → bot က collection တွေ AES-256 encrypt လုပ်\n` +
+      `2️⃣ → backup ဖိုင် (\`.json.gz.enc\`) ကို backup channel (သို့ owner DM) ဆီ ပို့ပေးမယ်\n\n` +
+      `🎬 *ဥပမာ ၂ — gateway ပိတ်နည်း (busy):*\n` +
+      `1️⃣ \`/setgateway KPay Busy\` ရိုက် → ဝယ်သူတွေ topup မှာ KPay "🟡 Busy" မြင်ရမယ်\n\n` +
       `🤖 *Auto (24/7):* Cron (3AM), Backup (6AM), Flash sale, Feedback, Sentiment, AntiSpam — background အလိုအလျောက်။`,
   },
   {
@@ -210,7 +285,10 @@ const GUIDE_SECTIONS = [
     body:
       `📋 *Audit Logs* _(Manager+)_\n\n` +
       `Admin လုပ်ဆောင်ချက်တိုင်း မှတ်တမ်းတင်: ဘယ်သူ / ဘာ / ဘယ်အချိန်။\n\n` +
-      `Order status ပြောင်း, balance ပြင်, broadcast, category ပြင်… အားလုံး ခြေရာခံနိုင်။`,
+      `🎬 *ဥပမာ — ဘယ်သူ ဘာလုပ်ခဲ့လဲ စစ်နည်း:*\n` +
+      `1️⃣ menu → *📋 Audit Logs* နှိပ် (သို့ \`/auditlog\`)\n` +
+      `2️⃣ → "Admin John — Adjusted balance +5000 — 10:30 AM" စတဲ့ မှတ်တမ်းတွေ စာရင်း ပေါ်မယ်\n\n` +
+      `_Order status ပြောင်း, balance ပြင်, broadcast, category ပြင်… အားလုံး ခြေရာခံနိုင်။_`,
   },
 ];
 
