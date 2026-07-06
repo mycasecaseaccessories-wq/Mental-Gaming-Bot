@@ -16,6 +16,11 @@ const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const { config } = require('../../config/settings');
 
+// Escape legacy-Markdown special chars in dynamic text (method names, etc.)
+function escMd(s) {
+  return String(s == null ? '' : s).replace(/([_*`\[])/g, '\\$1');
+}
+
 // ── E-Receipt builder ────────────────────────────────────────────────────────
 function buildReceipt(txId, amountKS, bonusCoins, user) {
   const now = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' });
@@ -291,6 +296,118 @@ module.exports = function registerTopup(bot) {
       `➕ *Add Payment Method*\n\nStep 1/4: Enter the payment method name:`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
+  });
+
+  // ── Admin: 💳 Payment Gateways — unified management panel ───────────────────
+  // Single panel that manages the PaymentMethod list users actually see in /topup.
+  // Toggling here changes exactly what customers can pick — admin view = user view.
+  async function buildGatewayPanel() {
+    const methods = await PaymentMethod.find().sort({ displayOrder: 1, name: 1 });
+    const activeCount = methods.filter((m) => m.isActive).length;
+
+    let text =
+      `💳 *Payment Gateways*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+      `🟢 ဝယ်သူမြင်ရ (Active): *${activeCount}*  |  🔴 ပိတ်ထား: *${methods.length - activeCount}*\n\n`;
+
+    if (!methods.length) {
+      text += `_Gateway တစ်ခုမှ မရှိသေးပါ။ ➕ Add New နှိပ်ပြီး ထည့်ပါ။_`;
+    } else {
+      text +=
+        methods
+          .map(
+            (m) =>
+              `${m.isActive ? '🟢' : '🔴'} ${m.emoji} *${escMd(m.name)}*\n` +
+              `   👤 ${escMd(m.accountName)}  •  📱 \`${m.accountNumber}\``
+          )
+          .join('\n\n') +
+        `\n\n_🟢 = ဝယ်သူ topup မှာ မြင်ရ  •  🔴 = ဖျောက်ထား_`;
+    }
+
+    const rows = methods.map((m) => [
+      Markup.button.callback(
+        `${m.isActive ? '🟢' : '🔴'} ${m.name}`,
+        `pg_toggle:${m._id}`
+      ),
+      Markup.button.callback('🗑', `pg_del:${m._id}`),
+    ]);
+    rows.push([Markup.button.callback('➕ Add New', 'addpayment_start')]);
+    rows.push([Markup.button.callback('🔄 Refresh', 'pg_panel'), Markup.button.callback('🔙 Back', 'nav:go:admin_main')]);
+
+    return { text, keyboard: Markup.inlineKeyboard(rows) };
+  }
+
+  bot.hears('💳 Payment Gateways', adminOnly(), async (ctx) => {
+    const { text, keyboard } = await buildGatewayPanel();
+    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  });
+
+  bot.action('pg_panel', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const { text, keyboard } = await buildGatewayPanel();
+    try {
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    } catch (e) {
+      if (String(e?.description || e?.message || '').includes('message is not modified')) return;
+      await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+  });
+
+  bot.action(/^pg_toggle:(.+)$/, adminOnly(), async (ctx) => {
+    const id = ctx.match[1];
+    const method = await PaymentMethod.findById(id);
+    if (!method) return ctx.answerCbQuery('Not found', { show_alert: true });
+
+    method.isActive = !method.isActive;
+    await method.save();
+    await auditLog(ctx.from.id, 'TOGGLE_PAYMENT_METHOD', id, 'System', {
+      name: method.name,
+      isActive: method.isActive,
+    });
+    await ctx.answerCbQuery(
+      method.isActive ? `🟢 ${method.name} ဖွင့်ပြီး (ဝယ်သူ မြင်ရ)` : `🔴 ${method.name} ပိတ်လိုက်ပြီ`
+    );
+
+    const { text, keyboard } = await buildGatewayPanel();
+    try {
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    } catch {
+      await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+  });
+
+  bot.action(/^pg_del:(.+)$/, adminOnly(), async (ctx) => {
+    const id = ctx.match[1];
+    const method = await PaymentMethod.findById(id);
+    if (!method) return ctx.answerCbQuery('Not found', { show_alert: true });
+    await ctx.answerCbQuery();
+    await ctx.reply(
+      `🗑 *${method.emoji} ${escMd(method.name)}* ကို ဖျက်မှာ သေချာလား?\n\n_ဒါကို ပြန်ဖျက်လို့ မရပါ။_`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('✅ ဖျက်မယ်', `pg_delyes:${id}`)],
+          [Markup.button.callback('❌ မဖျက်တော့ဘူး', 'pg_panel')],
+        ]),
+      }
+    );
+  });
+
+  bot.action(/^pg_delyes:(.+)$/, adminOnly(), async (ctx) => {
+    const id = ctx.match[1];
+    const method = await PaymentMethod.findById(id);
+    if (!method) return ctx.answerCbQuery('Not found', { show_alert: true });
+
+    const name = method.name;
+    await PaymentMethod.deleteOne({ _id: id });
+    await auditLog(ctx.from.id, 'DELETE_PAYMENT_METHOD', id, 'System', { name });
+    await ctx.answerCbQuery(`🗑 ${name} ဖျက်ပြီးပါပြီ`);
+
+    const { text, keyboard } = await buildGatewayPanel();
+    try {
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    } catch {
+      await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    }
   });
 
   // ── User: Transaction history via /history ─────────────────────────────────

@@ -28,6 +28,7 @@ function adminMenuKeyboard() {
     ['📈 Analytics',       '🤖 AI Insights'],
     ['🔧 System',          '📋 Audit Logs'],
     ['🪙 Coins & Tiers',   '🎁 Rewards'],
+    ['💳 Payment Gateways'],
     ['📖 Admin Guide',     '🔙 Back to Main'],
   ]).resize();
 }

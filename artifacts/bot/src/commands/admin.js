@@ -263,6 +263,23 @@ const GUIDE_SECTIONS = [
       `_ပြင်ပြီးရင် customer ရဲ့ tier က နောက် order ပြီးချိန်မှာ အလိုအလျောက် ပြန်တွက်ပါတယ်။_`,
   },
   {
+    key: 'gateways', label: '💳 Payment Gateways',
+    body:
+      `💳 *Payment Gateways* _(Owner)_\n\n` +
+      `Admin menu → *💳 Payment Gateways* — panel *တစ်ခုတည်း*မှာ ငွေပေးချေမှုနည်းလမ်း အားလုံးကို စီမံ။\n` +
+      `_ဒီ panel ထဲက စာရင်းက ဝယ်သူတွေ topup မှာ မြင်ရတဲ့ စာရင်း အတိအကျ — admin မြင်တာ = user မြင်တာ။_\n\n` +
+      `တစ်ခုချင်း ဝင်စရာ မလိုတော့ဘဲ button တွေနဲ့ တန်းလုပ်နိုင်:\n` +
+      `• 🟢/🔴 *နာမည် button* — နှိပ်လိုက်တိုင်း On ↔ Off ပြောင်း (🔴 ဆို ဝယ်သူ မမြင်ရ)\n` +
+      `• 🗑 — gateway ဖျက် (အတည်ပြုမှ ဖျက်)\n` +
+      `• ➕ *Add New* — gateway အသစ် ၄ ဆင့်နဲ့ ထည့် (name → number → account name → emoji)\n` +
+      `• 🔄 *Refresh* — စာရင်း ပြန် load\n\n` +
+      `🎬 *ဥပမာ — admin မှာ ၄ ခုပြပြီး user မှာ ၂ ခုပဲ ပါနေရင်:*\n` +
+      `1️⃣ menu → *💳 Payment Gateways* နှိပ်\n` +
+      `2️⃣ 🔴 ပိတ်နေတဲ့ gateway (ဥပမာ 🔴 AYA Pay) ကို နှိပ် → 🟢 ဖြစ်သွားမယ်\n` +
+      `3️⃣ → ချက်ချင်း ဝယ်သူ topup ထဲ AYA Pay ပေါ်လာမယ် (admin = user တူညီသွားပြီ)\n\n` +
+      `_🟢 ပြထားသလောက်ပဲ ဝယ်သူ မြင်ရတာမို့ — ပြချင်တာ 🟢, ဖျောက်ချင်တာ 🔴 ထားပါ။_`,
+  },
+  {
     key: 'system', label: '🔧 System',
     body:
       `🔧 *System* _(Owner)_\n\n` +

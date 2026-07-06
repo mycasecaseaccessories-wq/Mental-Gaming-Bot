@@ -7,6 +7,7 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const SystemStatus = require('../models/SystemStatus');
+const PaymentMethod = require('../models/PaymentMethod');
 const { Markup } = require('telegraf');
 
 function gatewayIcon(status) {
@@ -26,6 +27,7 @@ async function buildDashboardText(theme) {
     successToday,
     rates,
     sysStatus,
+    paymentMethods,
   ] = await Promise.all([
     Order.countDocuments({ timestamp: { $gte: startOfDay } }),
     Order.countDocuments({ status: 'Pending' }),
@@ -34,6 +36,7 @@ async function buildDashboardText(theme) {
     Order.countDocuments({ status: 'Success', timestamp: { $gte: startOfDay } }),
     getAllRates(),
     SystemStatus.get(),
+    PaymentMethod.find().sort({ displayOrder: 1, name: 1 }),
   ]);
 
   const recentOrders = await Order.find({ status: 'Pending' })
@@ -54,13 +57,12 @@ async function buildDashboardText(theme) {
       })
     : ['  _No pending orders_'];
 
-  // Gateway status display
-  const gwLines = [
-    `  ${gatewayIcon(sysStatus.kpayStatus)} KBZ Pay: *${sysStatus.kpayStatus}*`,
-    `  ${gatewayIcon(sysStatus.waveStatus)} Wave Money: *${sysStatus.waveStatus}*`,
-    `  ${gatewayIcon(sysStatus.ayaStatus)} AYA Pay: *${sysStatus.ayaStatus}*`,
-    `  ${gatewayIcon(sysStatus.cbStatus)} CB Pay: *${sysStatus.cbStatus}*`,
-  ];
+  // Gateway display — driven by PaymentMethod (same list users see in /topup)
+  const gwLines = paymentMethods.length
+    ? paymentMethods.map(
+        (m) => `  ${m.isActive ? '🟢' : '🔴'} ${m.emoji} ${m.name}${m.isActive ? '' : ' _(hidden)_'}`
+      )
+    : ['  _No payment methods configured_'];
   if (sysStatus.gatewayNote) {
     gwLines.push(`  📝 _${sysStatus.gatewayNote}_`);
   }
@@ -193,12 +195,12 @@ module.exports = function registerDashboard(bot) {
     const dbState = ['Disconnected', 'Connected', 'Connecting', 'Disconnecting'];
     const dbStatus = dbState[mongoose.connection.readyState] || 'Unknown';
     const dbIcon   = mongoose.connection.readyState === 1 ? '🟢' : '🔴';
-    const gwStatus = [
-      `  ${gatewayIcon(status.kpayStatus)} *KBZ Pay*: ${status.kpayStatus}`,
-      `  ${gatewayIcon(status.waveStatus)} *Wave Money*: ${status.waveStatus}`,
-      `  ${gatewayIcon(status.ayaStatus)} *AYA Pay*: ${status.ayaStatus}`,
-      `  ${gatewayIcon(status.cbStatus)} *CB Pay*: ${status.cbStatus}`,
-    ].join('\n');
+    const methods = await PaymentMethod.find().sort({ displayOrder: 1, name: 1 });
+    const gwStatus = methods.length
+      ? methods
+          .map((m) => `  ${m.isActive ? '🟢' : '🔴'} *${m.name}*${m.isActive ? '' : ' (hidden)'}`)
+          .join('\n')
+      : '  _No payment methods configured_';
     const gwNote = status.gatewayNote ? `\n  📝 _${status.gatewayNote}_` : '';
     await ctx.reply(
       `🖥 *System Health*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
@@ -206,8 +208,8 @@ module.exports = function registerDashboard(bot) {
       `${dbIcon} DB: *${dbStatus}*\n` +
       `💾 Memory: *${heapUsedMB}MB / ${heapTotalMB}MB*\n` +
       `🟡 Pending Orders: *${pendingOrders}*\n\n` +
-      `💳 *Gateways*\n${gwStatus}${gwNote}\n\n` +
-      `_/setgateway <method> <Online|Busy|Offline>_`,
+      `💳 *Gateways* _(ဝယ်သူမြင်ရ = 🟢)_\n${gwStatus}${gwNote}\n\n` +
+      `_စီမံရန်: Admin menu → 💳 Payment Gateways_`,
       { parse_mode: 'Markdown' }
     );
   });
