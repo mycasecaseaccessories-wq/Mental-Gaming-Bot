@@ -43,3 +43,7 @@ args = "pnpm --filter @workspace/bot run start"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[deployment]
+deploymentTarget = "vm"
+run = ["pnpm", "--filter", "@workspace/bot", "run", "start"]
