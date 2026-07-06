@@ -1,0 +1,1 @@
+- [Bot run setup](bot-run-setup.md) — Node24+pnpm, CommonJS, needs BOT_TOKEN/MONGODB_URI/ADMIN_ID secrets; console workflow, no web port.
