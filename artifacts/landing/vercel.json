@@ -1,0 +1,5 @@
+{
+  "buildCommand": "pnpm --filter @workspace/landing run build",
+  "outputDirectory": "artifacts/landing/dist/public",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
