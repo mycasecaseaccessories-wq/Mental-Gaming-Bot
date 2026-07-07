@@ -227,6 +227,41 @@ const systemStatusSchema = new mongoose.Schema(
       comment: '@username of support contact shown to users',
     },
 
+    // ── Promotion Perks ───────────────────────────────────────────────────────
+    birthdayGiftMC: {
+      type:    Number,
+      default: 0,
+      min:     0,
+      comment: 'MC gifted on user birthday (0 = off)',
+    },
+    happyHourEnabled: { type: Boolean, default: false },
+    happyHourStartMMT: { type: Number, default: 18, min: 0, max: 23, comment: 'Start hour (MMT, 0-23)' },
+    happyHourEndMMT:   { type: Number, default: 20, min: 0, max: 23, comment: 'End hour (MMT, exclusive)' },
+    happyHourBonusPct: { type: Number, default: 5, min: 0, max: 100, comment: 'Extra MC bonus % on top-ups during happy hour' },
+    cashbackPct: {
+      type:    Number,
+      default: 0,
+      min:     0,
+      max:     100,
+      comment: 'MC cashback % of order amount on completed orders (0 = off)',
+    },
+    firstOrderDiscountPct: {
+      type:    Number,
+      default: 0,
+      min:     0,
+      max:     90,
+      comment: 'Discount % on a user\'s very first order (0 = off)',
+    },
+    winbackEnabled: { type: Boolean, default: false },
+    winbackDays:    { type: Number, default: 30, min: 7, comment: 'Days of inactivity before win-back message' },
+    winbackBonusMC: { type: Number, default: 0, min: 0, comment: 'MC credited with the win-back message' },
+    leaderboardEnabled: { type: Boolean, default: false, comment: 'Monthly top-spender leaderboard + auto prizes' },
+    leaderboardPrizes: {
+      type:    [Number],
+      default: () => [3000, 2000, 1000],
+      comment: 'MC prizes for monthly top spenders (index 0 = 1st place)',
+    },
+
     // ── Meta ───────────────────────────────────────────────────────────────────
     updatedBy: { type: Number, default: null },
   },

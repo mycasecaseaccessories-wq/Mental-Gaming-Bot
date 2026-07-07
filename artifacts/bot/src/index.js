@@ -94,6 +94,7 @@ function loadCommands(bot) {
     'rewards.js',           // ← Coin Rewards + Redeem Codes (user) — text handler must precede ambient
     'accounts.js',          // ← Premium Accounts (user + admin) — text wizard must precede ambient
     'refCampaign.js',       // ← Referral campaigns (user + admin wizard)
+    'promoPerks.js',        // ← Promotion perks (birthday/happy hour/cashback/winback/leaderboard) — text prompts must precede ambient
     'joinReward.js',        // ← Channel join bonus (user + admin wizard)
     'admin.js',
     'help.js',

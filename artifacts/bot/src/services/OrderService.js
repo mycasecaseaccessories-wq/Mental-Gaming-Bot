@@ -180,6 +180,9 @@ async function completeOrder(orderId, adminId, deliveredData, telegram) {
         });
       }
       await TierService.recalcUserTiers(order.userId._id);
+      // MC cashback (if enabled)
+      const PromoPerksService = require('./PromoPerksService');
+      await PromoPerksService.giveCashback(order, telegram);
     } catch (e) {
       console.error('[OrderService] post-complete hooks error:', e.message);
     }

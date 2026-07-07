@@ -22,7 +22,7 @@ function escMd(s) {
 }
 
 // ── E-Receipt builder ────────────────────────────────────────────────────────
-function buildReceipt(txId, amountKS, bonusCoins, user) {
+function buildReceipt(txId, amountKS, bonusCoins, user, happyHourCoins = 0, happyHourPct = 0) {
   const now = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' });
   return (
     `🧾 *E\\-Receipt — Mental Gaming Store*\n` +
@@ -32,6 +32,7 @@ function buildReceipt(txId, amountKS, bonusCoins, user) {
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
     `💳 Top\\-up: *${amountKS.toLocaleString()} KS*\n` +
     `🎁 Coin Bonus: *\\+${bonusCoins.toLocaleString()} Mental Coins*\n` +
+    (happyHourCoins > 0 ? `⏰ Happy Hour \\(\\+${happyHourPct}%\\): *\\+${happyHourCoins.toLocaleString()} MC*\n` : '') +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
     `💰 KS Balance: *${user.balanceKS.toLocaleString()} KS*\n` +
     `🪙 Coin Balance: *${user.balanceCoin.toLocaleString()} MC*\n` +
@@ -76,9 +77,9 @@ module.exports = function registerTopup(bot) {
         `✅ *Top-up approved!*`
       );
 
-      const { user, amountKS, bonusCoins } = await approveTopup(txId, ctx.from.id);
+      const { user, amountKS, bonusCoins, happyHourCoins, happyHourPct } = await approveTopup(txId, ctx.from.id);
 
-      await auditLog(ctx.from.id, 'TOPUP_APPROVED', txId, 'Transaction', { amountKS, bonusCoins });
+      await auditLog(ctx.from.id, 'TOPUP_APPROVED', txId, 'Transaction', { amountKS, bonusCoins, happyHourCoins });
 
       // ── Process referral commission (first or every-topup mode) ────────
       processTopupCommission(user._id, amountKS, ctx.telegram).catch((err) =>
@@ -94,7 +95,7 @@ module.exports = function registerTopup(bot) {
       try {
         await ctx.telegram.sendMessage(
           user.telegramId,
-          buildReceipt(txId, amountKS, bonusCoins, user),
+          buildReceipt(txId, amountKS, bonusCoins, user, happyHourCoins, happyHourPct),
           { parse_mode: 'MarkdownV2' }
         );
       } catch (err) {
@@ -105,7 +106,7 @@ module.exports = function registerTopup(bot) {
         `✅ *Top-up approved!*\n\n` +
         `👤 User: \`${user.telegramId}\`\n` +
         `💰 Credited: *${price(amountKS)}*\n` +
-        `🎁 Coins: *+${bonusCoins.toLocaleString()} MC*\n` +
+        `🎁 Coins: *+${bonusCoins.toLocaleString()} MC*${happyHourCoins > 0 ? ` (+${happyHourCoins.toLocaleString()} ⏰HH)` : ''}\n` +
         `⭐ New Tier: *${user.membershipTier}*`,
         { parse_mode: 'Markdown' }
       );

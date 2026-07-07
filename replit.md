@@ -252,6 +252,9 @@ Daily schedule (Myanmar Time = UTC+6:30):
 | `/delchannelpost <id>` | Owner | Delete a channel auto-post |
 | `/refcamp` | Owner | Referral campaign panel (create/end/top participants) |
 | `/joinbonusadmin` | Owner | Channel join bonus panel (add/toggle/delete/announce) |
+| `/promoperks` | Owner | Promotion perks panel: birthday gift, happy hour, cashback, first-order discount, win-back, monthly leaderboard |
+| `/toplist` | All | Current-month top spender leaderboard |
+| `/setbirthday` | All | Save birthday (DD-MM) for yearly MC gift |
 
 ### Channel Auto-Posts
 
@@ -280,6 +283,17 @@ Sells account credentials (e.g. ExpressVPN) with instant delivery, per-product d
 - `minRefereeAgeDays` (wizard step 8, 0 = off): invited user's Telegram account age is *estimated* from their numeric ID via `utils/accountAge.js` (anchor-table interpolation); refs from too-new accounts are not counted (referrer notified, `REF_CAMPAIGN_AGE_REJECT` audit)
 - Admin: `/refcamp` / admin menu **🎯 Ref Campaign** — 8-step wizard, end, top participants. User: `/campaign`
 - File: `src/commands/refCampaign.js`
+
+### Promotion Perks (Owner) — `/promoperks` panel
+
+Six promotion mechanics controlled from a single owner panel; all settings on the SystemStatus singleton, engine in `services/PromoPerksService.js`, commands in `src/commands/promoPerks.js` (ORDER before `admin.js`).
+
+- **Birthday gift** — user saves `/setbirthday DD-MM` (`birthdayMonth/Day` on User); daily 09:05 MMT cron credits `birthdayGiftMC` once per year (`lastBirthdayGiftYear` claimed atomically)
+- **Happy Hour** — `happyHourEnabled/StartMMT/EndMMT/BonusPct`; extra MC credited inside `WalletService.approveTopup()` (lazy-required to avoid circular dep); shown on e-receipt; supports overnight windows
+- **Cashback** — `cashbackPct`; MC credited in `OrderService.completeOrder` post-complete hook via `PromoPerksService.giveCashback(order, telegram)`
+- **First-order discount** — `firstOrderDiscountPct`; applied in orderScene step 0 (baked into `unitPrice` after tier discount; eligibility = no Pending/Processing/Success order ever)
+- **Win-back** — `winbackEnabled/Days/BonusMC`; daily 09:15 MMT cron messages users with `lastActive` older than N days + credits MC; max once per 90 days (`lastWinbackAt` claimed atomically)
+- **Monthly leaderboard** — `leaderboardEnabled/Prizes[]`; user `/toplist` (masked names); cron on 1st 09:30 MMT awards previous-month top spenders (aggregate on Success orders) + admin summary
 
 ### Channel Join Bonus (Owner) — opt-in, NOT force-join
 

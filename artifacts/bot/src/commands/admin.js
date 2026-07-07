@@ -335,6 +335,23 @@ const GUIDE_SECTIONS = [
       `_ဝယ်သူတွေက \`/joinbonus\` နဲ့လည်း ကြည့်နိုင်ပါတယ်။_`,
   },
   {
+    key: 'promoperks', label: '🎁 Promo Perks',
+    body:
+      `🎁 *Promotion Perks* _(Owner)_\n\n` +
+      `\`/promoperks\` panel တစ်ခုတည်းကနေ promotion ၆ မျိုး ထိန်းချုပ်နိုင်ပါတယ်:\n\n` +
+      `🎂 *Birthday Gift* — user က \`/setbirthday\` နဲ့ မွေးနေ့မှတ်ထားရင် မွေးနေ့ရောက်တိုင်း MC လက်ဆောင် အလိုအလျောက်ပေး (တစ်နှစ် တစ်ခါပဲ)\n` +
+      `⏰ *Happy Hour* — သတ်မှတ်ထားတဲ့ နာရီအတွင်း (MMT) ငွေဖြည့်ရင် MC bonus ပိုပေး (ဥပမာ ညနေ 6–8 နာရီ +5%)\n` +
+      `💸 *Cashback* — order ပြီးမြောက်တိုင်း order တန်ဖိုးရဲ့ % ကို MC နဲ့ ပြန်အမ်း\n` +
+      `🛒 *First Order Discount* — user ရဲ့ ပထမဆုံး order မှာ % လျှော့ပေး (order စာမျက်နှာမှာ အလိုအလျောက်ပေါ်)\n` +
+      `😴 *Win-back* — ရက်အတော်ကြာ ပျောက်နေတဲ့ user တွေဆီ "ပြန်လာပါ" စာ + MC bonus အလိုအလျောက်ပို့ (90 ရက်အတွင်း တစ်ခါပဲ)\n` +
+      `📊 *Monthly Leaderboard* — လစဉ် အဝယ်အများဆုံး Top တွေကို လကုန်ရင် MC ဆု အလိုအလျောက်ချီးမြှင့်; user တွေက \`/toplist\` နဲ့ ကြည့်နိုင်\n\n` +
+      `🎬 *ဥပမာ:*\n` +
+      `1️⃣ \`/promoperks\` → 💸 Cashback % → \`2\` ရိုက် → order တိုင်း 2% MC ပြန်ရ\n` +
+      `2️⃣ ⏰ HH အချိန်/% → \`18-20-5\` → ညနေ 6–8 နာရီ Happy Hour ဖွင့်\n` +
+      `3️⃣ 📊 LB ဆုများ → \`3000 2000 1000\` → လကုန်ရင် Top 3 ကို ဆုပေး\n\n` +
+      `_Toggle ခလုတ်တွေနဲ့ တစ်ချက်နှိပ် ဖွင့်-ပိတ် လုပ်နိုင်ပါတယ်။_`,
+  },
+  {
     key: 'system', label: '🔧 System',
     body:
       `🔧 *System* _(Owner)_\n\n` +

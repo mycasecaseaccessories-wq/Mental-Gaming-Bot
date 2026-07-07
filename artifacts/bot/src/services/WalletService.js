@@ -290,8 +290,26 @@ async function approveTopup(txId, adminId) {
     });
   }
 
+  // Happy Hour extra MC bonus (lazy require to avoid circular dependency)
+  let happyHourCoins = 0;
+  let happyHourPct = 0;
+  try {
+    const { happyHourBonusMC } = require('./PromoPerksService');
+    const hh = await happyHourBonusMC(amountKS);
+    if (hh.bonus > 0) {
+      happyHourCoins = hh.bonus;
+      happyHourPct = hh.pct;
+      await creditCoin(user._id, happyHourCoins, {
+        type: 'Bonus',
+        note: `Happy Hour bonus (+${hh.pct}%)`,
+      });
+    }
+  } catch (e) {
+    console.error('[WalletService] happy hour bonus error:', e.message);
+  }
+
   const finalUser = await User.findById(user._id);
-  return { user: finalUser, amountKS, bonusCoins, txId };
+  return { user: finalUser, amountKS, bonusCoins, happyHourCoins, happyHourPct, txId };
 }
 
 /**

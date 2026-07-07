@@ -128,7 +128,21 @@ const orderScene = new Scenes.WizardScene(
     const tierResult = applyTierDiscount(effectivePrice, tier);
     const tierDiscount    = tierResult.discount;
     const tierDiscountPct = tierResult.pct;
-    const priceAfterTier  = tierResult.finalPrice;
+    let priceAfterTier  = tierResult.finalPrice;
+
+    // ── First-order discount (very first order only) ──────────────────────────
+    let foPct = 0;
+    let foDiscount = 0;
+    try {
+      const { firstOrderDiscountPct } = require('../services/PromoPerksService');
+      foPct = await firstOrderDiscountPct(user._id);
+      if (foPct > 0) {
+        foDiscount = Math.floor((priceAfterTier * foPct) / 100);
+        priceAfterTier = Math.max(0, priceAfterTier - foDiscount);
+      }
+    } catch (e) {
+      console.error('[OrderScene] first-order discount error:', e.message);
+    }
 
     // Resolve checkout fields once at session start
     const checkoutFields = await resolveCheckoutFields(product);
@@ -150,7 +164,9 @@ const orderScene = new Scenes.WizardScene(
       isFlashSale,
       tierDiscount,
       tierDiscountPct,
-      unitPrice: priceAfterTier,        // price per 1 unit (after flash + tier)
+      foDiscountPct: foPct,
+      foDiscount,
+      unitPrice: priceAfterTier,        // price per 1 unit (after flash + tier + first-order)
       effectivePrice: priceAfterTier,   // total price (unit × qty), before promo
       orderQuantity: 1,
       maxQuantity: maxQty,
@@ -172,6 +188,9 @@ const orderScene = new Scenes.WizardScene(
     const tierLine = tierDiscount > 0
       ? [`${tierBadgeMap[tier]} ${tier} Discount (${tierDiscountPct}%): *−${price(tierDiscount)}*`]
       : [];
+    const foLine = foDiscount > 0
+      ? [`🛒 First Order Discount (${foPct}%): *−${price(foDiscount)}*`]
+      : [];
 
     const productInfoText = buildMessage(theme, [{
       title: '🛒 Select Quantity',
@@ -184,7 +203,8 @@ const orderScene = new Scenes.WizardScene(
           ? `${theme.emoji.money} Unit Price: ~~${price(product.finalPrice)}~~ → *${price(effectivePrice)}*`
           : `${theme.emoji.money} Unit Price: ${theme.format.bold(price(product.finalPrice))}`,
         ...tierLine,
-        tierDiscount > 0 ? `✨ Your Unit Price: ${theme.format.bold(price(priceAfterTier))}` : null,
+        ...foLine,
+        (tierDiscount > 0 || foDiscount > 0) ? `✨ Your Unit Price: ${theme.format.bold(price(priceAfterTier))}` : null,
         `📦 Stock: ${stockLabel}`,
         maxQty > 1 ? `⚠️ _Max ${maxQty} per order_` : null,
         ``,
@@ -381,7 +401,10 @@ const orderScene = new Scenes.WizardScene(
     const flashLine = sess.isFlashSale
       ? [`🔥 Flash Sale Price: ${price(sess.flashSalePrice || sess.originalPrice)}`]
       : [];
-    const hasAnyDiscount = sess.tierDiscount > 0 || sess.promoDiscount > 0 || sess.isFlashSale;
+    const foLine = (sess.foDiscount || 0) > 0
+      ? [`🛒 First Order Discount (${sess.foDiscountPct}%): −${price(sess.foDiscount)}`]
+      : [];
+    const hasAnyDiscount = sess.tierDiscount > 0 || sess.promoDiscount > 0 || sess.isFlashSale || (sess.foDiscount || 0) > 0;
 
     const qty = sess.orderQuantity || 1;
     const qtyLabel = qty > 1 ? ` × ${qty}` : '';
@@ -396,6 +419,7 @@ const orderScene = new Scenes.WizardScene(
         `💰 Original${qty > 1 ? ' Total' : ''}: ${price(sess.originalPrice * qty)}`,
         ...flashLine,
         ...tierLine,
+        ...foLine,
         ...promoLine,
         hasAnyDiscount ? `──────────────` : null,
         `✨ *Final Price: ${price(sess.finalAmount)}*`,
@@ -690,6 +714,28 @@ orderScene.action('order_final_confirm', async (ctx) => {
       const user = await User.findByTelegramId(ctx.from.id);
       const { promo } = await RewardService.redeemCouponCode(user, sess.redeemCodeToConsume);
       await applyPromo(promo.code, ctx.from.id);
+    }
+
+    // ── Re-validate first-order discount at commit time (race-safe) ─────────
+    if ((sess.foDiscount || 0) > 0) {
+      try {
+        const { firstOrderDiscountPct } = require('../services/PromoPerksService');
+        const stillPct = await firstOrderDiscountPct(user._id);
+        if (stillPct <= 0) {
+          const qty = sess.orderQuantity || 1;
+          sess.finalAmount += sess.foDiscount * qty;
+          sess.unitPrice += sess.foDiscount;
+          sess.foDiscount = 0;
+          sess.foDiscountPct = 0;
+          await ctx.reply(
+            `⚠️ First order discount က ပထမဆုံး order တစ်ခုတည်းအတွက်ပါ — ဒီ order မှာ မရတော့ပါ။\n` +
+              `💰 စုစုပေါင်း: *${price(sess.finalAmount)}*`,
+            { parse_mode: 'Markdown' }
+          );
+        }
+      } catch (e) {
+        console.error('[OrderScene] FO revalidation error:', e.message);
+      }
     }
 
     await checklist(ctx, ref, [

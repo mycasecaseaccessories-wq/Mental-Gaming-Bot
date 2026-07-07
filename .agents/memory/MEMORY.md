@@ -1,2 +1,3 @@
 - [Bot run setup](bot-run-setup.md) — Node24+pnpm, CommonJS, needs BOT_TOKEN/MONGODB_URI/ADMIN_ID secrets; console workflow, no web port.
 - [Mongo atomic counters](mongo-atomic-counters.md) — reward/quota counters must use conditional findOneAndUpdate + $inc, never read-modify-save; partial unique index for single-active singletons.
+- [Bot promo cron & claims](bot-promo-claims.md) — daily-gift crons must claim atomically, then roll back the claim if credit fails; session-cached discounts must be revalidated at order commit.

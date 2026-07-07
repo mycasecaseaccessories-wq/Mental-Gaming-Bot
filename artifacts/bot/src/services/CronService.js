@@ -25,6 +25,7 @@ const Promo          = require('../models/Promo');
 const Transaction    = require('../models/Transaction');
 const CacheService   = require('./CacheService');
 const ChannelAutoPostService = require('./ChannelAutoPostService');
+const PromoPerksService = require('./PromoPerksService');
 const { config }     = require('../../config/settings');
 
 const ARCHIVE_CUTOFF_MONTHS = 6;
@@ -337,7 +338,22 @@ function startCronJobs(telegram) {
     cron.schedule('30 2 * * *', () => notifyExpiringAccounts(telegram), { timezone: 'UTC' })
   );
 
-  console.log('[CronService] ✅ 7 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/AccountExpiry)');
+  // 09:05 MMT = 02:35 UTC — birthday MC gifts
+  scheduledJobs.push(
+    cron.schedule('35 2 * * *', () => PromoPerksService.runBirthdayGifts(telegram).catch((e) => console.error('[Cron] birthday:', e.message)), { timezone: 'UTC' })
+  );
+
+  // 09:15 MMT = 02:45 UTC — win-back messages
+  scheduledJobs.push(
+    cron.schedule('45 2 * * *', () => PromoPerksService.runWinback(telegram).catch((e) => console.error('[Cron] winback:', e.message)), { timezone: 'UTC' })
+  );
+
+  // 09:30 MMT on the 1st = 03:00 UTC — monthly leaderboard prizes (previous month)
+  scheduledJobs.push(
+    cron.schedule('0 3 1 * *', () => PromoPerksService.awardMonthlyPrizes(telegram).catch((e) => console.error('[Cron] leaderboard:', e.message)), { timezone: 'UTC' })
+  );
+
+  console.log('[CronService] ✅ 10 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/AccountExpiry/Birthday/Winback/Leaderboard)');
 }
 
 function stopCronJobs() {

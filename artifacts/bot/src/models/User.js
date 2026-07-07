@@ -65,6 +65,14 @@ const userSchema = new mongoose.Schema(
       comment: 'True once the 100 MC welcome bonus has been credited',
     },
 
+    // ── Birthday Gift ────────────────────────────────────────────────────────
+    birthdayMonth: { type: Number, default: null, min: 1, max: 12 },
+    birthdayDay:   { type: Number, default: null, min: 1, max: 31 },
+    lastBirthdayGiftYear: { type: Number, default: null, comment: 'Year the birthday MC gift was last credited' },
+
+    // ── Win-back ─────────────────────────────────────────────────────────────
+    lastWinbackAt: { type: Date, default: null, comment: 'When the last win-back bonus was sent' },
+
     // ── Preferences ──────────────────────────────────────────────────────────
     theme:    { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
     language: { type: String, enum: ['en', 'mm'], default: 'en' },
