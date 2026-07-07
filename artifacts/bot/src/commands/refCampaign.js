@@ -207,6 +207,16 @@ module.exports = function registerRefCampaign(bot) {
     if (st.step === 'quota') {
       const n = parseInt(input, 10);
       if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      st.totalRewardLimit = n;
+      st.step = 'minage';
+      return ctx.reply(
+        `Step 8/8: ဖိတ်ခံရသူရဲ့ *Telegram account သက်တမ်း အနည်းဆုံး ဘယ်နှစ်ရက်* ရှိရမလဲ?\n_(Account အသစ်စက်စက်နဲ့ လိမ်ခေါ်တာ ကာကွယ်ဖို့ — ID ကနေ ခန့်မှန်းတွက်ပါတယ်။ 0 = မစစ်ဘူး၊ ဥပမာ 90 = ၃ လ)_`,
+        { parse_mode: 'Markdown', ...Markup.forceReply() }
+      );
+    }
+    if (st.step === 'minage') {
+      const n = parseInt(input, 10);
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 90):', Markup.forceReply());
       ctx.session.rcAdmin = null;
       const camp = await RefCampaign.create({
         title: st.title,
