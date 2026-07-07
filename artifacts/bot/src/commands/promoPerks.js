@@ -40,7 +40,8 @@ async function buildPanel() {
     `💸 *Cashback:* ${st.cashbackPct > 0 ? `${st.cashbackPct}% MC` : '🔴 OFF'}\n` +
     `🛒 *First Order Discount:* ${st.firstOrderDiscountPct > 0 ? `${st.firstOrderDiscountPct}%` : '🔴 OFF'}\n` +
     `😴 *Win-back:* ${onOff(st.winbackEnabled)} — ${st.winbackDays} ရက် idle, +${(st.winbackBonusMC || 0).toLocaleString()} MC\n` +
-    `📊 *Monthly Leaderboard:* ${onOff(st.leaderboardEnabled)} — ဆု: ${(st.leaderboardPrizes || []).map((p) => p.toLocaleString()).join(' / ')} MC\n\n` +
+    `📊 *Monthly Leaderboard:* ${onOff(st.leaderboardEnabled)} — ဆု: ${(st.leaderboardPrizes || []).map((p) => p.toLocaleString()).join(' / ')} MC\n` +
+    `🎟 *Top-up Coupon:* ${onOff(st.topupCouponEnabled)} — ${(st.topupCouponMinKS || 0).toLocaleString()} KS+ ဖြည့်ရင် ${st.topupCouponType === 'Flat' ? `${(st.topupCouponValue || 0).toLocaleString()} KS` : `${st.topupCouponValue || 0}%`} coupon (${st.topupCouponExpiryDays || 7} ရက်သက်တမ်း)\n\n` +
     `_ပြင်ချင်တဲ့အရာကို နှိပ်ပါ:_`;
 
   const kb = Markup.inlineKeyboard([
@@ -49,6 +50,7 @@ async function buildPanel() {
     [Markup.button.callback('🛒 First Order %', 'pp_fo'), Markup.button.callback(`😴 Win-back ${st.winbackEnabled ? 'OFF' : 'ON'}`, 'pp_wb_toggle')],
     [Markup.button.callback('😴 WB ရက်/MC', 'pp_wb_set'), Markup.button.callback(`📊 Leaderboard ${st.leaderboardEnabled ? 'OFF' : 'ON'}`, 'pp_lb_toggle')],
     [Markup.button.callback('📊 LB ဆုများ', 'pp_lb_set'), Markup.button.callback('📊 ယခုလ Top 10', 'pp_lb_view')],
+    [Markup.button.callback(`🎟 Topup Coupon ${st.topupCouponEnabled ? 'OFF' : 'ON'}`, 'pp_tc_toggle'), Markup.button.callback('🎟 TC ပြင်မယ်', 'pp_tc_set')],
     [Markup.button.callback('❌ Close', 'pp_close')],
   ]);
   return { text, kb };
@@ -137,6 +139,17 @@ module.exports = function registerPromoPerks(bot) {
     await showPanel(ctx, true);
   });
 
+  bot.action('pp_tc_toggle', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const st = await SystemStatus.get();
+    if (!st.topupCouponEnabled && !(st.topupCouponValue > 0)) {
+      return ctx.answerCbQuery('❌ အရင် "🎟 TC ပြင်မယ်" နဲ့ တန်ဖိုးသတ်မှတ်ပါ', { show_alert: true });
+    }
+    await SystemStatus.set({ topupCouponEnabled: !st.topupCouponEnabled }, ctx.from.id);
+    await auditLog(ctx.from.id, 'PROMO_PERKS_UPDATE', 'topupCouponEnabled', 'System', { value: !st.topupCouponEnabled });
+    await showPanel(ctx, true);
+  });
+
   bot.action('pp_lb_view', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.reply(await leaderboardText(), { parse_mode: 'Markdown' });
@@ -155,6 +168,7 @@ module.exports = function registerPromoPerks(bot) {
     pp_fo: { action: 'fo_pct', msg: '🛒 ပထမဆုံး order discount % ရိုက်ပါ (0 = ပိတ်မယ်, အများဆုံး 90)\nဥပမာ: `10`' },
     pp_wb_set: { action: 'wb_set', msg: '😴 Win-back ကို `ရက်-MC` ပုံစံနဲ့ ရိုက်ပါ\nဥပမာ: `30-300` = ရက် 30 idle ရင် 300 MC နဲ့ ပြန်ခေါ်' },
     pp_lb_set: { action: 'lb_set', msg: '📊 လစဉ်ဆုများကို space ခြားပြီး ရိုက်ပါ (No.1 က အရင်)\nဥပမာ: `3000 2000 1000`' },
+    pp_tc_set: { action: 'tc_set', msg: '🎟 Top-up coupon ကို `အနည်းဆုံးKS-pct/flat-တန်ဖိုး-ရက်` ပုံစံနဲ့ ရိုက်ပါ\nဥပမာ: `10000-pct-5-7` = 10,000 KS+ ဖြည့်ရင် 5% coupon (7 ရက်သက်တမ်း)\nဥပမာ: `20000-flat-1000-14` = 1,000 KS လျှော့ coupon' },
   };
 
   for (const [act, def] of Object.entries(prompts)) {
@@ -241,6 +255,21 @@ module.exports = function registerPromoPerks(bot) {
         const d = num(m[1], 7, 3650), b = num(m[2], 0, 1_000_000);
         if (d === null || b === null) return ctx.reply('❌ ရက်က အနည်းဆုံး 7 ဖြစ်ရပါမယ်။');
         return done({ winbackDays: d, winbackBonusMC: b, winbackEnabled: true }, 'winback');
+      }
+      case 'tc_set': {
+        const m = raw.match(/^(\d{1,9})\s*-\s*(pct|flat)\s*-\s*(\d{1,7})\s*-\s*(\d{1,4})$/i);
+        if (!m) return ctx.reply('❌ `အနည်းဆုံးKS-pct/flat-တန်ဖိုး-ရက်` ပုံစံ (ဥပမာ `10000-pct-5-7`) နဲ့ ရိုက်ပါ။', { parse_mode: 'Markdown' });
+        const minKS = num(m[1], 0, 100_000_000);
+        const type = m[2].toLowerCase() === 'flat' ? 'Flat' : 'Percentage';
+        const value = num(m[3], 1, type === 'Percentage' ? 90 : 1_000_000);
+        const days = num(m[4], 1, 365);
+        if (minKS === null || value === null || days === null) {
+          return ctx.reply('❌ တန်ဖိုးတွေ မမှန်ပါ — % ဆိုရင် 1–90, ရက်က 1–365 ကြားဖြစ်ရပါမယ်။');
+        }
+        return done(
+          { topupCouponEnabled: true, topupCouponMinKS: minKS, topupCouponType: type, topupCouponValue: value, topupCouponExpiryDays: days },
+          'topupCoupon'
+        );
       }
       case 'lb_set': {
         const parts = raw.split(/\s+/).map((v) => parseInt(v, 10));

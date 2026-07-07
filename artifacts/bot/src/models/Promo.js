@@ -46,6 +46,35 @@ const promoSchema = new mongoose.Schema(
         usedAt: { type: Date, default: Date.now },
       },
     ],
+    perUserLimit: {
+      type: Number,
+      default: 1,
+      min: 1,
+      comment: 'Max times a single account may use this code',
+    },
+    scopeType: {
+      type: String,
+      enum: ['all', 'category', 'product'],
+      default: 'all',
+      comment: 'Which products this code applies to',
+    },
+    scopeCategories: {
+      type: [String],
+      default: () => [],
+      comment: 'Category names (when scopeType = category)',
+    },
+    scopeProducts: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Product',
+      default: () => [],
+      comment: 'Product IDs (when scopeType = product)',
+    },
+    source: {
+      type: String,
+      enum: ['admin', 'topup', 'reward'],
+      default: 'admin',
+      comment: 'How this promo was created',
+    },
     restrictedToUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -79,7 +108,26 @@ promoSchema.methods.isValid = function () {
 };
 
 promoSchema.methods.hasUserUsed = function (userId) {
-  return this.usedBy.some((u) => u.userId?.toString() === userId?.toString());
+  return this.userUseCount(userId) >= (this.perUserLimit || 1);
+};
+
+promoSchema.methods.userUseCount = function (userId) {
+  return this.usedBy.filter((u) => u.userId?.toString() === userId?.toString()).length;
+};
+
+/** true if this promo applies to the given product (id + category). No product info = pass. */
+promoSchema.methods.appliesToProduct = function ({ productId, category } = {}) {
+  const scope = this.scopeType || 'all';
+  if (scope === 'all') return true;
+  if (scope === 'category') {
+    if (!category) return false;
+    return (this.scopeCategories || []).some((c) => c.toLowerCase() === String(category).toLowerCase());
+  }
+  if (scope === 'product') {
+    if (!productId) return false;
+    return (this.scopeProducts || []).some((p) => p.toString() === productId.toString());
+  }
+  return true;
 };
 
 module.exports = mongoose.model('Promo', promoSchema);

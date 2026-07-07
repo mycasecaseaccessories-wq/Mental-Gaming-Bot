@@ -9,7 +9,10 @@
 
 const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
-const { validatePromo, createPromo, listPromos, deactivatePromo } = require('../services/PromoService');
+const {
+  validatePromo, createPromo, listPromos, deactivatePromo,
+  generateCoupon, listUserCoupons, scopeText, discountText,
+} = require('../services/PromoService');
 const { price } = require('../utils/ui');
 const { config } = require('../../config/settings');
 
@@ -92,6 +95,41 @@ module.exports = function registerPromo(bot) {
     );
   });
 
+  // ── User: /mycoupons — list my usable coupons ──────────────────────────────
+  bot.command('mycoupons', async (ctx) => {
+    const User = require('../models/User');
+    const user = await User.findByTelegramId(ctx.from.id);
+    if (!user) return ctx.reply('❌ /start ကို အရင်နှိပ်ပါ။');
+
+    const coupons = await listUserCoupons(user._id);
+    if (!coupons.length) {
+      return ctx.reply(
+        `💼 *My Coupons*\n\nသုံးလို့ရတဲ့ coupon မရှိသေးပါ။\n_ငွေဖြည့်တာ / promotion တွေကနေ coupon ရနိုင်ပါတယ်_ 🎁`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    const lines = coupons.map((c) => {
+      const exp = c.expiryDate ? ` — ${new Date(c.expiryDate).toLocaleDateString('en-GB')} အထိ` : '';
+      return `🎟 \`${c.code}\` — *${discountText(c)}*\n   📦 ${scopeText(c)}${exp}`;
+    });
+
+    await ctx.reply(
+      `💼 *My Coupons (${coupons.length})*\n\n${lines.join('\n\n')}\n\n_Order တင်တဲ့အခါ promo code အဆင့်မှာ ဒီ coupon တွေ ခလုတ်အနေနဲ့ ပေါ်ပါမယ်_ 🛒`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // ── Admin: /gencoupon — auto-generate a coupon (guided) ────────────────────
+  bot.command('gencoupon', adminOnly(), async (ctx) => {
+    ctx.session.adminGenCoupon = { step: 'value' };
+    await ctx.reply(
+      `🎟 *Auto-Generate Coupon*\n\nStep 1/5: Discount ရိုက်ပါ:\n` +
+        `• \`pct 10\` = 10% လျှော့\n• \`flat 500\` = 500 KS လျှော့`,
+      { parse_mode: 'Markdown', ...Markup.forceReply() }
+    );
+  });
+
   // ── Admin: /createpromo ────────────────────────────────────────────────────
   bot.command('createpromo', adminOnly(), async (ctx) => {
     ctx.session.adminCreatePromo = { step: 'code' };
@@ -135,6 +173,120 @@ module.exports = function registerPromo(bot) {
       await ctx.reply(`✅ Promo \`${promo.code}\` deactivated.`, { parse_mode: 'Markdown' });
     } catch (err) {
       await ctx.reply(`❌ ${err.message}`);
+    }
+  });
+
+  // ── Multi-step auto-coupon generation interceptor ──────────────────────────
+  bot.on('text', async (ctx, next) => {
+    const state = ctx.session?.adminGenCoupon;
+    if (!state || ctx.from.id !== config.bot.adminId) return next();
+    const input = ctx.message.text.trim();
+    if (input.startsWith('/')) { ctx.session.adminGenCoupon = null; return next(); }
+
+    if (state.step === 'value') {
+      const m = input.match(/^(pct|flat)\s+(\d+(?:\.\d+)?)$/i);
+      if (!m) return ctx.reply('❌ `pct 10` (10%) သို့ `flat 500` (500 KS) ပုံစံနဲ့ ရိုက်ပါ:', { parse_mode: 'Markdown' });
+      state.discountType = m[1].toLowerCase() === 'flat' ? 'Flat' : 'Percentage';
+      state.value = parseFloat(m[2]);
+      if (state.discountType === 'Percentage' && (state.value <= 0 || state.value > 90)) {
+        return ctx.reply('❌ % က 1–90 ကြားပဲ ရပါတယ်:');
+      }
+      state.step = 'scope';
+      await ctx.reply(
+        `Step 2/5: ဘယ်ပစ္စည်းတွေမှာ သုံးလို့ရမလဲ?\n\n` +
+          `• \`all\` — ပစ္စည်းအားလုံး\n` +
+          `• \`cat MLBB, PUBG\` — category အလိုက်\n` +
+          `• \`prod diamond\` — product နာမည်ရှာပြီး ကိုက်တဲ့ဟာတွေ`,
+        { parse_mode: 'Markdown', ...Markup.forceReply() }
+      );
+
+    } else if (state.step === 'scope') {
+      const lower = input.toLowerCase();
+      if (lower === 'all') {
+        state.scopeType = 'all';
+        state.scopeCategories = [];
+        state.scopeProducts = [];
+        state.scopeLabel = 'All products';
+      } else if (lower.startsWith('cat ')) {
+        const cats = input.slice(4).split(',').map((s) => s.trim()).filter(Boolean);
+        if (!cats.length) return ctx.reply('❌ `cat MLBB, PUBG` လို ရိုက်ပါ:', { parse_mode: 'Markdown' });
+        state.scopeType = 'category';
+        state.scopeCategories = cats;
+        state.scopeProducts = [];
+        state.scopeLabel = cats.join(', ');
+      } else if (lower.startsWith('prod ')) {
+        const q = input.slice(5).trim();
+        if (!q) return ctx.reply('❌ `prod <နာမည်>` လို ရိုက်ပါ:', { parse_mode: 'Markdown' });
+        const Product = require('../models/Product');
+        const prods = await Product.find({
+          name: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' },
+          isActive: { $ne: false },
+        }).limit(20);
+        if (!prods.length) return ctx.reply(`❌ "${q}" နဲ့ ကိုက်တဲ့ product မတွေ့ပါ — ထပ်ရှာကြည့်ပါ:`);
+        state.scopeType = 'product';
+        state.scopeCategories = [];
+        state.scopeProducts = prods.map((p) => p._id);
+        state.scopeLabel = prods.map((p) => p.name).slice(0, 5).join(', ') + (prods.length > 5 ? ` +${prods.length - 5}` : '');
+        await ctx.reply(`✅ Product ${prods.length} ခု ကိုက်ပါတယ်:\n${prods.map((p) => `• ${p.name}`).join('\n')}`);
+      } else {
+        return ctx.reply('❌ `all`, `cat ...`, သို့ `prod ...` နဲ့ စရပါမယ်:', { parse_mode: 'Markdown' });
+      }
+      state.step = 'maxUses';
+      await ctx.reply(`Step 3/5: လူဘယ်နှစ်ယောက်စာလဲ? (စုစုပေါင်း အသုံးပြုနိုင်မယ့် အကြိမ်; \`unlimited\` လည်း ရ):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+
+    } else if (state.step === 'maxUses') {
+      if (input.toLowerCase() === 'unlimited') {
+        state.maxUses = null;
+      } else {
+        const n = parseInt(input, 10);
+        if (!Number.isFinite(n) || n < 1) return ctx.reply('❌ 1 နဲ့အထက် ကိန်း သို့ `unlimited` ရိုက်ပါ:', { parse_mode: 'Markdown' });
+        state.maxUses = n;
+      }
+      state.step = 'perUser';
+      await ctx.reply(`Step 4/5: အကောင့်တစ်ခုက ဘယ်နှစ်ခါ သုံးလို့ရမလဲ? (များသောအားဖြင့် \`1\`):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+
+    } else if (state.step === 'perUser') {
+      const n = parseInt(input, 10);
+      if (!Number.isFinite(n) || n < 1 || n > 100) return ctx.reply('❌ 1–100 ကြား ရိုက်ပါ:');
+      state.perUserLimit = n;
+      state.step = 'expiry';
+      await ctx.reply(`Step 5/5: သက်တမ်း ဘယ်နှရက်လဲ? (ဥပမာ \`7\`; \`never\` = သက်တမ်းမကုန်):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+
+    } else if (state.step === 'expiry') {
+      let expiryDate = null;
+      if (input.toLowerCase() !== 'never') {
+        const days = parseInt(input, 10);
+        if (!Number.isFinite(days) || days < 1 || days > 3650) return ctx.reply('❌ ရက်အရေအတွက် (1–3650) သို့ `never` ရိုက်ပါ:', { parse_mode: 'Markdown' });
+        expiryDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      }
+      ctx.session.adminGenCoupon = null;
+
+      try {
+        const promo = await generateCoupon(ctx.from.id, {
+          discountType: state.discountType,
+          value: state.value,
+          maxUses: state.maxUses,
+          perUserLimit: state.perUserLimit,
+          expiryDate,
+          scopeType: state.scopeType,
+          scopeCategories: state.scopeCategories,
+          scopeProducts: state.scopeProducts,
+          description: `Scope: ${state.scopeLabel}`,
+        });
+
+        await ctx.reply(
+          `✅ *Coupon ထုတ်ပြီးပါပြီ!*\n\n` +
+            `🎟 Code: \`${promo.code}\`\n` +
+            `🏷 Discount: *${discountText(promo)}*\n` +
+            `📦 Scope: ${state.scopeLabel}\n` +
+            `👥 စုစုပေါင်း: ${promo.maxUses || '∞'} ကြိမ် | တစ်ယောက်: ${promo.perUserLimit} ကြိမ်\n` +
+            `📅 Expires: ${expiryDate ? expiryDate.toLocaleDateString('en-GB') : 'Never'}\n\n` +
+            `_Code ကို ကူးပြီး ဝယ်သူတွေဆီ / channel မှာ ကြေညာနိုင်ပါပြီ_ 📢`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (err) {
+        await ctx.reply(`❌ ${err.message}`);
+      }
     }
   });
 

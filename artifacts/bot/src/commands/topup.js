@@ -77,7 +77,7 @@ module.exports = function registerTopup(bot) {
         `✅ *Top-up approved!*`
       );
 
-      const { user, amountKS, bonusCoins, happyHourCoins, happyHourPct } = await approveTopup(txId, ctx.from.id);
+      const { user, amountKS, bonusCoins, happyHourCoins, happyHourPct, topupCoupon } = await approveTopup(txId, ctx.from.id);
 
       await auditLog(ctx.from.id, 'TOPUP_APPROVED', txId, 'Transaction', { amountKS, bonusCoins, happyHourCoins });
 
@@ -98,6 +98,20 @@ module.exports = function registerTopup(bot) {
           buildReceipt(txId, amountKS, bonusCoins, user, happyHourCoins, happyHourPct),
           { parse_mode: 'MarkdownV2' }
         );
+        // Top-up reward coupon notification
+        if (topupCoupon) {
+          const { scopeText, discountText } = require('../services/PromoService');
+          await ctx.telegram.sendMessage(
+            user.telegramId,
+            `🎁 *Top-up လက်ဆောင် Coupon ရပါပြီ!*\n\n` +
+              `🎟 Code: \`${topupCoupon.code}\`\n` +
+              `🏷 Discount: *${escMd(discountText(topupCoupon))}*\n` +
+              `📦 သုံးလို့ရမယ့် ပစ္စည်း: ${escMd(scopeText(topupCoupon))}\n` +
+              `📅 သက်တမ်း: ${new Date(topupCoupon.expiryDate).toLocaleDateString('en-GB')} အထိ\n\n` +
+              `_Order တင်တဲ့အခါ promo code နေရာမှာ အလိုအလျောက် ပေါ်နေပါမယ်_ 🛒`,
+            { parse_mode: 'Markdown' }
+          ).catch((e) => console.error('[Topup] coupon notify error:', e.message));
+        }
       } catch (err) {
         console.error('[Topup] Could not send receipt to user:', err.message);
       }

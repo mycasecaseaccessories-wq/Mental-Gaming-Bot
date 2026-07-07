@@ -326,7 +326,10 @@ const orderScene = new Scenes.WizardScene(
     // If arriving via text (promo code input)
     if (ctx.message?.text && !ctx.message.text.startsWith('/')) {
       const code = ctx.message.text.trim();
-      const result = await validatePromo(code, ctx.from.id, sess.effectivePrice);
+      const result = await validatePromo(code, ctx.from.id, sess.effectivePrice, {
+        productId: sess.productId,
+        category: sess.gameName,
+      });
 
       if (result.valid) {
         sess.promoCode = code.toUpperCase();
@@ -355,12 +358,34 @@ const orderScene = new Scenes.WizardScene(
       return;
     }
 
-    // Prompt for promo code
+    // Prompt for promo code — show the user's own usable coupons as buttons
+    let couponButtons = [];
+    let couponHint = '';
+    try {
+      const { listUserCoupons, discountText } = require('../services/PromoService');
+      const user = await User.findByTelegramId(ctx.from.id);
+      if (user) {
+        const coupons = await listUserCoupons(user._id, {
+          productId: sess.productId,
+          category: sess.gameName,
+        });
+        couponButtons = coupons.slice(0, 5).map((c) => [
+          Markup.button.callback(`🎟 ${c.code} — ${discountText(c)}`, `order_use_coupon:${c._id}`),
+        ]);
+        if (couponButtons.length) {
+          couponHint = `\n💼 _သင့်အကောင့်ထဲက coupon ${couponButtons.length} ခု ဒီပစ္စည်းမှာ သုံးလို့ရပါတယ် — နှိပ်ပြီး သုံးပါ:_`;
+        }
+      }
+    } catch (e) {
+      console.error('[OrderScene] coupon list error:', e.message);
+    }
+
     await ctx.reply(
-      `🎟 *Promo Code*\n\nDo you have a promo code? Enter it below or skip:`,
+      `🎟 *Promo Code*\n\nDo you have a promo code? Enter it below or skip:${couponHint}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
+          ...couponButtons,
           [Markup.button.callback('⏭ Skip', 'order_skip_promo')],
           [Markup.button.callback('❌ Cancel', 'order_cancel_scene')],
         ]),
@@ -686,6 +711,38 @@ orderScene.action('order_new_id', async (ctx) => {
 });
 
 // ── Action: Skip promo ─────────────────────────────────────────────────────────
+// ── Action: Use one of the user's saved coupons ───────────────────────────────
+orderScene.action(/^order_use_coupon:([a-f0-9]{24})$/, async (ctx) => {
+  const sess = ctx.session.orderSession;
+  if (!sess) { await ctx.answerCbQuery(); await ctx.reply('❌ Session expired.'); return ctx.scene.leave(); }
+
+  try {
+    const Promo = require('../models/Promo');
+    const promo = await Promo.findById(ctx.match[1]);
+    if (!promo) return ctx.answerCbQuery('❌ Coupon မတွေ့ပါ', { show_alert: true });
+
+    const result = await validatePromo(promo.code, ctx.from.id, sess.effectivePrice, {
+      productId: sess.productId,
+      category: sess.gameName,
+    });
+    if (!result.valid) {
+      return ctx.answerCbQuery(`❌ ${result.error}`, { show_alert: true });
+    }
+
+    await ctx.answerCbQuery('✅ Coupon applied!');
+    await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+    sess.promoCode = promo.code;
+    sess.promoDiscount = result.discount;
+    sess.finalAmount = Math.max(0, sess.effectivePrice - result.discount);
+    sess.redeemCodeToConsume = null;
+    ctx.wizard.selectStep(3);
+    return ctx.wizard.steps[3](ctx);
+  } catch (e) {
+    console.error('[OrderScene] use coupon error:', e.message);
+    return ctx.answerCbQuery('❌ Error — code ကို ရိုက်ထည့်ကြည့်ပါ', { show_alert: true });
+  }
+});
+
 orderScene.action('order_skip_promo', async (ctx) => {
   await ctx.answerCbQuery('Skipping promo');
   await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
@@ -707,11 +764,13 @@ orderScene.action('order_final_confirm', async (ctx) => {
   const ref = { chatId: ctx.chat.id, messageId: (await ctx.reply('⌛')).message_id };
 
   try {
+    const user = await User.findByTelegramId(ctx.from.id);
+    if (!user) throw new Error('User not found');
+
     // Consume the coupon-type redeem code BEFORE placing the order, so a
     // bookkeeping failure aborts the discounted purchase (never grants a free
     // discount). On success the discount is already baked into sess.finalAmount.
     if (sess.redeemCodeToConsume) {
-      const user = await User.findByTelegramId(ctx.from.id);
       const { promo } = await RewardService.redeemCouponCode(user, sess.redeemCodeToConsume);
       await applyPromo(promo.code, ctx.from.id);
     }
@@ -735,6 +794,23 @@ orderScene.action('order_final_confirm', async (ctx) => {
         }
       } catch (e) {
         console.error('[OrderScene] FO revalidation error:', e.message);
+      }
+    }
+
+    // ── Consume plain promo/coupon atomically BEFORE placing the order ──────
+    // If the limit was hit by a concurrent use, strip the discount instead of
+    // silently granting it.
+    if (!sess.redeemCodeToConsume && sess.promoCode) {
+      try {
+        await applyPromo(sess.promoCode, ctx.from.id);
+      } catch (e) {
+        sess.finalAmount = Math.min(sess.finalAmount + (sess.promoDiscount || 0), sess.effectivePrice ?? sess.finalAmount + (sess.promoDiscount || 0));
+        sess.promoCode = null;
+        sess.promoDiscount = 0;
+        await ctx.reply(
+          `⚠️ Promo code က အသုံးပြုခွင့် ပြည့်သွားလို့ ဒီ order မှာ မရတော့ပါ။\n💰 စုစုပေါင်း: *${price(sess.finalAmount)}*`,
+          { parse_mode: 'Markdown' }
+        );
       }
     }
 
@@ -767,11 +843,6 @@ orderScene.action('order_final_confirm', async (ctx) => {
       finalAmount: sess.finalAmount,
       checkoutData: checkoutDataArr,
     });
-
-    // Redeem-code coupons are already consumed above; only mark plain promos here.
-    if (!sess.redeemCodeToConsume && sess.promoCode) {
-      await applyPromo(sess.promoCode, ctx.from.id).catch(() => {});
-    }
 
     await auditLog(ctx.from.id, 'ORDER_PLACED', order._id.toString(), 'Order', {
       product: sess.productName,

@@ -308,8 +308,35 @@ async function approveTopup(txId, adminId) {
     console.error('[WalletService] happy hour bonus error:', e.message);
   }
 
+  // Top-up reward coupon (lazy require to avoid circular dependency)
+  let topupCoupon = null;
+  try {
+    const SystemStatus = require('../models/SystemStatus');
+    const st = await SystemStatus.get();
+    if (st.topupCouponEnabled && amountKS >= (st.topupCouponMinKS || 0) && st.topupCouponValue > 0) {
+      const { generateCoupon } = require('./PromoService');
+      const expiryDate = new Date(Date.now() + (st.topupCouponExpiryDays || 7) * 24 * 60 * 60 * 1000);
+      topupCoupon = await generateCoupon(adminId, {
+        discountType: st.topupCouponType || 'Percentage',
+        value: st.topupCouponValue,
+        maxUses: 1,
+        perUserLimit: 1,
+        expiryDate,
+        scopeType: st.topupCouponScopeType || 'all',
+        scopeCategories: st.topupCouponScopeCategories || [],
+        scopeProducts: st.topupCouponScopeProducts || [],
+        restrictedToUserId: user._id,
+        source: 'topup',
+        description: `Top-up reward — ${amountKS.toLocaleString()} KS (${txId})`,
+        prefix: 'TU',
+      });
+    }
+  } catch (e) {
+    console.error('[WalletService] topup coupon grant error:', e.message);
+  }
+
   const finalUser = await User.findById(user._id);
-  return { user: finalUser, amountKS, bonusCoins, happyHourCoins, happyHourPct, txId };
+  return { user: finalUser, amountKS, bonusCoins, happyHourCoins, happyHourPct, topupCoupon, txId };
 }
 
 /**

@@ -352,6 +352,25 @@ const GUIDE_SECTIONS = [
       `_Toggle ခလုတ်တွေနဲ့ တစ်ချက်နှိပ် ဖွင့်-ပိတ် လုပ်နိုင်ပါတယ်။_`,
   },
   {
+    key: 'coupons', label: '🎟 Coupons',
+    body:
+      `🎟 *Coupon System* _(Owner)_\n\n` +
+      `*၁။ Auto-Generate Coupon — \`/gencoupon\`*\n` +
+      `Code ကို bot က အလိုအလျောက်ထုတ်ပေး (ဥပမာ \`MGS-A3K9ZX\`)။ အဆင့် ၅ ဆင့်:\n` +
+      `1️⃣ Discount — \`pct 10\` (10%) သို့ \`flat 500\` (500 KS)\n` +
+      `2️⃣ Scope — \`all\` (အားလုံး) / \`cat MLBB\` (category) / \`prod diamond\` (product ရှာ)\n` +
+      `3️⃣ လူဘယ်နှစ်ယောက်စာ — စုစုပေါင်း အသုံးပြုနိုင်မယ့် အကြိမ် (\`unlimited\` ရ)\n` +
+      `4️⃣ တစ်ယောက် ဘယ်နှစ်ခါ — per-account limit\n` +
+      `5️⃣ သက်တမ်း ရက် (\`never\` ရ)\n\n` +
+      `*၂။ Top-up Coupon (အလိုအလျောက်လက်ဆောင်)*\n` +
+      `\`/promoperks\` → 🎟 TC ပြင်မယ် → \`10000-pct-5-7\` = 10,000 KS+ ဖြည့်တိုင်း 5% coupon (7 ရက်သက်တမ်း) အလိုအလျောက်ရ။ Toggle နဲ့ ဖွင့်-ပိတ်နိုင်။\n\n` +
+      `*၃။ ဝယ်သူဘက်မြင်ကွင်း*\n` +
+      `• \`/mycoupons\` — ကိုယ့် coupon တွေ + discount + သက်တမ်း ကြည့်\n` +
+      `• Order တင်တဲ့ promo code အဆင့်မှာ သုံးလို့ရတဲ့ coupon တွေ ခလုတ်အနေနဲ့ ပေါ်ပြီး တစ်ချက်နှိပ် သုံးနိုင်\n` +
+      `• Scope မကိုက်တဲ့ ပစ္စည်းမှာ သုံးရင် ငြင်းပယ်ပြီး ဘာတွေမှာသုံးလို့ရလဲ ပြောပြပေး\n\n` +
+      `_ရိုးရိုး code ကိုယ်တိုင်သတ်မှတ်ချင်ရင် \`/createpromo\` ကို ဆက်သုံးနိုင်ပါတယ်။_`,
+  },
+  {
     key: 'system', label: '🔧 System',
     body:
       `🔧 *System* _(Owner)_\n\n` +

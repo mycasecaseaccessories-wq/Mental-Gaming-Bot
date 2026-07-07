@@ -262,6 +262,16 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'MC prizes for monthly top spenders (index 0 = 1st place)',
     },
 
+    // ── Top-up reward coupon (auto-grant coupon on qualifying top-ups) ────────
+    topupCouponEnabled: { type: Boolean, default: false },
+    topupCouponMinKS:   { type: Number, default: 10000, min: 0, comment: 'Minimum top-up amount (KS) to earn a coupon' },
+    topupCouponType:    { type: String, enum: ['Flat', 'Percentage'], default: 'Percentage' },
+    topupCouponValue:   { type: Number, default: 5, min: 0, comment: 'KS (Flat) or % (Percentage) discount of the granted coupon' },
+    topupCouponExpiryDays: { type: Number, default: 7, min: 1, comment: 'Coupon validity in days from grant' },
+    topupCouponScopeType: { type: String, enum: ['all', 'category', 'product'], default: 'all' },
+    topupCouponScopeCategories: { type: [String], default: () => [] },
+    topupCouponScopeProducts: { type: [mongoose.Schema.Types.ObjectId], default: () => [] },
+
     // ── Meta ───────────────────────────────────────────────────────────────────
     updatedBy: { type: Number, default: null },
   },
