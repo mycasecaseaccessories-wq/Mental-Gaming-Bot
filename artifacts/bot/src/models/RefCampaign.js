@@ -43,6 +43,12 @@ const refCampaignSchema = new mongoose.Schema(
     },
     totalRewardsClaimed: { type: Number, default: 0 },
 
+    minRefereeAgeDays: {
+      type: Number,
+      default: 0,
+      comment: 'Min estimated Telegram account age (days) of the INVITED user for the ref to count (0 = off). Anti-fraud.',
+    },
+
     isActive:  { type: Boolean, default: true, index: true },
     endedAt:   { type: Date, default: null },
     endReason: { type: String, default: null, comment: 'quota_full | manual' },

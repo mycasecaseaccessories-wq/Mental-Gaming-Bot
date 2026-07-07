@@ -9,6 +9,7 @@ const RefCampaign = require('../models/RefCampaign');
 const RefCampaignEntry = require('../models/RefCampaignEntry');
 const { creditCoin, creditKS } = require('./WalletService');
 const { auditLog } = require('./logger');
+const { estimateAccountAgeDays } = require('../utils/accountAge');
 const { config } = require('../../config/settings');
 
 function rewardText(c) {
@@ -21,10 +22,29 @@ function rewardText(c) {
  * Called when a referral is completed for the first time (referee's first
  * qualifying top-up). Increments progress and grants rewards when due.
  */
-async function onReferralCompleted(referrer, telegram) {
+async function onReferralCompleted(referrer, telegram, referee = null) {
   try {
     const camp = await RefCampaign.getActive();
     if (!camp) return null;
+
+    // Anti-fraud: invited user's estimated Telegram account age must meet minimum
+    if (camp.minRefereeAgeDays > 0 && referee) {
+      const ageDays = estimateAccountAgeDays(referee.telegramId);
+      if (ageDays < camp.minRefereeAgeDays) {
+        try {
+          if (telegram) {
+            await telegram.sendMessage(
+              referrer.telegramId,
+              `🎯 Campaign "${camp.title}"\n\n⚠️ ဒီ ref ကို campaign မှာ မတွက်ပေးနိုင်ပါ — ဖိတ်ခံရသူရဲ့ Telegram account သက်တမ်းက အနည်းဆုံး ${camp.minRefereeAgeDays} ရက် ရှိရပါမယ် (ခန့်မှန်း ${ageDays} ရက်ပဲ ရှိသေးလို့ပါ)။\n\n_ပုံမှန် referral commission ကတော့ ရရှိပြီးသားပါ။_`
+            );
+          }
+        } catch {}
+        await auditLog(referrer.telegramId, 'REF_CAMPAIGN_AGE_REJECT', camp._id.toString(), 'System', {
+          refereeId: referee.telegramId, estAgeDays: ageDays, minRequired: camp.minRefereeAgeDays,
+        });
+        return null;
+      }
+    }
 
     // Ensure entry exists (idempotent upsert)
     await RefCampaignEntry.updateOne(

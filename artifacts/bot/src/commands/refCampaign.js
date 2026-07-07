@@ -114,7 +114,7 @@ module.exports = function registerRefCampaign(bot) {
     if (existing) return ctx.reply('❌ Campaign တစ်ခု ဖွင့်ထားပြီးသားပါ။ အရင်ပိတ်ပြီးမှ အသစ်စပါ။');
     ctx.session.rcAdmin = { step: 'title' };
     await ctx.reply(
-      `➕ *Campaign အသစ်*\n\nStep 1/7: *Campaign နာမည်* ရိုက်ပါ:\n_(ဥပမာ "မိတ်ဆွေ ၅ ယောက်ခေါ် VPN အလကားရ")_`,
+      `➕ *Campaign အသစ်*\n\nStep 1/8: *Campaign နာမည်* ရိုက်ပါ:\n_(ဥပမာ "မိတ်ဆွေ ၅ ယောက်ခေါ် VPN အလကားရ")_`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
   });
@@ -162,7 +162,7 @@ module.exports = function registerRefCampaign(bot) {
     if (st.step === 'title') {
       st.title = input;
       st.step = 'refs';
-      return ctx.reply(`Step 2/7: ဆုတစ်ခုရဖို့ *ref ဘယ်နှစ်ယောက်* လိုမလဲ? (ဥပမာ 5)`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 2/8: ဆုတစ်ခုရဖို့ *ref ဘယ်နှစ်ယောက်* လိုမလဲ? (ဥပမာ 5)`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'refs') {
       const n = parseInt(input, 10);
@@ -170,7 +170,7 @@ module.exports = function registerRefCampaign(bot) {
       st.requiredRefs = n;
       st.step = 'rtype';
       return ctx.reply(
-        `Step 3/7: *ဆု အမျိုးအစား* ရွေးပါ:`,
+        `Step 3/8: *ဆု အမျိုးအစား* ရွေးပါ:`,
         Markup.inlineKeyboard([
           [Markup.button.callback('🪙 MC (Mental Coins)', 'rcw_type:mc')],
           [Markup.button.callback('💵 KS (Wallet ငွေ)', 'rcw_type:ks')],
@@ -183,26 +183,26 @@ module.exports = function registerRefCampaign(bot) {
       if (!n || n < 1) return ctx.reply('❌ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
       st.rewardAmount = n;
       st.step = 'maxinv';
-      return ctx.reply(`Step 5/7: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 5/8: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'rlabel') {
       st.rewardLabel = input;
       st.step = 'maxinv';
-      return ctx.reply(`Step 5/7: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 5/8: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'maxinv') {
       const n = parseInt(input, 10);
       if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
       st.maxInvitesPerUser = n;
       st.step = 'maxrew';
-      return ctx.reply(`Step 6/7: တစ်ယောက်လျှင် *ဆု အများဆုံး ဘယ်နှစ်ခု* လဲရမလဲ?\n_(0 = ကန့်သတ်မထား၊ များသောအားဖြင့် 1)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 6/8: တစ်ယောက်လျှင် *ဆု အများဆုံး ဘယ်နှစ်ခု* လဲရမလဲ?\n_(0 = ကန့်သတ်မထား၊ များသောအားဖြင့် 1)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'maxrew') {
       const n = parseInt(input, 10);
       if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
       st.maxRewardsPerUser = n;
       st.step = 'quota';
-      return ctx.reply(`Step 7/7: Campaign တစ်ခုလုံးမှာ *ဆု စုစုပေါင်း ဘယ်နှစ်ခု* ပေးမလဲ?\n_(ပြည့်တာနဲ့ campaign အလိုအလျောက် ပိတ်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 7/8: Campaign တစ်ခုလုံးမှာ *ဆု စုစုပေါင်း ဘယ်နှစ်ခု* ပေးမလဲ?\n_(ပြည့်တာနဲ့ campaign အလိုအလျောက် ပိတ်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'quota') {
       const n = parseInt(input, 10);
@@ -235,9 +235,9 @@ module.exports = function registerRefCampaign(bot) {
     st.rewardType = ctx.match[1];
     if (st.rewardType === 'product') {
       st.step = 'rlabel';
-      return ctx.reply(`Step 4/7: *ဆု product နာမည်* ရိုက်ပါ:\n_(ဥပမာ "ExpressVPN 1 Month" — ဆုရသူကို admin က ကိုယ်တိုင် ပို့ရပါမယ်)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 4/8: *ဆု product နာမည်* ရိုက်ပါ:\n_(ဥပမာ "ExpressVPN 1 Month" — ဆုရသူကို admin က ကိုယ်တိုင် ပို့ရပါမယ်)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     st.step = 'ramount';
-    return ctx.reply(`Step 4/7: *ဆု ပမာဏ* ရိုက်ပါ (${st.rewardType === 'mc' ? 'MC' : 'KS'}):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+    return ctx.reply(`Step 4/8: *ဆု ပမာဏ* ရိုက်ပါ (${st.rewardType === 'mc' ? 'MC' : 'KS'}):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
   });
 };
