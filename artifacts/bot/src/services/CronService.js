@@ -223,6 +223,75 @@ async function tickChannelAutoPosts(telegram) {
   }
 }
 
+// ── Job 7: Premium account expiry reminders (daily 09:00 MMT) ────────────────
+
+async function notifyExpiringAccounts(telegram) {
+  try {
+    const AccountCredential = require('../models/AccountCredential');
+    const now = new Date();
+    const in3d = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    let sent = 0;
+
+    // Expiring within 3 days
+    const expiring = await AccountCredential.find({
+      status: 'sold', notified3d: false,
+      expiresAt: { $gt: now, $lte: in3d },
+      buyerTelegramId: { $ne: null },
+    }).limit(200);
+    for (const c of expiring) {
+      const days = Math.ceil((c.expiresAt - now) / (24 * 60 * 60 * 1000));
+      const name = String(c.serviceNameSnap || 'Account');
+      const plan = String(c.planLabelSnap || '');
+      try {
+        await telegram.sendMessage(
+          c.buyerTelegramId,
+          `⏳ သတိပေးချက်\n\n🔐 ${name}${plan ? ` (${plan})` : ''} သက်တမ်း ${days} ရက်ပဲ ကျန်ပါတော့တယ်။\n\nအသစ် ပြန်ဝယ်ချင်ရင် /accounts ကို နှိပ်ပါ။`
+        );
+        sent++;
+        c.notified3d = true;
+        await c.save();
+      } catch (err) {
+        // User blocked bot / chat gone → mark so we don't retry forever
+        if (err?.response?.error_code === 403 || err?.response?.error_code === 400) {
+          c.notified3d = true;
+          await c.save();
+        }
+      }
+    }
+
+    // Just expired
+    const expired = await AccountCredential.find({
+      status: 'sold', notifiedExpired: false,
+      expiresAt: { $lte: now },
+      buyerTelegramId: { $ne: null },
+    }).limit(200);
+    for (const c of expired) {
+      const name = String(c.serviceNameSnap || 'Account');
+      const plan = String(c.planLabelSnap || '');
+      try {
+        await telegram.sendMessage(
+          c.buyerTelegramId,
+          `🔴 သက်တမ်းကုန်ပါပြီ\n\n🔐 ${name}${plan ? ` (${plan})` : ''} သက်တမ်း ကုန်သွားပါပြီ။\n\nအသစ် ပြန်ဝယ်ချင်ရင် /accounts ကို နှိပ်ပါ။`
+        );
+        sent++;
+        c.notifiedExpired = true;
+        await c.save();
+      } catch (err) {
+        if (err?.response?.error_code === 403 || err?.response?.error_code === 400) {
+          c.notifiedExpired = true;
+          await c.save();
+        }
+      }
+    }
+
+    if (sent > 0) console.log(`[CronService] 🔐 Account expiry reminders sent: ${sent}`);
+    return { success: true, sent };
+  } catch (err) {
+    console.error('[CronService] ❌ Account expiry reminders:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 // ── Cron scheduler ────────────────────────────────────────────────────────────
 
 let scheduledJobs = [];
@@ -263,7 +332,12 @@ function startCronJobs(telegram) {
     cron.schedule('*/10 * * * *', () => tickChannelAutoPosts(telegram), { timezone: 'UTC' })
   );
 
-  console.log('[CronService] ✅ 6 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts)');
+  // 09:00 MMT = 02:30 UTC — premium account expiry reminders
+  scheduledJobs.push(
+    cron.schedule('30 2 * * *', () => notifyExpiringAccounts(telegram), { timezone: 'UTC' })
+  );
+
+  console.log('[CronService] ✅ 7 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/AccountExpiry)');
 }
 
 function stopCronJobs() {

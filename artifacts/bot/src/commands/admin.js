@@ -280,6 +280,25 @@ const GUIDE_SECTIONS = [
       `_🟢 ပြထားသလောက်ပဲ ဝယ်သူ မြင်ရတာမို့ — ပြချင်တာ 🟢, ဖျောက်ချင်တာ 🔴 ထားပါ။_`,
   },
   {
+    key: 'accounts', label: '🔐 Premium Accounts',
+    body:
+      `🔐 *Premium Accounts* _(Owner)_\n\n` +
+      `Account (ဥပမာ ExpressVPN) ရောင်းတဲ့ စနစ် — ဝယ်တာနဲ့ ဝယ်သူဆီ login + password *ချက်ချင်း* ရောက်။\n` +
+      `_ရိုးရိုး product system နဲ့ လုံးဝ သီးသန့် — မရောထွေးပါ။_\n\n` +
+      `Admin menu → *🔐 Accounts* (သို့ \`/accadmin\`):\n` +
+      `• ➕ *Add Product* — ၅ ဆင့် wizard (service → plan → စျေး → သက်တမ်းရက် → emoji)\n` +
+      `• 📥 *Stock ထည့်* — \`email:password\` တစ်ကြောင်းချင်း paste (တစ်ခါတည်း အများကြီးရ)\n` +
+      `• 🏷 *Discount* — % လျှော့စျေး (0 = ဖြုတ်)\n` +
+      `• 💵 *စျေးပြင်* / 🟢🔴 *ဖွင့်-ပိတ်* / 🗑 *ဖျက်*\n\n` +
+      `🎬 *ဥပမာ — ExpressVPN 1 လစာ ရောင်းနည်း:*\n` +
+      `1️⃣ *🔐 Accounts* → ➕ Add Product → "ExpressVPN" → "1 Month" → 15000 → 30 → 🛡\n` +
+      `2️⃣ 📥 Stock ထည့် → \`myvpn@gmail.com:Pass123\` စသဖြင့် paste\n` +
+      `3️⃣ ဝယ်သူက menu → *🔐 Premium Accounts* → ဝယ် → wallet ဖြတ် → account ချက်ချင်းရ\n` +
+      `4️⃣ ဝယ်ချိန်မှ ရက် ၃၀ သက်တမ်း စတွက် — ဝယ်သူက *🎟 ကျွန်ုပ်၏ Accounts* မှာ ကျန်ရက် ကြည့်နိုင်\n\n` +
+      `🤖 *Auto:* သက်တမ်း ၃ ရက်အလို + ကုန်ချိန်မှာ ဝယ်သူဆီ သတိပေးစာ အလိုအလျောက် ပို့ပေးတယ် (မနက် 9 နာရီ)။\n` +
+      `_Stock ကုန်ရင် ဝယ်လို့မရတော့ဘဲ ငွေလည်း မဖြတ်ပါ — stock အမြဲ ဖြည့်ထားပါ။_`,
+  },
+  {
     key: 'system', label: '🔧 System',
     body:
       `🔧 *System* _(Owner)_\n\n` +

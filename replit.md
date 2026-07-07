@@ -258,6 +258,16 @@ Owner-only system for scheduling daily promotional posts to Telegram channels:
 - Cron tick: every 10 minutes via `ChannelAutoPostService.runDuePosts()`; deduplicates per MST date
 - Bot must be admin in the destination channel with post permission
 
+### Premium Accounts System (separate from Product system)
+
+Sells account credentials (e.g. ExpressVPN) with instant delivery, per-product duration/expiry, and discounts. Completely independent of the game top-up Product system.
+
+- Models: `AccountProduct` (serviceName, planLabel, price KS, discountPercent 0–90, durationDays, isActive) and `AccountCredential` (loginId, password, status available/sold, buyer + soldAt/expiresAt + name snapshots; atomic `claimOne()`)
+- User: `/accounts` (+ 🔐 main-menu button, i18n `menu.accounts`), buy flow = `debitKS` → `claimOne` → instant credential delivery (refund on any failure/out-of-stock); `/myaccounts` shows remaining days
+- Admin (Owner): admin menu **🔐 Accounts** / `/accadmin` — add-product wizard (5 steps), bulk stock paste (`email:password` per line), discount %, price edit, toggle, delete
+- Cron: daily 09:00 MMT expiry reminders (3 days before + on expiry; `notified3d`/`notifiedExpired` flags, set only after successful send or 403)
+- File: `src/commands/accounts.js` in ORDER before `admin.js` (text wizard must precede ambient)
+
 ### Spin Wheel — Custom Rewards (Owner)
 
 Admin can add unlimited custom prizes via `/dashboard → 🎰 Spin → ➕ Add Custom Reward`:

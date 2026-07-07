@@ -14,7 +14,7 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null) {
     [L('menu.rewards'),  L('menu.promo')],
     [L('menu.referral'), L('menu.gameids')],
     [L('menu.faq'),      L('menu.support')],
-    [L('menu.settings')],
+    [L('menu.accounts'), L('menu.settings')],
   );
   return Markup.keyboard(rows).resize();
 }
@@ -28,7 +28,7 @@ function adminMenuKeyboard() {
     ['📈 Analytics',       '🤖 AI Insights'],
     ['🔧 System',          '📋 Audit Logs'],
     ['🪙 Coins & Tiers',   '🎁 Rewards'],
-    ['💳 Payment Gateways'],
+    ['💳 Payment Gateways', '🔐 Accounts'],
     ['📖 Admin Guide',     '🔙 Back to Main'],
   ]).resize();
 }

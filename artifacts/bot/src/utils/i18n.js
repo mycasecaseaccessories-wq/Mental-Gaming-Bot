@@ -22,6 +22,7 @@ const STRINGS = {
   'menu.faq':        { en: '❓ FAQ',            mm: '❓ မေးခွန်းများ' },
   'menu.support':    { en: '💬 Support',        mm: '💬 အကူအညီ' },
   'menu.settings':   { en: '⚙️ Settings',       mm: '⚙️ ဆက်တင်' },
+  'menu.accounts':   { en: '🔐 Premium Accounts', mm: '🔐 အကောင့်များ' },
 
   // ── Welcome / common ─────────────────────────────────────────────────────
   'welcome.title':       { en: '👋 Welcome to *Mental Gaming Store*!', mm: '👋 *Mental Gaming Store* မှ ကြိုဆိုပါတယ်!' },
