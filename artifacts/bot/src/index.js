@@ -93,6 +93,8 @@ function loadCommands(bot) {
     'adminRewards.js',      // ← Coin Rewards + Redeem Codes admin (Owner)
     'rewards.js',           // ← Coin Rewards + Redeem Codes (user) — text handler must precede ambient
     'accounts.js',          // ← Premium Accounts (user + admin) — text wizard must precede ambient
+    'refCampaign.js',       // ← Referral campaigns (user + admin wizard)
+    'joinReward.js',        // ← Channel join bonus (user + admin wizard)
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler
@@ -128,6 +130,8 @@ async function registerBotCommands() {
     { command: 'topup',         description: '💳 Top Up Wallet' },
     { command: 'accounts',      description: '🔐 Premium Accounts' },
     { command: 'myaccounts',    description: '🎟 My Purchased Accounts' },
+    { command: 'campaign',      description: '🎯 Referral Campaign' },
+    { command: 'joinbonus',     description: '📣 Channel Join Bonus' },
     { command: 'history',       description: '📜 Transaction History' },
     { command: 'spin',          description: '🎰 Spin Wheel' },
     { command: 'spininfo',      description: '🎲 Prize Pool Info' },

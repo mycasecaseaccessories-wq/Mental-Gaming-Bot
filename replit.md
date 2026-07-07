@@ -250,6 +250,8 @@ Daily schedule (Myanmar Time = UTC+6:30):
 | `/sendchannelpost <id>` | Owner | Send a configured post immediately (test) |
 | `/togglechannelpost <id>` | Owner | Toggle auto-post active/inactive |
 | `/delchannelpost <id>` | Owner | Delete a channel auto-post |
+| `/refcamp` | Owner | Referral campaign panel (create/end/top participants) |
+| `/joinbonusadmin` | Owner | Channel join bonus panel (add/toggle/delete/announce) |
 
 ### Channel Auto-Posts
 
@@ -267,6 +269,23 @@ Sells account credentials (e.g. ExpressVPN) with instant delivery, per-product d
 - Admin (Owner): admin menu **🔐 Accounts** / `/accadmin` — add-product wizard (5 steps), bulk stock paste (`email:password` per line), discount %, price edit, toggle, delete
 - Cron: daily 09:00 MMT expiry reminders (3 days before + on expiry; `notified3d`/`notifiedExpired` flags, set only after successful send or 403)
 - File: `src/commands/accounts.js` in ORDER before `admin.js` (text wizard must precede ambient)
+
+### Referral Campaigns (Owner)
+
+"Invite N friends → get reward" campaigns; only ONE active at a time (DB partial unique index on `isActive:true`).
+
+- Models: `RefCampaign` (title, requiredRefs, rewardType mc/ks/product, rewardAmount/rewardLabel, maxInvitesPerUser, maxRewardsPerUser, totalRewardLimit, totalRewardsClaimed, endReason quota_full/manual) and `RefCampaignEntry` (unique campaignId+telegramId; countedRefs/totalRefs/rewardsClaimed)
+- `RefCampaignService.onReferralCompleted(referrer, telegram)` — hooked into `ReferralService.processTopupCommission` on FIRST completion only (`commissionHistory.length === 1`). All counters use conditional `findOneAndUpdate` + `$inc` (concurrency-safe; rollback on delivery failure)
+- Quota full → campaign auto-ends, admin notified; unfinished progress discarded; next campaign starts fresh
+- Admin: `/refcamp` / admin menu **🎯 Ref Campaign** — 7-step wizard, end, top participants. User: `/campaign`
+- File: `src/commands/refCampaign.js`
+
+### Channel Join Bonus (Owner) — opt-in, NOT force-join
+
+- Models: `JoinReward` (channelId, channelLink, title, mcReward, isActive, claimCount), `JoinRewardClaim` (unique rewardId+telegramId)
+- User: `/joinbonus` — join channel → ✅ Claim → `getChatMember` verify → MC credited once (claim-record-first blocks double-claim races). Bot must be admin in the channel
+- Admin: `/joinbonusadmin` / admin menu **📣 Join Bonus Admin** — 3-step add wizard (getChat validation), toggle/delete, 📢 announce to all users (50ms delay loop)
+- File: `src/commands/joinReward.js`
 
 ### Spin Wheel — Custom Rewards (Owner)
 

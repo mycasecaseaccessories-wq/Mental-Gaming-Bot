@@ -29,6 +29,7 @@ function adminMenuKeyboard() {
     ['🔧 System',          '📋 Audit Logs'],
     ['🪙 Coins & Tiers',   '🎁 Rewards'],
     ['💳 Payment Gateways', '🔐 Accounts'],
+    ['🎯 Ref Campaign',     '📣 Join Bonus Admin'],
     ['📖 Admin Guide',     '🔙 Back to Main'],
   ]).resize();
 }

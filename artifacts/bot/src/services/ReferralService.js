@@ -257,6 +257,16 @@ async function processTopupCommission(userId, topupAmount, telegram) {
 
   await referral.save();
 
+  // ── Referral campaign hook (first completion only) ────────────────────────
+  if (referral.commissionHistory.length === 1) {
+    try {
+      const { onReferralCompleted } = require('./RefCampaignService');
+      await onReferralCompleted(referrer, telegram);
+    } catch (err) {
+      console.error('[ReferralService] ⚠️ Campaign hook failed:', err.message);
+    }
+  }
+
   await auditLog(referee.telegramId, 'REFERRAL_COMMISSION_PAID', referral._id.toString(), 'System', {
     referrerId: referrer.telegramId,
     topupAmount,

@@ -299,6 +299,41 @@ const GUIDE_SECTIONS = [
       `_Stock ကုန်ရင် ဝယ်လို့မရတော့ဘဲ ငွေလည်း မဖြတ်ပါ — stock အမြဲ ဖြည့်ထားပါ။_`,
   },
   {
+    key: 'refcampaign', label: '🎯 Ref Campaign',
+    body:
+      `🎯 *Referral Campaign* _(Owner)_\n\n` +
+      `"မိတ်ဆွေ N ယောက်ခေါ်ရင် ဆုရ" campaign စနစ် — တစ်ကြိမ်လျှင် campaign *တစ်ခုပဲ* ဖွင့်လို့ရ။\n\n` +
+      `Admin menu → *🎯 Ref Campaign* (သို့ \`/refcamp\`):\n` +
+      `• ➕ *New Campaign* — ၇ ဆင့် wizard:\n` +
+      `   နာမည် → ဆုရဖို့ ref အရေအတွက် → ဆုအမျိုးအစား (🪙MC / 💵KS / 📦Product) → ဆုပမာဏ →\n` +
+      `   max ref/user → max ဆု/user → *ဆုစုစုပေါင်း limit*\n` +
+      `• ⏹ *End* — campaign ပိတ် (မပြည့်သေးတဲ့ progress ပျက်၊ နောက် campaign အသစ် 0 ကစ)\n` +
+      `• 📊 *Top ပါဝင်သူများ* — ဘယ်သူ ref ဘယ်နှစ်ယောက် ခေါ်ပြီးပြီ\n\n` +
+      `🎬 *ဥပမာ — "ref 5 ယောက် = ExpressVPN အလကား" (ဆု 20 ခုပဲ):*\n` +
+      `1️⃣ ➕ New Campaign → နာမည် → 5 → 📦 Product → "ExpressVPN 1 Month" → 0 → 1 → 20\n` +
+      `2️⃣ \`/launchbroadcast\` နဲ့ ကြေညာ — ဝယ်သူတွေက \`/campaign\` မှာ progress ကြည့်နိုင်\n` +
+      `3️⃣ တစ်ယောက်ယောက် ref 5 ယောက်ပြည့်ရင် → ဆုအလိုအလျောက်ရ (Product ဆို owner ဆီ "ပို့ပေးပါ" စာရောက်)\n` +
+      `4️⃣ ဆု 20 ခု ပြည့်တာနဲ့ campaign *အလိုအလျောက် ပိတ်* — owner ဆီ အကြောင်းကြားစာ ရောက်\n\n` +
+      `_Ref 1 ယောက် = မိတ်ဆွေက link နဲ့ဝင်ပြီး ပထမဆုံး ငွေဖြည့်မှ တွက်ပါတယ် (commission စနစ်နဲ့ တူတူ)။_`,
+  },
+  {
+    key: 'joinbonus', label: '📣 Join Bonus',
+    body:
+      `📣 *Channel Join Bonus* _(Owner)_\n\n` +
+      `Channel join ရင် MC ပေးတဲ့ စနစ် — *force join မဟုတ်ပါ*၊ ဆန္ဒရှိမှ ဝင်တာပါ။\n\n` +
+      `Admin menu → *📣 Join Bonus Admin* (သို့ \`/joinbonusadmin\`):\n` +
+      `• ➕ *Add* — ၃ ဆင့် (channel → ပြမယ့်နာမည် → MC ပမာဏ)\n` +
+      `• 📢 — user အားလုံးဆီ ကြေညာစာ ပို့ (join link + claim button ပါပြီးသား)\n` +
+      `• 🟢🔴 ဖွင့်-ပိတ် / 🗑 ဖျက်\n\n` +
+      `⚠️ *အရေးကြီး:* Bot ကို channel ထဲ *admin* အဖြစ် အရင်ထည့်ပါ — မဟုတ်ရင် member ဝင်မဝင် စစ်လို့မရပါ။\n\n` +
+      `🎬 *ဥပမာ — "News channel join ရင် 50 MC":*\n` +
+      `1️⃣ Bot ကို channel မှာ admin ထည့်\n` +
+      `2️⃣ *📣 Join Bonus Admin* → ➕ Add → \`@mychannel\` → "MGS News" → 50\n` +
+      `3️⃣ 📢 နှိပ် → user အားလုံးဆီ ကြေညာစာရောက်\n` +
+      `4️⃣ User က channel ဝင် → ✅ Claim နှိပ် → bot က member ဟုတ်မဟုတ် စစ်ပြီး 50 MC ချက်ချင်းပေး (တစ်ယောက် တစ်ခါပဲ)\n\n` +
+      `_ဝယ်သူတွေက \`/joinbonus\` နဲ့လည်း ကြည့်နိုင်ပါတယ်။_`,
+  },
+  {
     key: 'system', label: '🔧 System',
     body:
       `🔧 *System* _(Owner)_\n\n` +
