@@ -42,6 +42,7 @@ async function showUserCampaign(ctx) {
     (camp.maxInvitesPerUser > 0 ? `👥 တစ်ယောက်လျှင် ref အများဆုံး: ${camp.maxInvitesPerUser} ယောက် (သုံးပြီး ${totalRefs})\n` : '') +
     (camp.maxRewardsPerUser > 0 ? `🎁 တစ်ယောက်လျှင် ဆု အများဆုံး: ${camp.maxRewardsPerUser} ခု\n` : '') +
     (quotaLeft !== null ? `⏳ ဆု လက်ကျန်: *${quotaLeft} ခု* (ကုန်ရင် campaign ပြီးမယ်)\n` : '') +
+    (camp.minRefereeAgeDays > 0 ? `🛡 ဖိတ်ခံရသူရဲ့ Telegram account သက်တမ်း အနည်းဆုံး *${camp.minRefereeAgeDays} ရက်* ရှိရပါမယ်\n` : '') +
     `\n_မိတ်ဆွေက သင့် link နဲ့ဝင်ပြီး ပထမဆုံး ငွေဖြည့်ရင် 1 ref အဖြစ် တွက်ပါတယ်။_\n` +
     `🔗 သင့် link ကို /referral မှာ ယူပါ။`;
 
@@ -65,6 +66,7 @@ async function buildAdminPanel() {
       `👥 Max ref per user: ${camp.maxInvitesPerUser || '∞'}\n` +
       `🎁 Max ဆု per user: ${camp.maxRewardsPerUser || '∞'}\n` +
       `📦 ဆုစုစုပေါင်း limit: ${camp.totalRewardLimit || '∞'} (ပေးပြီး ${camp.totalRewardsClaimed})\n` +
+      `🛡 ဖိတ်ခံရသူ acc သက်တမ်း: ${camp.minRefereeAgeDays > 0 ? `≥ ${camp.minRefereeAgeDays} ရက် (ID ခန့်မှန်း)` : 'မစစ်ပါ'}\n` +
       `🙋 ပါဝင်သူ: ${participants} ယောက်\n\n` +
       `_Campaign ပိတ်ရင် မပြည့်သေးတဲ့ progress တွေ ပျက်မယ် — နောက် campaign မှာ အသစ်ပြန်စမယ်။_`;
     rows.push([Markup.button.callback('⏹ Campaign ပိတ်မယ်', 'rc_end')]);
@@ -226,11 +228,12 @@ module.exports = function registerRefCampaign(bot) {
         rewardLabel: st.rewardLabel || '',
         maxInvitesPerUser: st.maxInvitesPerUser,
         maxRewardsPerUser: st.maxRewardsPerUser,
-        totalRewardLimit: n,
+        totalRewardLimit: st.totalRewardLimit,
+        minRefereeAgeDays: n,
       });
       await auditLog(ctx.from.id, 'CREATE_REF_CAMPAIGN', camp._id.toString(), 'System', { title: camp.title });
       return ctx.reply(
-        `✅ *Campaign စတင်ပြီးပါပြီ!*\n\n🎯 ${esc(camp.title)}\n🏆 ${esc(rewardText(camp))} / ref ${camp.requiredRefs} ယောက်\n👥 Max ref/user: ${camp.maxInvitesPerUser || '∞'}  •  🎁 Max ဆု/user: ${camp.maxRewardsPerUser || '∞'}\n📦 ဆုစုစုပေါင်း: ${camp.totalRewardLimit || '∞'}\n\n_ဝယ်သူတွေကို /launchbroadcast နဲ့ ကြေညာပေးပါ — သူတို့က /campaign နဲ့ progress ကြည့်နိုင်ပါတယ်။_`,
+        `✅ *Campaign စတင်ပြီးပါပြီ!*\n\n🎯 ${esc(camp.title)}\n🏆 ${esc(rewardText(camp))} / ref ${camp.requiredRefs} ယောက်\n👥 Max ref/user: ${camp.maxInvitesPerUser || '∞'}  •  🎁 Max ဆု/user: ${camp.maxRewardsPerUser || '∞'}\n📦 ဆုစုစုပေါင်း: ${camp.totalRewardLimit || '∞'}\n🛡 ဖိတ်ခံရသူ acc သက်တမ်း: ${camp.minRefereeAgeDays > 0 ? `≥ ${camp.minRefereeAgeDays} ရက်` : 'မစစ်ပါ'}\n\n_ဝယ်သူတွေကို /launchbroadcast နဲ့ ကြေညာပေးပါ — သူတို့က /campaign နဲ့ progress ကြည့်နိုင်ပါတယ်။_`,
         { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('🎯 Panel', 'rc_panel')]]) }
       );
     }

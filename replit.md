@@ -275,9 +275,10 @@ Sells account credentials (e.g. ExpressVPN) with instant delivery, per-product d
 "Invite N friends → get reward" campaigns; only ONE active at a time (DB partial unique index on `isActive:true`).
 
 - Models: `RefCampaign` (title, requiredRefs, rewardType mc/ks/product, rewardAmount/rewardLabel, maxInvitesPerUser, maxRewardsPerUser, totalRewardLimit, totalRewardsClaimed, endReason quota_full/manual) and `RefCampaignEntry` (unique campaignId+telegramId; countedRefs/totalRefs/rewardsClaimed)
-- `RefCampaignService.onReferralCompleted(referrer, telegram)` — hooked into `ReferralService.processTopupCommission` on FIRST completion only (`commissionHistory.length === 1`). All counters use conditional `findOneAndUpdate` + `$inc` (concurrency-safe; rollback on delivery failure)
+- `RefCampaignService.onReferralCompleted(referrer, telegram, referee)` — hooked into `ReferralService.processTopupCommission` on FIRST completion only (`commissionHistory.length === 1`). All counters use conditional `findOneAndUpdate` + `$inc` (concurrency-safe; rollback on delivery failure)
 - Quota full → campaign auto-ends, admin notified; unfinished progress discarded; next campaign starts fresh
-- Admin: `/refcamp` / admin menu **🎯 Ref Campaign** — 7-step wizard, end, top participants. User: `/campaign`
+- `minRefereeAgeDays` (wizard step 8, 0 = off): invited user's Telegram account age is *estimated* from their numeric ID via `utils/accountAge.js` (anchor-table interpolation); refs from too-new accounts are not counted (referrer notified, `REF_CAMPAIGN_AGE_REJECT` audit)
+- Admin: `/refcamp` / admin menu **🎯 Ref Campaign** — 8-step wizard, end, top participants. User: `/campaign`
 - File: `src/commands/refCampaign.js`
 
 ### Channel Join Bonus (Owner) — opt-in, NOT force-join

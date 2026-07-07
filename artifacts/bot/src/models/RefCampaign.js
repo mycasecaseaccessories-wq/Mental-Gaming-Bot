@@ -46,6 +46,7 @@ const refCampaignSchema = new mongoose.Schema(
     minRefereeAgeDays: {
       type: Number,
       default: 0,
+      min: 0,
       comment: 'Min estimated Telegram account age (days) of the INVITED user for the ref to count (0 = off). Anti-fraud.',
     },
 

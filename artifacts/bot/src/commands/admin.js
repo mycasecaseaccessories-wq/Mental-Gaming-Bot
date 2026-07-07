@@ -304,9 +304,9 @@ const GUIDE_SECTIONS = [
       `🎯 *Referral Campaign* _(Owner)_\n\n` +
       `"မိတ်ဆွေ N ယောက်ခေါ်ရင် ဆုရ" campaign စနစ် — တစ်ကြိမ်လျှင် campaign *တစ်ခုပဲ* ဖွင့်လို့ရ။\n\n` +
       `Admin menu → *🎯 Ref Campaign* (သို့ \`/refcamp\`):\n` +
-      `• ➕ *New Campaign* — ၇ ဆင့် wizard:\n` +
+      `• ➕ *New Campaign* — ၈ ဆင့် wizard:\n` +
       `   နာမည် → ဆုရဖို့ ref အရေအတွက် → ဆုအမျိုးအစား (🪙MC / 💵KS / 📦Product) → ဆုပမာဏ →\n` +
-      `   max ref/user → max ဆု/user → *ဆုစုစုပေါင်း limit*\n` +
+      `   max ref/user → max ဆု/user → *ဆုစုစုပေါင်း limit* → *ဖိတ်ခံရသူ acc သက်တမ်း အနည်းဆုံး (ရက်)*\n` +
       `• ⏹ *End* — campaign ပိတ် (မပြည့်သေးတဲ့ progress ပျက်၊ နောက် campaign အသစ် 0 ကစ)\n` +
       `• 📊 *Top ပါဝင်သူများ* — ဘယ်သူ ref ဘယ်နှစ်ယောက် ခေါ်ပြီးပြီ\n\n` +
       `🎬 *ဥပမာ — "ref 5 ယောက် = ExpressVPN အလကား" (ဆု 20 ခုပဲ):*\n` +
@@ -314,7 +314,8 @@ const GUIDE_SECTIONS = [
       `2️⃣ \`/launchbroadcast\` နဲ့ ကြေညာ — ဝယ်သူတွေက \`/campaign\` မှာ progress ကြည့်နိုင်\n` +
       `3️⃣ တစ်ယောက်ယောက် ref 5 ယောက်ပြည့်ရင် → ဆုအလိုအလျောက်ရ (Product ဆို owner ဆီ "ပို့ပေးပါ" စာရောက်)\n` +
       `4️⃣ ဆု 20 ခု ပြည့်တာနဲ့ campaign *အလိုအလျောက် ပိတ်* — owner ဆီ အကြောင်းကြားစာ ရောက်\n\n` +
-      `_Ref 1 ယောက် = မိတ်ဆွေက link နဲ့ဝင်ပြီး ပထမဆုံး ငွေဖြည့်မှ တွက်ပါတယ် (commission စနစ်နဲ့ တူတူ)။_`,
+      `_Ref 1 ယောက် = မိတ်ဆွေက link နဲ့ဝင်ပြီး ပထမဆုံး ငွေဖြည့်မှ တွက်ပါတယ် (commission စနစ်နဲ့ တူတူ)။_\n\n` +
+      `🛡 *Acc သက်တမ်း စစ်ဆေးမှု:* ဖိတ်ခံရသူရဲ့ Telegram account သက်တမ်းကို ID ကနေ *ခန့်မှန်း* တွက်ပြီး သတ်မှတ်ရက်မပြည့်ရင် campaign မှာ မတွက်ပါ (fake account ကာကွယ်ရေး)။ ပုံမှန် commission ကတော့ ရနေမြဲပါ။`,
   },
   {
     key: 'joinbonus', label: '📣 Join Bonus',
