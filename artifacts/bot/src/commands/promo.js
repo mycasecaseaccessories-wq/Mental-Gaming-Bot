@@ -14,6 +14,11 @@ const {
   generateCoupon, listUserCoupons, scopeText, discountText,
 } = require('../services/PromoService');
 const { price } = require('../utils/ui');
+
+// Escape legacy-Markdown special chars in dynamic text
+function escMd(s) {
+  return String(s == null ? '' : s).replace(/([_*`\[])/g, '\\$1');
+}
 const { config } = require('../../config/settings');
 
 module.exports = function registerPromo(bot) {
@@ -298,12 +303,80 @@ module.exports = function registerPromo(bot) {
             `📦 Scope: ${state.scopeLabel}\n` +
             `👥 စုစုပေါင်း: ${promo.maxUses || '∞'} ကြိမ် | တစ်ယောက်: ${promo.perUserLimit} ကြိမ်\n` +
             `📅 Expires: ${expiryDate ? expiryDate.toLocaleDateString('en-GB') : 'Never'}\n\n` +
-            `_Code ကို ကူးပြီး ဝယ်သူတွေဆီ / channel မှာ ကြေညာနိုင်ပါပြီ_ 📢`,
-          { parse_mode: 'Markdown' }
+            `_Channel မှာ တစ်ခါတည်း ကြေညာချင်ရင် အောက်ကခလုတ် နှိပ်ပါ_ 👇`,
+          {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              [Markup.button.callback('📢 Channel မှာ ကြေညာမယ်', `coupon_announce:${promo._id}`)],
+            ]),
+          }
         );
       } catch (err) {
         await ctx.reply(`❌ ${err.message}`);
       }
+    }
+  });
+
+  // ── Announce a coupon to a channel (Owner) ─────────────────────────────────
+  bot.action(/^coupon_announce:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.adminCouponAnnounce = { promoId: ctx.match[1] };
+    await ctx.reply(
+      `📢 *Channel မှာ ကြေညာမယ်*\n\n` +
+        `ကြေညာချင်တဲ့ channel ရဲ့ \`@username\` (သို့) channel ID (ဥပမာ \`-1001234567890\`) ကို ရိုက်ပါ:\n` +
+        `_(Bot ကို အဲဒီ channel မှာ admin အရင်ထည့်ထားရပါမယ်။ မလုပ်တော့ရင် \`cancel\` ရိုက်ပါ)_`,
+      { parse_mode: 'Markdown', ...Markup.forceReply() }
+    );
+  });
+
+  bot.on('text', async (ctx, next) => {
+    const state = ctx.session?.adminCouponAnnounce;
+    if (!state || ctx.from.id !== config.bot.adminId) return next();
+    const input = ctx.message.text.trim();
+    if (input.startsWith('/')) { ctx.session.adminCouponAnnounce = null; return next(); }
+    if (/^cancel$/i.test(input)) {
+      ctx.session.adminCouponAnnounce = null;
+      return ctx.reply('👌 ပယ်ဖျက်လိုက်ပါပြီ။');
+    }
+
+    try {
+      const chat = await ctx.telegram.getChat(input);
+      if (chat.type !== 'channel') {
+        return ctx.reply(
+          `❌ ဒါက channel မဟုတ်ပါဘူး (${chat.type})။ Channel ရဲ့ @username (သို့) ID ကိုပဲ ရိုက်ပါ (သို့) \`cancel\` ရိုက်ပါ:`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+      const Promo = require('../models/Promo');
+      const promo = await Promo.findById(state.promoId);
+      if (!promo || !promo.isActive) {
+        ctx.session.adminCouponAnnounce = null;
+        return ctx.reply('❌ Coupon မတွေ့ပါ (သို့) ပိတ်ထားပြီးပါပြီ။');
+      }
+
+      const announceText =
+        `🎉 *Promo Code အသစ် ရောက်ပါပြီ!*\n\n` +
+        `🎟 Code: \`${promo.code}\`\n` +
+        `🏷 Discount: *${escMd(discountText(promo))}*\n` +
+        `📦 သုံးလို့ရမယ့် ပစ္စည်း: ${escMd(scopeText(promo))}\n` +
+        (promo.maxUses ? `👥 ဦးရေကန့်သတ်: ပထမဆုံး *${promo.maxUses}* ယောက်ပဲ ရမယ်!\n` : '') +
+        (promo.expiryDate ? `📅 ${new Date(promo.expiryDate).toLocaleDateString('en-GB')} အထိပဲ ရမယ်\n` : '') +
+        `\n🛒 Order တင်တဲ့အခါ Promo Code နေရာမှာ ဒီ code ကို ရိုက်ထည့်ပြီး လျှော့ဈေးယူလိုက်ပါ! 🚀`;
+
+      await ctx.telegram.sendMessage(chat.id, announceText, { parse_mode: 'Markdown' });
+      ctx.session.adminCouponAnnounce = null;
+      return ctx.reply(
+        `✅ *${escMd(chat.title || input)}* channel မှာ ကြေညာပြီးပါပြီ! 📢`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (e) {
+      console.error('[Promo] coupon announce error:', e.message);
+      return ctx.reply(
+        `❌ ပို့လို့မရပါ — ${escMd(e.message)}\n\n` +
+          `စစ်ရန်: ① channel ID/@username မှန်လား ② bot ကို channel မှာ admin ထည့်ထားလား\n` +
+          `ထပ်ရိုက်ကြည့်ပါ (သို့) \`cancel\` ရိုက်ပါ:`,
+        { parse_mode: 'Markdown' }
+      );
     }
   });
 
