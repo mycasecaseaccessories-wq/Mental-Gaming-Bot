@@ -26,6 +26,7 @@ module.exports = function registerPromo(bot) {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('🎟 Enter Promo Code', 'promo_enter')],
+          [Markup.button.callback('💼 My Coupons',       'promo_my_coupons')],
           [Markup.button.callback('🛒 Go to Shop',       'nav:go:shop')],
         ]),
       }
@@ -36,7 +37,16 @@ module.exports = function registerPromo(bot) {
   bot.action('promo_enter', async (ctx) => {
     await ctx.answerCbQuery();
     ctx.session.awaitingPromoCode = true;
-    await ctx.reply('🎟 Type your promo code:', { ...Markup.forceReply() });
+    await ctx.reply(
+      '🎟 Promo code ကို ရိုက်ထည့်ပါ:\n_(မလုပ်တော့ရင် `cancel` လို့ ရိုက်ပါ)_',
+      { parse_mode: 'Markdown', ...Markup.forceReply() }
+    );
+  });
+
+  // Inline — show my coupons
+  bot.action('promo_my_coupons', async (ctx) => {
+    await ctx.answerCbQuery();
+    return sendMyCoupons(ctx);
   });
 
   // Capture typed promo code from inline entry
@@ -44,7 +54,11 @@ module.exports = function registerPromo(bot) {
     if (!ctx.session?.awaitingPromoCode) return next();
     if (ctx.message?.text?.startsWith('/')) return next();
     ctx.session.awaitingPromoCode = false;
-    const code = ctx.message.text.trim().toUpperCase();
+    const raw = ctx.message.text.trim();
+    if (/^(skip|cancel|no|မလုပ်တော့|ထား)$/i.test(raw)) {
+      return ctx.reply('👌 ပယ်ဖျက်လိုက်ပါပြီ။');
+    }
+    const code = raw.toUpperCase();
     const result = await validatePromo(code, ctx.from.id, Infinity);
     if (!result.valid) return ctx.reply(`❌ *${code}*: ${result.error}`, { parse_mode: 'Markdown' });
     const p = result.promo;
@@ -95,8 +109,8 @@ module.exports = function registerPromo(bot) {
     );
   });
 
-  // ── User: /mycoupons — list my usable coupons ──────────────────────────────
-  bot.command('mycoupons', async (ctx) => {
+  // ── Shared: list the user's usable coupons ─────────────────────────────────
+  async function sendMyCoupons(ctx) {
     const User = require('../models/User');
     const user = await User.findByTelegramId(ctx.from.id);
     if (!user) return ctx.reply('❌ /start ကို အရင်နှိပ်ပါ။');
@@ -118,7 +132,10 @@ module.exports = function registerPromo(bot) {
       `💼 *My Coupons (${coupons.length})*\n\n${lines.join('\n\n')}\n\n_Order တင်တဲ့အခါ promo code အဆင့်မှာ ဒီ coupon တွေ ခလုတ်အနေနဲ့ ပေါ်ပါမယ်_ 🛒`,
       { parse_mode: 'Markdown' }
     );
-  });
+  }
+
+  // ── User: /mycoupons — list my usable coupons ──────────────────────────────
+  bot.command('mycoupons', (ctx) => sendMyCoupons(ctx));
 
   // ── Admin: /gencoupon — auto-generate a coupon (guided) ────────────────────
   bot.command('gencoupon', adminOnly(), async (ctx) => {
