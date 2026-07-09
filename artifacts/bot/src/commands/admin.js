@@ -116,18 +116,22 @@ const GUIDE_SECTIONS = [
     key: 'users', label: '👥 Manage Users',
     body:
       `👥 *Manage Users* _(Owner)_\n\n` +
-      `• \`/users <name|id>\` — ရှာ\n` +
-      `• \`/userinfo\` — အသေးစိတ်\n` +
+      `• 👥 Manage Users ခလုတ် → *📋 All Users* — user တစ်ယောက်ချင်း ခလုတ်နှိပ်ပြီး ကြည့်လို့ရ\n` +
+      `• User Card ထဲမှာ — 📦 *Orders* (ဘာဝယ်ထားလဲ), 💰 *Topup History* (ငွေဖြည့်မှတ်တမ်း), ⏳ *Pending Topup* (ရောက်မရောက် စစ်/Approve)\n` +
+      `• \`/users <name|id>\` — ရှာ, \`/userinfo\` — အသေးစိတ်\n` +
       `• ⚠️ *Warn* / Unwarn, 🚫 *Ban* / Unban\n` +
       `• 🔒 *Restrict* (order/topup/spin) / 🔓 Remove\n` +
       `• 💳 *Adjust Balance* — လက်ဖြင့် ငွေထည့်/နုတ် (audit ချက်ချင်း)\n` +
       `• \`/penalize\` — fraud ဒဏ်\n\n` +
-      `🎬 *ဥပမာ ၁ — user ကို ငွေ ထည့်ပေးနည်း:*\n` +
-      `1️⃣ \`/users John\` ရိုက် (သို့ user ID) → user card ပေါ်မယ်\n` +
-      `2️⃣ *💳 Adjust Balance* နှိပ် → "+5000" ရိုက် → အကြောင်းရိုက်\n` +
-      `3️⃣ → user wallet ကို 5000 KS ဝင် + audit log မှာ auto မှတ်\n\n` +
-      `🎬 *ဥပမာ ၂ — မကောင်းတဲ့ user ban လုပ်နည်း:*\n` +
-      `1️⃣ \`/users <id>\` → *🚫 Ban* နှိပ် → user က bot သုံးလို့ မရတော့ (Unban နဲ့ ပြန်ဖွင့်နိုင်)`,
+      `🎬 *ဥပမာ ၁ — user ငွေဖြည့်ထားတာ ရောက်မရောက် စစ်နည်း:*\n` +
+      `1️⃣ 👥 Manage Users → 📋 All Users → user ခလုတ် နှိပ်\n` +
+      `2️⃣ *💰 Topup History* နှိပ် → ⏳ Pending ရှိရင် ခလုတ်ပေါ်မယ်\n` +
+      `3️⃣ *⏳ Pending Topup စစ်ရန်* နှိပ် → screenshot + ✅ Approve နှိပ်ရင် ငွေ ချက်ချင်းဝင်\n\n` +
+      `🎬 *ဥပမာ ၂ — user ကို ငွေ ထည့်ပေးနည်း:*\n` +
+      `1️⃣ User card မှာ *💳 Adjust Balance* နှိပ် → "+5000" ရိုက်\n` +
+      `2️⃣ → user wallet ကို 5000 KS ဝင် + audit log မှာ auto မှတ်\n\n` +
+      `🎬 *ဥပမာ ၃ — မကောင်းတဲ့ user ban လုပ်နည်း:*\n` +
+      `1️⃣ User card မှာ *🚫 Ban* နှိပ် → user က bot သုံးလို့ မရတော့ (Unban နဲ့ ပြန်ဖွင့်နိုင်)`,
   },
   {
     key: 'rates', label: '💱 Manage Rates',
@@ -1376,20 +1380,26 @@ module.exports = function registerAdmin(bot) {
     await ctx.answerCbQuery();
     const { users, total } = await listUsers({ filter: { isBlocked: true }, limit: 10 });
     if (!total) return ctx.reply('✅ No banned users.');
-    const esc2 = (s) => String(s || '').replace(/([_*`\[\]()~>#+=|{}.!\\-])/g, '\\$1');
-    const lines = users.map((u) => `• \`${u.telegramId}\` ${u.username ? `@${esc2(u.username)}` : '—'}`);
-    await ctx.reply(`🚫 *Banned Users (${total})*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' })
-      .catch(() => ctx.reply(`Banned Users (${total})\n\n${lines.join('\n').replace(/[*_`\\]/g,'')}`));
+    const btns = users.map((u) => {
+      const name = u.first_name || (u.username ? `@${u.username}` : `ID:${u.telegramId}`);
+      return [Markup.button.callback(`🚫 ${name}`.slice(0, 50), `um_view:${u.telegramId}`)];
+    });
+    await ctx.reply(`🚫 *Banned Users (${total})*\n\n_User ကို နှိပ်ပြီး အသေးစိတ် ကြည့်ပါ_ 👇`, {
+      parse_mode: 'Markdown', ...Markup.inlineKeyboard(btns),
+    }).catch(() => ctx.reply(`Banned Users (${total}) — user ကို နှိပ်ပါ 👇`, Markup.inlineKeyboard(btns)));
   });
 
   bot.action('users_warned', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const { users, total } = await listUsers({ filter: { warningsCount: { $gt: 0 } }, limit: 10 });
     if (!total) return ctx.reply('✅ No users with warnings.');
-    const esc2 = (s) => String(s || '').replace(/([_*`\[\]()~>#+=|{}.!\\-])/g, '\\$1');
-    const lines = users.map((u) => `• \`${u.telegramId}\` ${u.username ? `@${esc2(u.username)}` : '—'} — ⚠️ ${u.warningsCount}/3`);
-    await ctx.reply(`⚠️ *Warned Users (${total})*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' })
-      .catch(() => ctx.reply(`Warned Users (${total})\n\n${lines.join('\n').replace(/[*_`\\]/g,'')}`));
+    const btns = users.map((u) => {
+      const name = u.first_name || (u.username ? `@${u.username}` : `ID:${u.telegramId}`);
+      return [Markup.button.callback(`⚠️ ${u.warningsCount}/3 — ${name}`.slice(0, 50), `um_view:${u.telegramId}`)];
+    });
+    await ctx.reply(`⚠️ *Warned Users (${total})*\n\n_User ကို နှိပ်ပြီး အသေးစိတ် ကြည့်ပါ_ 👇`, {
+      parse_mode: 'Markdown', ...Markup.inlineKeyboard(btns),
+    }).catch(() => ctx.reply(`Warned Users (${total}) — user ကို နှိပ်ပါ 👇`, Markup.inlineKeyboard(btns)));
   });
 
   bot.action('users_stats', adminOnly(), async (ctx) => {

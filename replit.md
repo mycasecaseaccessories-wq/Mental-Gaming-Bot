@@ -101,6 +101,11 @@ artifacts/bot/
 - **Referral campaigns** — `/refcamp` (Owner), `/campaign` (user): "invite N friends → reward"; one active at a time (partial unique index); `RefCampaign` + `RefCampaignEntry` models; hooked into first commission completion only; all counters conditional `findOneAndUpdate` + `$inc`; quota-full auto-end; optional `minRefereeAgeDays` (account age estimated from Telegram ID, `utils/accountAge.js`)
 - **Channel join bonus** (opt-in, NOT force-join) — `/joinbonus` (user, getChatMember verify, claim-record-first), `/joinbonusadmin` (Owner); `JoinReward` + `JoinRewardClaim` models; 📢 announce button posts to ALL bot users AND `announcementChannelId` (channel post: join URL + bot deep link, no callback claim button)
 
+### User management (`userManagement.js`)
+- 👥 Manage Users panel → 📋 All Users / 🚫 Banned / ⚠️ Warned lists now show **per-user tappable buttons** (`um_view:<telegramId>`) opening the full user card; `/users [query]` search results also buttonized
+- User card extra buttons: 📦 Orders (`um_orders` — last 10 orders w/ status icons), 💰 Topup History (`um_txs` — last 10 transactions + balances + pending count), ⏳ Pending Topup စစ်ရန် (`um_ptopup` — that user's pending topups w/ screenshot + reused `topup_approve`/`topup_reject`/`topup_askinfo` buttons); sub-views have 🔙 User Card back button
+- Existing card actions: Warn/Unwarn, Ban/Unban, Restrict order/topup, Adjust Balance (`um_adjust` text wizard)
+
 ### Admin menu buttons
 - `adminMenuKeyboard()` in `utils/keyboard.js`; new rows: 🎁 Promo Perks / 🎟 Coupons / 📣 Announce / 🎮 Game News / 🎁 Giveaway — `bot.hears` handlers live next to the matching `bot.command` in promoPerks.js, promo.js (gencoupon), apiManagement.js, gameNews.js, accountGiveaway.js (`/giveaway`)
 
