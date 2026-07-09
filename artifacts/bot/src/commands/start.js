@@ -138,6 +138,12 @@ module.exports = function registerStart(bot) {
       } catch {}
     }
 
+    // ── Free giveaway deep link: freebie ─────────────────────────────────────
+    else if (payload === 'freebie') {
+      await setJoinSourceOnce(ctx.from.id, 'channel', 'freebie');
+      extraNote = `\n🎁 _အခမဲ့ Premium Account ရယူဖို့ /freebie ကို နှိပ်ပါ!_\n`;
+    }
+
     // ── Direct start ─────────────────────────────────────────────────────────
     else {
       await setJoinSourceOnce(ctx.from.id, 'direct', null);

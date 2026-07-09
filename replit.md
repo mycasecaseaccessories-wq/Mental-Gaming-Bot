@@ -109,6 +109,7 @@ artifacts/bot/
 
 ### Premium Accounts (separate from Product system)
 - Sells credentials (e.g. ExpressVPN): `AccountProduct` + `AccountCredential` (atomic `claimOne()`); buy = `debitKS` → claim → instant delivery (refund on failure); `/accounts`, `/myaccounts` (user); `/accadmin` (Owner) — add wizard, bulk `email:password` paste, discount/price/toggle/delete; daily 09:00 expiry reminders
+- **Free Giveaway** (`commands/accountGiveaway.js`): give one AccountProduct away free; models `AccountGiveaway` (one active via partial unique index; restrictions all toggleable: maxClaims 0=unlimited, endAt, minAccountAgeDays via `utils/accountAge`, requirePurchase = Order status 'Success', requireChannelId getChatMember check) + `AccountGiveawayClaim` (unique giveawayId+telegramId, claim-record-first, rollback on stock failure); claim = quota `$inc` guard → `claimOne` pricePaid 0 → deliver like purchase; auto-deactivates on quota/stock exhaustion + owner notify; admin: `/accadmin` → 🎁 Free Giveaway (`accga_*` actions, reply-targeted text wizard `session.accGaWiz`); announce via `broadcastToUsers` + announcement channel deep link `?start=freebie`; user: `/accounts` 🎁 banner/button or `/freebie`
 
 ### Spin wheel custom rewards
 - `/dashboard` → 🎰 Spin → ➕ Add Custom Reward; types coin/ks/spin/none with label/amount/weight; `GameConfig.customSpinPrizes[]` merged via `GameService.getEffectivePrizePool()`

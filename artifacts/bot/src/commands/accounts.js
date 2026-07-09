@@ -9,6 +9,7 @@ const { debitKS, creditKS } = require('../services/WalletService');
 const { auditLog } = require('../services/logger');
 const AccountProduct = require('../models/AccountProduct');
 const AccountCredential = require('../models/AccountCredential');
+const AccountGiveaway = require('../models/AccountGiveaway');
 const User = require('../models/User');
 const { config } = require('../../config/settings');
 
@@ -35,8 +36,12 @@ function fmtDate(d) {
 async function buildHub() {
   const products = await AccountProduct.getActive();
   const counts = await Promise.all(products.map((p) => AccountCredential.countAvailable(p._id)));
+  const giveaway = await AccountGiveaway.getActive().catch(() => null);
 
   let text = `🔐 *Premium Accounts*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
+  if (giveaway?.productId) {
+    text += `🎁 *အခမဲ့ Giveaway ဖွင့်ထားပါတယ်!* — ${giveaway.productId.emoji} ${esc(giveaway.productId.serviceName)} ကို အခမဲ့ ရယူနိုင်ပါပြီ 👇\n\n`;
+  }
   if (!products.length) {
     text += `_လက်ရှိ ရောင်းချနေတဲ့ account မရှိသေးပါ။ နောက်မှ ပြန်ကြည့်ပေးပါ။_`;
   } else {
@@ -56,12 +61,19 @@ async function buildHub() {
       .join('\n\n');
   }
 
-  const rows = products.map((p, i) => [
-    Markup.button.callback(
-      `${p.emoji} ${p.serviceName} — ${p.planLabel}${counts[i] === 0 ? ' (ကုန်)' : ''}`,
-      `acc_view:${p._id}`
-    ),
-  ]);
+  const rows = [];
+  if (giveaway?.productId) {
+    rows.push([Markup.button.callback('🎁 အခမဲ့ ရယူမယ် — FREE!', 'accga_free')]);
+  }
+  for (let i = 0; i < products.length; i++) {
+    const p = products[i];
+    rows.push([
+      Markup.button.callback(
+        `${p.emoji} ${p.serviceName} — ${p.planLabel}${counts[i] === 0 ? ' (ကုန်)' : ''}`,
+        `acc_view:${p._id}`
+      ),
+    ]);
+  }
   rows.push([Markup.button.callback('🎟 ကျွန်ုပ်၏ Accounts', 'acc_mine')]);
 
   return { text, keyboard: Markup.inlineKeyboard(rows) };
@@ -102,6 +114,7 @@ async function buildAdminPanel() {
     Markup.button.callback(`${p.isActive ? '🟢' : '🔴'} ${p.serviceName} — ${p.planLabel}`, `accad_view:${p._id}`),
   ]);
   rows.push([Markup.button.callback('➕ Add Product', 'accad_add')]);
+  rows.push([Markup.button.callback('🎁 Free Giveaway', 'accga_admin')]);
   rows.push([Markup.button.callback('🔄 Refresh', 'accad_panel'), Markup.button.callback('🔙 Back', 'nav:go:admin_main')]);
 
   return { text, keyboard: Markup.inlineKeyboard(rows) };
@@ -414,6 +427,7 @@ module.exports = function registerAccounts(bot) {
 
   bot.action('accad_add', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
+    ctx.session.accGaWiz = null; // isolate from the giveaway wizard
     ctx.session.accAdmin = { step: 'service' };
     await ctx.reply(
       `➕ *Account Product အသစ်*\n\nStep 1/5: *Service နာမည်* ရိုက်ပါ:\n_(ဥပမာ ExpressVPN, Netflix, Spotify)_`,
@@ -423,6 +437,7 @@ module.exports = function registerAccounts(bot) {
 
   bot.action(/^accad_stock:(.+)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
+    ctx.session.accGaWiz = null; // isolate from the giveaway wizard
     ctx.session.accAdmin = { step: 'stock', productId: ctx.match[1] };
     await ctx.reply(
       `📥 *Stock ထည့်ရန်*\n\nAccount တွေကို တစ်ကြောင်းချင်း ဒီပုံစံနဲ့ ပို့ပါ:\n\n\`email:password\`\n\`email2:password2\`\n\n_(တစ်ကြိမ်တည်း အများကြီး ထည့်လို့ရပါတယ်)_`,
@@ -432,6 +447,7 @@ module.exports = function registerAccounts(bot) {
 
   bot.action(/^accad_disc:(.+)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
+    ctx.session.accGaWiz = null; // isolate from the giveaway wizard
     ctx.session.accAdmin = { step: 'discount', productId: ctx.match[1] };
     await ctx.reply(
       `🏷 *Discount သတ်မှတ်ရန်*\n\nလျှော့စျေး % ရိုက်ပါ (0–90):\n_(0 = discount မရှိ။ ဥပမာ "20" = 20% လျှော့)_`,
@@ -441,6 +457,7 @@ module.exports = function registerAccounts(bot) {
 
   bot.action(/^accad_price:(.+)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
+    ctx.session.accGaWiz = null; // isolate from the giveaway wizard
     ctx.session.accAdmin = { step: 'price_edit', productId: ctx.match[1] };
     await ctx.reply(`💵 *စျေးနှုန်းအသစ်* (KS) ရိုက်ပါ:`, { parse_mode: 'Markdown', ...Markup.forceReply() });
   });
