@@ -143,14 +143,16 @@ module.exports = function registerPromo(bot) {
   bot.command('mycoupons', (ctx) => sendMyCoupons(ctx));
 
   // ── Admin: /gencoupon — auto-generate a coupon (guided) ────────────────────
-  bot.command('gencoupon', adminOnly(), async (ctx) => {
+  const startGenCoupon = async (ctx) => {
     ctx.session.adminGenCoupon = { step: 'value' };
     await ctx.reply(
       `🎟 *Auto-Generate Coupon*\n\nStep 1/5: Discount ရိုက်ပါ:\n` +
         `• \`pct 10\` = 10% လျှော့\n• \`flat 500\` = 500 KS လျှော့`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
-  });
+  };
+  bot.command('gencoupon', adminOnly(), startGenCoupon);
+  bot.hears('🎟 Coupons', adminOnly(), startGenCoupon);
 
   // ── Admin: /createpromo ────────────────────────────────────────────────────
   bot.command('createpromo', adminOnly(), async (ctx) => {

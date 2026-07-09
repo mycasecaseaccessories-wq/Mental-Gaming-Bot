@@ -139,13 +139,13 @@ module.exports = function registerSupport(bot) {
 
   bot.action('sup_contact_set', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    ctx.session.awaitingSupportContact = true;
-    await ctx.reply(
+    const prompt = await ctx.reply(
       `✏️ *Support contact username ရိုက်ထည့်ပါ:*\n\n` +
         `ဥပမာ: \`@mgs_admin\` (သို့) \`mgs_admin\`\n` +
         `ဖျက်ချင်ရင် \`off\` လို့ ရိုက်ပါ။`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
+    ctx.session.awaitingSupportContact = prompt.message_id;
   });
 
   bot.action('sup_contact_off', adminOnly(), async (ctx) => {
@@ -155,29 +155,35 @@ module.exports = function registerSupport(bot) {
 
   // Text wizard step for ✏️ Username ပြောင်းမယ် button
   bot.on('text', async (ctx, next) => {
-    if (!ctx.session?.awaitingSupportContact) return next();
+    const promptMsgId = ctx.session?.awaitingSupportContact;
+    if (!promptMsgId) return next();
     if (!(await isAnyAdmin(ctx.from.id))) return next();
 
-    const input = ctx.message.text.trim();
-    if (input.startsWith('/') && !['/off'].includes(input.toLowerCase())) {
-      ctx.session.awaitingSupportContact = false;
-      return next(); // let other commands run
+    // Only consume replies to the wizard prompt — anything else (menu button
+    // taps, commands, other wizard inputs) clears the flag and passes through
+    if (ctx.message.reply_to_message?.message_id !== promptMsgId) {
+      ctx.session.awaitingSupportContact = null;
+      return next();
     }
 
+    const input = ctx.message.text.trim();
+
     if (['off', 'auto', 'clear', '/off'].includes(input.toLowerCase())) {
-      ctx.session.awaitingSupportContact = false;
+      ctx.session.awaitingSupportContact = null;
       return saveSupportContact(ctx, null);
     }
 
     const username = input.replace(/^@/, '');
     if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) {
-      return ctx.reply(
+      const prompt = await ctx.reply(
         `❌ Username ပုံစံ မမှန်ပါဘူး — အက္ခရာ/ဂဏန်း/underscore ၅–၃၂ လုံး ဖြစ်ရပါမယ်။\n\nထပ်ရိုက်ပါ (ဖျက်ချင်ရင် \`off\`):`,
         { parse_mode: 'Markdown', ...Markup.forceReply() }
       );
+      ctx.session.awaitingSupportContact = prompt.message_id;
+      return;
     }
 
-    ctx.session.awaitingSupportContact = false;
+    ctx.session.awaitingSupportContact = null;
     return saveSupportContact(ctx, username);
   });
 

@@ -113,6 +113,7 @@ module.exports = function registerPromoPerks(bot) {
 
   // ── Owner: /promoperks ─────────────────────────────────────────────────────
   bot.command('promoperks', adminOnly(), async (ctx) => showPanel(ctx));
+  bot.hears('🎁 Promo Perks', adminOnly(), async (ctx) => showPanel(ctx));
 
   // ── Toggles ────────────────────────────────────────────────────────────────
   bot.action('pp_hh_toggle', adminOnly(), async (ctx) => {

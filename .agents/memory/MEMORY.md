@@ -3,3 +3,4 @@
 - [Bot promo cron & claims](bot-promo-claims.md) — daily-gift crons must claim atomically, then roll back the claim if credit fails; session-cached discounts must be revalidated at order commit.
 - [Telegram inline button payloads](telegram-inline-button-payloads.md) — callback_data needs stable IDs (not indices); atomic $pull/guarded $push for shared lists; clear rival wizard flags.
 - [Gemini free-tier quota exhaustion](gemini-quota-degradation.md) — AI features silently stop on 429 "limit: 0"; check bot logs for Gemini 429 before debugging code.
+- [Telegraf text wizards](telegraf-text-wizards.md) — text wizard steps must match reply_to_message against the stored prompt id, or they swallow later-registered button/hears handlers.

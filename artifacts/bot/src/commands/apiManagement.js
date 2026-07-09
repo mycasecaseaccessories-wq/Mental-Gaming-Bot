@@ -239,15 +239,7 @@ module.exports = function registerApiManagement(bot) {
     );
   }
 
-  bot.command('announce', requireRole('MANAGER'), async (ctx) => {
-    const productId = ctx.message.text.split(/\s+/)[1];
-
-    if (productId) {
-      const product = await Product.findById(productId).catch(() => null);
-      if (!product) return ctx.reply('❌ Product ရှာမတွေ့ပါ။');
-      return showAnnounceStyles(ctx, product);
-    }
-
+  async function showAnnouncePicker(ctx) {
     const products = await Product.find({ isActive: true })
       .sort({ updatedAt: -1 })
       .limit(15)
@@ -265,6 +257,20 @@ module.exports = function registerApiManagement(bot) {
       `📣 *Product ကြေညာချက်*\n\nဘယ် product ကို ကြေညာမလဲ ရွေးပါ:\n_(bot user အားလုံး + channel နှစ်ခုလုံး ပို့ပါမယ်)_`,
       { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
     );
+  }
+
+  bot.hears('📣 Announce', requireRole('MANAGER'), (ctx) => showAnnouncePicker(ctx));
+
+  bot.command('announce', requireRole('MANAGER'), async (ctx) => {
+    const productId = ctx.message.text.split(/\s+/)[1];
+
+    if (productId) {
+      const product = await Product.findById(productId).catch(() => null);
+      if (!product) return ctx.reply('❌ Product ရှာမတွေ့ပါ။');
+      return showAnnounceStyles(ctx, product);
+    }
+
+    return showAnnouncePicker(ctx);
   });
 
   bot.action(/^ann_pick:(.+)$/, requireRole('MANAGER'), async (ctx) => {

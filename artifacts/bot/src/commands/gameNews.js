@@ -179,6 +179,7 @@ module.exports = (bot) => {
   }
 
   bot.command('gamenews', adminOnly(), (ctx) => showPanel(ctx));
+  bot.hears('🎮 Game News', adminOnly(), (ctx) => showPanel(ctx));
   bot.action('gamenews_refresh', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     await showPanel(ctx);

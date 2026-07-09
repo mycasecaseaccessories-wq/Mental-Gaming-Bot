@@ -146,12 +146,12 @@ const GUIDE_SECTIONS = [
     body:
       `📢 *Broadcast & Channel Posts* _(Owner)_\n\n` +
       `• *Broadcast* — user အားလုံး / tier အလိုက် / active (၃၀ ရက်) ဆီ message (စာ + ပုံ)\n` +
-      `• \`/announce\` — *Product ကြေညာချက်* — product စာရင်းထဲက ရွေး → 🆕 New Product / ⚡ Flash Sale ပုံစံရွေး → *bot user အားလုံး + ကြေညာချက် channel နှစ်ခုလုံး* ကို 🛒 ဝယ်မယ့်ခလုတ်နဲ့တကွ တစ်ပြိုင်နက် ပို့ပေးမယ်\n` +
+      `• Admin menu → *📣 Announce* ခလုတ် (သို့ \`/announce\`) — *Product ကြေညာချက်* — product စာရင်းထဲက ရွေး → 🆕 New Product / ⚡ Flash Sale ပုံစံရွေး → *bot user အားလုံး + ကြေညာချက် channel နှစ်ခုလုံး* ကို 🛒 ဝယ်မယ့်ခလုတ်နဲ့တကွ တစ်ပြိုင်နက် ပို့ပေးမယ်\n` +
       `• \`/addchannelpost\` — channel ကို နေ့စဉ် auto post (HH:MM MMT)\n` +
       `• \`/listchannelposts\`, \`/sendchannelpost\`, \`/togglechannelpost\`, \`/delchannelpost\`\n` +
       `• \`/setseason\` — အခါသမယ theme (Thingyan/Christmas…)\n\n` +
       `🎬 *ဥပမာ — product ကြေညာနည်း:*\n` +
-      `1️⃣ \`/announce\` ရိုက် → product ခလုတ်တွေထဲက တစ်ခု ရွေး\n` +
+      `1️⃣ menu → *📣 Announce* နှိပ် (သို့ \`/announce\` ရိုက်) → product ခလုတ်တွေထဲက တစ်ခု ရွေး\n` +
       `2️⃣ ပုံစံရွေး — 🆕 New Product (ဒါမှမဟုတ် flash sale price သတ်မှတ်ထားရင် ⚡ Flash Sale)\n` +
       `3️⃣ → user အားလုံး + channel မှာ "🛒 ဝယ်မယ်" ခလုတ်ပါတဲ့ ကြေညာစာ တစ်ပြိုင်နက် ရောက်မယ်\n\n` +
       `🎬 *ဥပမာ ၁ — user အားလုံးဆီ message ပို့နည်း:*\n` +
@@ -344,7 +344,7 @@ const GUIDE_SECTIONS = [
     key: 'promoperks', label: '🎁 Promo Perks',
     body:
       `🎁 *Promotion Perks* _(Owner)_\n\n` +
-      `\`/promoperks\` panel တစ်ခုတည်းကနေ promotion ၆ မျိုး ထိန်းချုပ်နိုင်ပါတယ်:\n\n` +
+      `Admin menu → *🎁 Promo Perks* ခလုတ် (သို့ \`/promoperks\`) — panel တစ်ခုတည်းကနေ promotion ၆ မျိုး ထိန်းချုပ်နိုင်ပါတယ်:\n\n` +
       `🎂 *Birthday Gift* — user က \`/setbirthday\` နဲ့ မွေးနေ့မှတ်ထားရင် မွေးနေ့ရောက်တိုင်း MC လက်ဆောင် အလိုအလျောက်ပေး (တစ်နှစ် တစ်ခါပဲ)\n` +
       `⏰ *Happy Hour* — သတ်မှတ်ထားတဲ့ နာရီအတွင်း (MMT) ငွေဖြည့်ရင် MC bonus ပိုပေး (ဥပမာ ညနေ 6–8 နာရီ +5%)\n` +
       `💸 *Cashback* — order ပြီးမြောက်တိုင်း order တန်ဖိုးရဲ့ % ကို MC နဲ့ ပြန်အမ်း\n` +
@@ -361,7 +361,7 @@ const GUIDE_SECTIONS = [
     key: 'coupons', label: '🎟 Coupons',
     body:
       `🎟 *Coupon System* _(Owner)_\n\n` +
-      `*၁။ Auto-Generate Coupon — \`/gencoupon\`*\n` +
+      `*၁။ Auto-Generate Coupon — menu → 🎟 Coupons ခလုတ် (သို့ \`/gencoupon\`)*\n` +
       `Code ကို bot က အလိုအလျောက်ထုတ်ပေး (ဥပမာ \`MGS-A3K9ZX\`)။ အဆင့် ၅ ဆင့်:\n` +
       `1️⃣ Discount — \`pct 10\` (10%) သို့ \`flat 500\` (500 KS)\n` +
       `2️⃣ Scope — \`all\` (အားလုံး) / \`cat MLBB\` (category) / \`prod diamond\` (product ရှာ)\n` +
@@ -389,7 +389,7 @@ const GUIDE_SECTIONS = [
       `• \`/setgateway <method> <Online|Busy|Offline>\`\n` +
       `• \`/setbackupchan\`, \`/setstalesupport <min>\`\n` +
       `• \`/setsupportcontact @username\` — /support ထဲက 📨 "Admin ကို တိုက်ရိုက် စာပို့ရန်" ခလုတ်နှိပ်ရင် ရောက်မယ့် account သတ်မှတ် (\`off\` = owner username အလိုအလျောက် ပြန်သုံး)\n` +
-      `• Admin menu → *📡 Channels* (သို့ \`/channels\`) — Channel စာရင်း panel: bot သိထားတဲ့ channel အားလုံး (auto-post, join bonus, ကြေညာချက်, backup, review, game update, သိမ်းထားတဲ့) tag နဲ့ ကြည့်/➕ ထည့်/🗑 ဖျက်။ ➕ နဲ့ channel ထည့်ရင် *ဘာအတွက်လဲ ရွေးခိုင်းမယ်* — 📅 Auto-post (ဆက်ပြီး post wizard ဝင်မယ်) / 📣 Join Bonus (ဆက်ပြီး reward wizard ဝင်မယ်) / 📢 ကြေညာချက် / 🔐 Backup / ⭐ Review (⭐4-5 customer review တွေ အလိုအလျောက်တင်) / 🎮 Game Update (channel ထဲ တင်တဲ့ update post တွေကို bot က ရက်စွဲနဲ့တကွ မှတ်ထားပြီး game မေးခွန်းလာရင် *post ထဲက စာကို တိုက်ရိုက် ဖြေပေးပြီး မူရင်း post link ကို 🔗 reference ခလုတ်နဲ့ တွဲပေးမယ်* — နောက်ဆုံး ၃ လစာပဲ သိမ်းမယ် — \`/gamenews\` နဲ့ စစ်လို့ရ) / 📖 FAQ (Game Update လိုပဲ မေးရင် အဖြေ + 🔗 reference link နဲ့ ဖြေမယ် — ဒါပေမဲ့ *သက်တမ်းမကုန်ဘူး*၊ အမြဲတမ်းမေးခွန်းတွေ တင်ထားဖို့ — \`/gamenews\` panel မှာပဲ တွဲစစ်လို့ရ) / 💾 ရိုးရိုးသိမ်း။ ထည့်ထားတဲ့ channel တွေက coupon ကြေညာတဲ့ picker မှာ အလိုအလျောက် ပေါ်မယ်\n\n` +
+      `• Admin menu → *📡 Channels* (သို့ \`/channels\`) — Channel စာရင်း panel: bot သိထားတဲ့ channel အားလုံး (auto-post, join bonus, ကြေညာချက်, backup, review, game update, သိမ်းထားတဲ့) tag နဲ့ ကြည့်/➕ ထည့်/🗑 ဖျက်။ ➕ နဲ့ channel ထည့်ရင် *ဘာအတွက်လဲ ရွေးခိုင်းမယ်* — 📅 Auto-post (ဆက်ပြီး post wizard ဝင်မယ်) / 📣 Join Bonus (ဆက်ပြီး reward wizard ဝင်မယ်) / 📢 ကြေညာချက် / 🔐 Backup / ⭐ Review (⭐4-5 customer review တွေ အလိုအလျောက်တင်) / 🎮 Game Update (channel ထဲ တင်တဲ့ update post တွေကို bot က ရက်စွဲနဲ့တကွ မှတ်ထားပြီး game မေးခွန်းလာရင် *post ထဲက စာကို တိုက်ရိုက် ဖြေပေးပြီး မူရင်း post link ကို 🔗 reference ခလုတ်နဲ့ တွဲပေးမယ်* — နောက်ဆုံး ၃ လစာပဲ သိမ်းမယ် — menu → *🎮 Game News* ခလုတ် (သို့ \`/gamenews\`) နဲ့ စစ်လို့ရ) / 📖 FAQ (Game Update လိုပဲ မေးရင် အဖြေ + 🔗 reference link နဲ့ ဖြေမယ် — ဒါပေမဲ့ *သက်တမ်းမကုန်ဘူး*၊ အမြဲတမ်းမေးခွန်းတွေ တင်ထားဖို့ — 🎮 Game News panel မှာပဲ တွဲစစ်လို့ရ) / 💾 ရိုးရိုးသိမ်း။ ထည့်ထားတဲ့ channel တွေက coupon ကြေညာတဲ့ picker မှာ အလိုအလျောက် ပေါ်မယ်\n\n` +
       `🎬 *ဥပမာ ၁ — data backup လက်ဖြင့် ဆွဲနည်း:*\n` +
       `1️⃣ \`/runbackup\` ရိုက် → bot က collection တွေ AES-256 encrypt လုပ်\n` +
       `2️⃣ → backup ဖိုင် (\`.json.gz.enc\`) ကို backup channel (သို့ owner DM) ဆီ ပို့ပေးမယ်\n\n` +
