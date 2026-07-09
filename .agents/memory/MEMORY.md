@@ -4,3 +4,4 @@
 - [Telegram inline button payloads](telegram-inline-button-payloads.md) — callback_data needs stable IDs (not indices); atomic $pull/guarded $push for shared lists; clear rival wizard flags.
 - [Gemini free-tier quota exhaustion](gemini-quota-degradation.md) — AI features silently stop on 429 "limit: 0"; check bot logs for Gemini 429 before debugging code.
 - [Telegraf text wizards](telegraf-text-wizards.md) — text wizard steps must match reply_to_message against the stored prompt id, or they swallow later-registered button/hears handlers.
+- [Bot token swap gotchas](bot-token-swap-gotchas.md) — stored file_ids, channel admin rights, and DM permission are all per-bot; re-verify after switching BOT_TOKEN.

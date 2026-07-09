@@ -128,6 +128,7 @@ artifacts/bot/
 | `/systemhealth` | Manager+ | Gateway + system status |
 | `/exportdetail` | Manager+ | CSV export (orders/transactions/users) |
 | `/setgateway` `/setgatewaynote` | Owner | Payment gateway status/note |
+| `/pendingtopups` | Owner | Re-list pending top-ups w/ approve/reject buttons (missed-notification recovery) |
 | `/setreftiers` / `/reftiers` | Owner / Manager+ | Referral commission tiers |
 | `/setstalesupport <min>` | Owner | Stale-order support threshold |
 | `/setsupportcontact @username\|off` | Owner | Support direct-message contact account |

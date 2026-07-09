@@ -150,7 +150,7 @@ const topupScene = new Scenes.WizardScene(
     }
 
     const user = await User.findByTelegramId(ctx.from.id);
-    const bonusCoins = calcCoinBonus(amount, user?.membershipTier || 'Silver');
+    const bonusCoins = await calcCoinBonus(amount, user?.membershipTier || 'Silver');
     ctx.session.topupAmount = amount;
     ctx.session.topupBonusCoins = bonusCoins;
 
@@ -298,13 +298,14 @@ topupScene.action('topup_cancel', async (ctx) => {
 
 // ── Helper: notify admin ───────────────────────────────────────────────────
 async function notifyAdminTopup(ctx, { user, amount, method, fileId, txId, bonusCoins }) {
-  const userTag = user.username ? `@${user.username}` : `ID: ${user.telegramId}`;
+  const rawTag = user.username ? `@${user.username}` : `ID: ${user.telegramId}`;
+  const userTag = rawTag.replace(/([_*`\[])/g, '\\$1');
 
   const caption =
     `💳 *New Top-Up Request*\n\n` +
     `🆔 TxID: \`${txId}\`\n` +
     `👤 User: ${userTag}\n` +
-    `${method.emoji} Method: *${method.name}*\n` +
+    `${method.emoji} Method: *${String(method.name || '').replace(/([_*`\[])/g, '\\$1')}*\n` +
     `💰 Amount: *${price(amount)}*\n` +
     `🎁 Coin Bonus on Approve: *+${bonusCoins?.toLocaleString()} MC*\n` +
     `🕐 Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT`;
@@ -316,7 +317,31 @@ async function notifyAdminTopup(ctx, { user, amount, method, fileId, txId, bonus
       ...adminTopupKeyboard(txId),
     });
   } catch (err) {
-    console.error('[TopupScene] Failed to notify admin:', err.message);
+    console.error('[TopupScene] Failed to notify admin (Markdown):', err.message);
+    // Fallback 1: same photo + plain-text caption (no Markdown parse risk)
+    try {
+      await ctx.telegram.sendPhoto(config.bot.adminId, fileId, {
+        caption:
+          `💳 New Top-Up Request\n\nTxID: ${txId}\nUser: ${rawTag}\n` +
+          `Method: ${method.name}\nAmount: ${amount.toLocaleString()} KS\n` +
+          `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT`,
+        ...adminTopupKeyboard(txId),
+      });
+      return;
+    } catch (err2) {
+      console.error('[TopupScene] Failed to notify admin (plain photo):', err2.message);
+    }
+    // Fallback 2: text-only alert so the request is never silently lost
+    try {
+      await ctx.telegram.sendMessage(
+        config.bot.adminId,
+        `💳 New Top-Up Request (screenshot ပို့မရ — /dashboard → Pending Topups မှာ ကြည့်ပါ)\n\n` +
+          `TxID: ${txId}\nUser: ${rawTag}\nMethod: ${method.name}\nAmount: ${amount.toLocaleString()} KS`,
+        { ...adminTopupKeyboard(txId) }
+      );
+    } catch (err3) {
+      console.error('[TopupScene] Failed to notify admin (text):', err3.message);
+    }
   }
 }
 

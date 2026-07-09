@@ -53,6 +53,53 @@ module.exports = function registerTopup(bot) {
     await ctx.scene.enter('topup_scene');
   });
 
+  // ── Admin: /pendingtopups — list all pending top-ups with action buttons ──
+  bot.command('pendingtopups', adminOnly(), async (ctx) => {
+    const pending = await Transaction.find({ type: 'Topup', status: 'Pending' })
+      .sort({ createdAt: 1 })
+      .limit(10)
+      .populate('userId');
+
+    if (!pending.length) {
+      return ctx.reply('✅ Pending top-up မရှိပါ — အားလုံး စစ်ပြီးသားပါ။');
+    }
+
+    await ctx.reply(
+      `⏳ *Pending Top-ups: ${pending.length} ခု*\n_တစ်ခုချင်း အောက်မှာ ပြပေးပါမယ် — Approve/Reject နှိပ်လို့ရပါတယ်။_`,
+      { parse_mode: 'Markdown' }
+    );
+
+    for (const tx of pending) {
+      const u = tx.userId;
+      const userTag = u?.username ? `@${escMd(u.username)}` : `ID: ${u?.telegramId || '?'}`;
+      const caption =
+        `💳 *Pending Top-Up*\n\n` +
+        `🆔 TxID: \`${tx.txId}\`\n` +
+        `👤 User: ${userTag}\n` +
+        `📋 Method: *${escMd(tx.paymentMethod || '-')}*\n` +
+        `💰 Amount: *${price(tx.amount)}*\n` +
+        `🕐 ${formatDate(tx.createdAt)}`;
+      const kb = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Approve', `topup_approve:${tx.txId}`)],
+        [Markup.button.callback('❌ Reject', `topup_reject:${tx.txId}`)],
+        [Markup.button.callback('💬 Ask for Info', `topup_askinfo:${tx.txId}`)],
+      ]);
+      try {
+        if (tx.screenshotUrl) {
+          await ctx.replyWithPhoto(tx.screenshotUrl, { caption, parse_mode: 'Markdown', ...kb });
+        } else {
+          await ctx.reply(caption, { parse_mode: 'Markdown', ...kb });
+        }
+      } catch {
+        // screenshot file_id may belong to another bot token — fall back to text
+        await ctx.reply(caption + `\n\n_📸 Screenshot ပြလို့မရပါ (bot အဟောင်းက ပုံ ဖြစ်နိုင်ပါတယ်)_`, {
+          parse_mode: 'Markdown',
+          ...kb,
+        }).catch(() => {});
+      }
+    }
+  });
+
   // ── Admin: Approve top-up ─────────────────────────────────────────────────
   bot.action(/^topup_approve:(.+)$/, adminOnly(), async (ctx) => {
     const txId = ctx.match[1];
@@ -149,6 +196,7 @@ module.exports = function registerTopup(bot) {
 
     const tx = await Transaction.findOne({ txId }).populate('userId');
     if (!tx) return ctx.reply('❌ Transaction not found.');
+    if (!tx.userId?.telegramId) return ctx.reply('❌ ဒီ transaction ရဲ့ user ကို ရှာမတွေ့ပါ (ဖျက်ထားပြီး ဖြစ်နိုင်ပါတယ်)။');
 
     ctx.session.adminTopupAskInfo = { txId, userTelegramId: tx.userId.telegramId };
 

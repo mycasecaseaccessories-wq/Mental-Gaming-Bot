@@ -283,7 +283,8 @@ const GUIDE_SECTIONS = [
       `1️⃣ menu → *💳 Payment Gateways* နှိပ်\n` +
       `2️⃣ 🔴 ပိတ်နေတဲ့ gateway (ဥပမာ 🔴 AYA Pay) ကို နှိပ် → 🟢 ဖြစ်သွားမယ်\n` +
       `3️⃣ → ချက်ချင်း ဝယ်သူ topup ထဲ AYA Pay ပေါ်လာမယ် (admin = user တူညီသွားပြီ)\n\n` +
-      `_🟢 ပြထားသလောက်ပဲ ဝယ်သူ မြင်ရတာမို့ — ပြချင်တာ 🟢, ဖျောက်ချင်တာ 🔴 ထားပါ။_`,
+      `_🟢 ပြထားသလောက်ပဲ ဝယ်သူ မြင်ရတာမို့ — ပြချင်တာ 🟢, ဖျောက်ချင်တာ 🔴 ထားပါ။_\n\n` +
+      `⏳ *Pending Top-ups ပြန်ကြည့်နည်း* — \`/pendingtopups\` ရိုက်ရင် မစစ်ရသေးတဲ့ topup တောင်းဆိုမှုအားလုံး screenshot + Approve/Reject/Ask Info button တွေနဲ့ ပြန်ပြပေးပါတယ် (notification လွတ်သွားရင် ဒီကနေ ပြန်ရှာပါ)။`,
   },
   {
     key: 'accounts', label: '🔐 Premium Accounts',
