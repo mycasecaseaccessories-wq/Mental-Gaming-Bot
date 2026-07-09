@@ -37,24 +37,40 @@ const TOPIC_META = {
 
 async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-// ── Admin direct-contact button (t.me link — needs admin to have a username) ─
+// ── Admin direct-contact button (t.me link) ──────────────────────────────────
+// Priority: SystemStatus.supportContactUsername (set via /setsupportcontact)
+// → fallback: owner account's own username (auto via getChat, cached 10 min)
 let adminContactCache = null; // { username: string|null, at: number }
 
 async function getAdminContactRow(ctx) {
-  const TTL = 10 * 60 * 1000;
-  if (!adminContactCache || Date.now() - adminContactCache.at > TTL) {
-    let username = null;
-    try {
-      const chat = await ctx.telegram.getChat(config.bot.adminId);
-      username = chat.username || null;
-    } catch (e) {
-      console.error('[SupportScene] getChat(admin) failed:', e.message);
-    }
-    adminContactCache = { username, at: Date.now() };
+  let username = null;
+
+  try {
+    const SystemStatus = require('../models/SystemStatus');
+    const st = await SystemStatus.get();
+    if (st.supportContactUsername) username = st.supportContactUsername;
+  } catch (e) {
+    console.error('[SupportScene] SystemStatus read failed:', e.message);
   }
-  if (!adminContactCache.username) return [];
+
+  if (!username) {
+    const TTL = 10 * 60 * 1000;
+    if (!adminContactCache || Date.now() - adminContactCache.at > TTL) {
+      let auto = null;
+      try {
+        const chat = await ctx.telegram.getChat(config.bot.adminId);
+        auto = chat.username || null;
+      } catch (e) {
+        console.error('[SupportScene] getChat(admin) failed:', e.message);
+      }
+      adminContactCache = { username: auto, at: Date.now() };
+    }
+    username = adminContactCache.username;
+  }
+
+  if (!username) return [];
   return [
-    [Markup.button.url('📨 Admin ကို တိုက်ရိုက် စာပို့ရန်', `https://t.me/${adminContactCache.username}`)],
+    [Markup.button.url('📨 Admin ကို တိုက်ရိုက် စာပို့ရန်', `https://t.me/${username}`)],
   ];
 }
 

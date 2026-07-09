@@ -122,6 +122,13 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Custom greeting shown in welcome message',
     },
 
+    // ── Support Direct-Contact Account ────────────────────────────────────────
+    supportContactUsername: {
+      type:    String,
+      default: null,
+      comment: 'Telegram username (without @) shown as the "message admin directly" button in /support; null = auto-use owner account username',
+    },
+
     // ── Stale-Order Support Prompt ────────────────────────────────────────────
     orderSupportThresholdMinutes: {
       type:    Number,

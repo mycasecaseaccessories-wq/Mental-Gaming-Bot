@@ -382,6 +382,7 @@ const GUIDE_SECTIONS = [
       `• \`/systemhealth\` — gateway + system\n` +
       `• \`/setgateway <method> <Online|Busy|Offline>\`\n` +
       `• \`/setbackupchan\`, \`/setstalesupport <min>\`\n` +
+      `• \`/setsupportcontact @username\` — /support ထဲက 📨 "Admin ကို တိုက်ရိုက် စာပို့ရန်" ခလုတ်နှိပ်ရင် ရောက်မယ့် account သတ်မှတ် (\`off\` = owner username အလိုအလျောက် ပြန်သုံး)\n` +
       `• Admin menu → *📡 Channels* (သို့ \`/channels\`) — Channel စာရင်း panel: bot သိထားတဲ့ channel အားလုံး (auto-post, join bonus, ကြေညာချက်, backup, review, game update, သိမ်းထားတဲ့) tag နဲ့ ကြည့်/➕ ထည့်/🗑 ဖျက်။ ➕ နဲ့ channel ထည့်ရင် *ဘာအတွက်လဲ ရွေးခိုင်းမယ်* — 📅 Auto-post (ဆက်ပြီး post wizard ဝင်မယ်) / 📣 Join Bonus (ဆက်ပြီး reward wizard ဝင်မယ်) / 📢 ကြေညာချက် / 🔐 Backup / ⭐ Review (⭐4-5 customer review တွေ အလိုအလျောက်တင်) / 🎮 Game Update (channel ထဲ တင်တဲ့ update post တွေကို bot က ရက်စွဲနဲ့တကွ မှတ်ထားပြီး game မေးခွန်းလာရင် *post ထဲက စာကို တိုက်ရိုက် ဖြေပေးပြီး မူရင်း post link ကို 🔗 reference ခလုတ်နဲ့ တွဲပေးမယ်* — နောက်ဆုံး ၃ လစာပဲ သိမ်းမယ် — \`/gamenews\` နဲ့ စစ်လို့ရ) / 📖 FAQ (Game Update လိုပဲ မေးရင် အဖြေ + 🔗 reference link နဲ့ ဖြေမယ် — ဒါပေမဲ့ *သက်တမ်းမကုန်ဘူး*၊ အမြဲတမ်းမေးခွန်းတွေ တင်ထားဖို့ — \`/gamenews\` panel မှာပဲ တွဲစစ်လို့ရ) / 💾 ရိုးရိုးသိမ်း။ ထည့်ထားတဲ့ channel တွေက coupon ကြေညာတဲ့ picker မှာ အလိုအလျောက် ပေါ်မယ်\n\n` +
       `🎬 *ဥပမာ ၁ — data backup လက်ဖြင့် ဆွဲနည်း:*\n` +
       `1️⃣ \`/runbackup\` ရိုက် → bot က collection တွေ AES-256 encrypt လုပ်\n` +
