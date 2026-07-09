@@ -60,6 +60,13 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Channel whose posts are stored as game-update knowledge for support AI',
     },
 
+    // ── FAQ Knowledge Channel ─────────────────────────────────────────────────
+    faqChannelId: {
+      type:    String,
+      default: null,
+      comment: 'Channel whose posts are stored as evergreen FAQ knowledge (no age cutoff)',
+    },
+
     // ── Payment Gateway Status (admin-controlled, shown to users in /topup) ──
     kpayStatus: { type: String, enum: ['Online', 'Busy', 'Offline'], default: 'Online' },
     waveStatus: { type: String, enum: ['Online', 'Busy', 'Offline'], default: 'Online' },

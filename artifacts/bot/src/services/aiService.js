@@ -279,14 +279,21 @@ async function loadGameNewsContext(userMessage) {
     const GameNews = require('../models/GameNews');
     const SystemStatus = require('../models/SystemStatus');
 
-    // Only ever serve knowledge from the CURRENTLY configured channel
+    // Only ever serve knowledge from the CURRENTLY configured channels
+    // (game news: 90-day fresh; FAQ: evergreen)
     const st = await SystemStatus.get();
-    if (!st.gameNewsChannelId) return '';
-    const chatId = String(st.gameNewsChannelId);
-
-    // Only use posts from the last 3 months
-    const freshSince = new Date(Date.now() - 90 * 24 * 3600 * 1000);
-    const base = { chatId, postedAt: { $gte: freshSince } };
+    const scopes = [];
+    if (st.gameNewsChannelId) {
+      scopes.push({
+        chatId: String(st.gameNewsChannelId),
+        postedAt: { $gte: new Date(Date.now() - 90 * 24 * 3600 * 1000) },
+      });
+    }
+    if (st.faqChannelId) {
+      scopes.push({ chatId: String(st.faqChannelId) });
+    }
+    if (!scopes.length) return '';
+    const base = scopes.length === 1 ? scopes[0] : { $or: scopes };
 
     // Try relevance search first, fall back to most recent posts
     let entries = [];

@@ -1,9 +1,12 @@
 /**
- * GameNewsService — direct (no-AI) lookup of game update channel posts.
+ * GameNewsService — direct (no-AI) lookup of knowledge channel posts.
  *
- * Used as a zero-cost fallback so the bot can answer game update questions
- * even when the AI is disabled or out of quota: matching posts are returned
- * verbatim instead of an AI-generated answer.
+ * Covers TWO knowledge channels:
+ *   - Game Update channel (SystemStatus.gameNewsChannelId) — 90-day fresh only
+ *   - FAQ channel (SystemStatus.faqChannelId) — evergreen, no age cutoff
+ *
+ * Used as a zero-cost fallback so the bot can answer questions even when the
+ * AI is disabled or out of quota: matching posts are forwarded verbatim.
  */
 
 const RETENTION_DAYS = 90;
@@ -16,13 +19,21 @@ async function findPosts(query, limit = 3) {
   if (!q) return [];
 
   const st = await SystemStatus.get();
-  if (!st.gameNewsChannelId) return [];
-  const chatId = String(st.gameNewsChannelId);
 
-  const fresh = {
-    chatId,
-    postedAt: { $gte: new Date(Date.now() - RETENTION_DAYS * 24 * 3600 * 1000) },
-  };
+  // Game news posts: only fresh ones (90 days). FAQ posts: evergreen (no cutoff).
+  const scopes = [];
+  if (st.gameNewsChannelId) {
+    scopes.push({
+      chatId: String(st.gameNewsChannelId),
+      postedAt: { $gte: new Date(Date.now() - RETENTION_DAYS * 24 * 3600 * 1000) },
+    });
+  }
+  if (st.faqChannelId) {
+    scopes.push({ chatId: String(st.faqChannelId) });
+  }
+  if (!scopes.length) return [];
+
+  const fresh = scopes.length === 1 ? scopes[0] : { $or: scopes };
 
   // 1) Mongo text search (relevance-ranked)
   let entries = [];

@@ -29,8 +29,11 @@ async function captureChannelPost(post, telegram) {
   const GameNews = require('../models/GameNews');
 
   const st = await SystemStatus.get();
-  if (!st.gameNewsChannelId) return;
-  if (String(post.chat.id) !== String(st.gameNewsChannelId)) return;
+  const gameId = st.gameNewsChannelId ? String(st.gameNewsChannelId) : null;
+  const faqId  = st.faqChannelId ? String(st.faqChannelId) : null;
+  const postChatId = String(post.chat.id);
+  if (postChatId !== gameId && postChatId !== faqId) return;
+  const isGameChannel = postChatId === gameId;
 
   let text = (post.text || post.caption || '').trim();
 
@@ -71,9 +74,11 @@ async function captureChannelPost(post, telegram) {
   );
   console.log(`[GameNews] 📝 saved post ${post.message_id} from ${chatId} (${text.length} chars)`);
 
-  // Retention — drop posts older than 3 months
-  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 3600 * 1000);
-  await GameNews.deleteMany({ chatId, postedAt: { $lt: cutoff } });
+  // Retention — game news only (FAQ posts are evergreen, no age cutoff)
+  if (isGameChannel) {
+    const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 3600 * 1000);
+    await GameNews.deleteMany({ chatId, postedAt: { $lt: cutoff } });
+  }
 
   // Cap storage — drop oldest beyond MAX_ENTRIES
   const count = await GameNews.countDocuments({ chatId });
@@ -112,42 +117,60 @@ module.exports = (bot) => {
     const GameNews = require('../models/GameNews');
 
     const st = await SystemStatus.get();
-    if (!st.gameNewsChannelId) {
+    if (!st.gameNewsChannelId && !st.faqChannelId) {
       return ctx.reply(
-        `🎮 *Game Update Channel*\n\n` +
+        `🎮 *Knowledge Channels*\n\n` +
           `မသတ်မှတ်ရသေးပါဘူး။\n\n` +
-          `သတ်မှတ်ရန်: /channels → ➕ Channel ထည့်မယ် → 🎮 *Game Update channel* ကို ရွေးပါ။`,
+          `သတ်မှတ်ရန်: /channels → ➕ Channel ထည့်မယ် → 🎮 *Game Update* (သို့) 📖 *FAQ channel* ကို ရွေးပါ။`,
         { parse_mode: 'Markdown' }
       );
     }
 
-    const [count, latest] = await Promise.all([
-      GameNews.countDocuments({ chatId: String(st.gameNewsChannelId) }),
-      GameNews.find({ chatId: String(st.gameNewsChannelId) })
-        .sort({ postedAt: -1 })
-        .limit(5)
-        .lean(),
-    ]);
+    let body = `🎮 *Knowledge Channels*\n\n`;
 
-    let body =
-      `🎮 *Game Update Channel*\n\n` +
-      `📡 Channel: \`${escMd(String(st.gameNewsChannelId))}\`\n` +
-      `🗂 သိမ်းထားတဲ့ post: *${count}* ခု (နောက်ဆုံး ၃ လအတွင်း၊ အများဆုံး ${MAX_ENTRIES} ခု)\n` +
-      `🖼 ပုံပါ post ဆိုရင် ပုံထဲက စာ/ရက်စွဲကိုပါ AI နဲ့ ဖတ်ပြီး သိမ်းပါတယ်\n\n`;
+    const renderSection = async (label, channelId, note) => {
+      const cid = String(channelId);
+      const [count, latest] = await Promise.all([
+        GameNews.countDocuments({ chatId: cid }),
+        GameNews.find({ chatId: cid }).sort({ postedAt: -1 }).limit(5).lean(),
+      ]);
+      let s =
+        `${label}\n` +
+        `📡 Channel: \`${escMd(cid)}\`\n` +
+        `🗂 သိမ်းထားတဲ့ post: *${count}* ခု ${note}\n`;
+      if (!latest.length) {
+        s += `_Post မရှိသေးပါဘူး — channel ထဲ တင်လိုက်တာနဲ့ bot က အလိုအလျောက် မှတ်ပါမယ်။_\n`;
+      } else {
+        s += latest
+          .map((n, i) => {
+            const preview = n.text.length > 80 ? n.text.slice(0, 80) + '…' : n.text;
+            const d = new Date(n.postedAt).toLocaleDateString('en-GB');
+            return `${i + 1}. _(${d})_ ${escMd(preview)}`;
+          })
+          .join('\n');
+        s += '\n';
+      }
+      return s;
+    };
 
-    if (!latest.length) {
-      body += `_Post မရှိသေးပါဘူး — channel ထဲ update တင်လိုက်တာနဲ့ bot က အလိုအလျောက် မှတ်ပါမယ်။_`;
-    } else {
-      body += `*နောက်ဆုံး post များ:*\n`;
-      body += latest
-        .map((n, i) => {
-          const preview = n.text.length > 80 ? n.text.slice(0, 80) + '…' : n.text;
-          const d = new Date(n.postedAt).toLocaleDateString('en-GB');
-          return `${i + 1}. _(${d})_ ${escMd(preview)}`;
-        })
-        .join('\n');
-      body += `\n\n_Customer က game မေးခွန်းမေးရင် ကိုက်ညီတဲ့ post ကို channel နာမည်ပေါ်အောင် တိုက်ရိုက် forward လုပ်ပြီး ဖြေပေးပါမယ်။_`;
+    if (st.gameNewsChannelId) {
+      body += await renderSection(
+        `*🎮 Game Update Channel*`,
+        st.gameNewsChannelId,
+        `(နောက်ဆုံး ၃ လအတွင်း၊ အများဆုံး ${MAX_ENTRIES} ခု)`
+      );
+      body += `\n`;
     }
+    if (st.faqChannelId) {
+      body += await renderSection(
+        `*📖 FAQ Channel*`,
+        st.faqChannelId,
+        `(သက်တမ်းမကုန် — အများဆုံး ${MAX_ENTRIES} ခု)`
+      );
+      body += `\n`;
+    }
+
+    body += `_Customer က မေးခွန်းမေးရင် ကိုက်ညီတဲ့ post ကို channel နာမည်ပေါ်အောင် တိုက်ရိုက် forward လုပ်ပြီး ဖြေပေးပါမယ်။ ပုံပါ post ဆိုရင် caption ရေးပေးပါ။_`;
 
     await ctx.reply(body, {
       parse_mode: 'Markdown',

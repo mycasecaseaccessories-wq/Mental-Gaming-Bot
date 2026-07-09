@@ -72,7 +72,7 @@ module.exports = (bot) => {
   });
 
   // Purpose picker — decide what the freshly validated channel is for
-  bot.action(/^chmgr_purpose:(autopost|joinbonus|announce|backup|review|game|saved|cancel)$/, adminOnly(), async (ctx) => {
+  bot.action(/^chmgr_purpose:(autopost|joinbonus|announce|backup|review|game|faq|saved|cancel)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const purpose = ctx.match[1];
     const state = ctx.session?.adminChannelMgr;
@@ -149,6 +149,21 @@ module.exports = (bot) => {
         `✅ *${escMd(chat.title)}* ကို 🎮 *Game Update channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
           `ဒီ channel မှာ တင်တဲ့ post တိုင်းကို bot က မှတ်ထားပြီး — customer support မှာ game နဲ့ပတ်သက်တာ လာမေးရင် *ဒီထဲက အချက်အလက်တွေကို အရင်ရှာပြီး* ဖြေပေးပါမယ်။\n\n` +
           `📌 Update အသစ်တွေကို channel ထဲ တင်ရုံပါပဲ — bot က အလိုအလျောက် သိမ်းပါမယ်။ \`/gamenews\` နဲ့ သိမ်းထားတာတွေ စစ်လို့ရပါတယ်။`,
+        { parse_mode: 'Markdown' }
+      );
+      return showPanel(ctx);
+    }
+
+    if (purpose === 'faq') {
+      const st = await SystemStatus.get();
+      await SystemStatus.updateOne(
+        { _id: st._id },
+        { $set: { faqChannelId: chat.id, updatedBy: ctx.from.id } }
+      );
+      await ctx.reply(
+        `✅ *${escMd(chat.title)}* ကို 📖 *FAQ channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
+          `ဒီ channel မှာ တင်တဲ့ FAQ post တိုင်းကို bot က မှတ်ထားပြီး — customer က မေးခွန်းမေးလာရင် ကိုက်ညီတဲ့ post ကို *channel နာမည်ပေါ်အောင် တိုက်ရိုက် forward* လုပ်ပြီး ဖြေပေးပါမယ်။\n\n` +
+          `📌 FAQ post တွေက သက်တမ်းမကုန်ပါဘူး (game update လို ၃ လအကန့်အသတ် မရှိပါ)။ ပုံပါ post ဆိုရင် caption မှာ စာရေးပေးပါ။ \`/gamenews\` နဲ့ သိမ်းထားတာတွေ စစ်လို့ရပါတယ်။`,
         { parse_mode: 'Markdown' }
       );
       return showPanel(ctx);
@@ -251,7 +266,8 @@ module.exports = (bot) => {
             [Markup.button.callback('📢 ကြေညာချက် channel အဖြစ်သတ်မှတ်', 'chmgr_purpose:announce')],
             [Markup.button.callback('🔐 Backup channel အဖြစ်သတ်မှတ်', 'chmgr_purpose:backup')],
             [Markup.button.callback('⭐ Review channel (⭐4-5 review တင်)', 'chmgr_purpose:review')],
-            [Markup.button.callback('🎮 Game Update channel (AI ဖြေဖို့)', 'chmgr_purpose:game')],
+            [Markup.button.callback('🎮 Game Update channel (မေးရင် ဖြေဖို့)', 'chmgr_purpose:game')],
+            [Markup.button.callback('📖 FAQ channel (အမြဲတမ်း မေးခွန်းတွေ)', 'chmgr_purpose:faq')],
             [Markup.button.callback('💾 ရိုးရိုး စာရင်းထဲ သိမ်းမယ်', 'chmgr_purpose:saved')],
             [Markup.button.callback('❌ မလုပ်တော့ပါ', 'chmgr_purpose:cancel')],
           ]),
