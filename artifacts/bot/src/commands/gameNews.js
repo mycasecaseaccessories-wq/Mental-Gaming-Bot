@@ -20,10 +20,10 @@ function escMd(s) {
   return String(s ?? '').replace(/([_*`\[\]])/g, '\\$1');
 }
 
-async function captureChannelPost(post) {
+const RETENTION_DAYS = 90; // keep posts from the last 3 months
+
+async function captureChannelPost(post, telegram) {
   if (!post || !post.chat) return;
-  const text = (post.text || post.caption || '').trim();
-  if (!text) return;
 
   const SystemStatus = require('../models/SystemStatus');
   const GameNews = require('../models/GameNews');
@@ -32,18 +32,53 @@ async function captureChannelPost(post) {
   if (!st.gameNewsChannelId) return;
   if (String(post.chat.id) !== String(st.gameNewsChannelId)) return;
 
+  let text = (post.text || post.caption || '').trim();
+
+  // Photo post → read text/dates inside the image with Gemini vision
+  if (Array.isArray(post.photo) && post.photo.length && telegram) {
+    try {
+      const axios = require('axios');
+      const { extractImageText } = require('../services/aiService');
+
+      const largest = post.photo[post.photo.length - 1];
+      const link = await telegram.getFileLink(largest.file_id);
+      const resp = await axios.get(String(link), {
+        responseType: 'arraybuffer',
+        timeout: 20000,
+        maxContentLength: 10 * 1024 * 1024,
+      });
+      const extracted = await extractImageText(
+        Buffer.from(resp.data).toString('base64'),
+        'image/jpeg'
+      );
+      if (extracted) {
+        text = text ? `${text}\n[From image] ${extracted}` : `[From image] ${extracted}`;
+      }
+    } catch (e) {
+      console.error('[GameNews] photo extract failed:', e.message);
+    }
+  }
+
+  if (!text) return;
+
+  const chatId = String(post.chat.id);
   const postedAt = post.date ? new Date(post.date * 1000) : new Date();
 
   await GameNews.updateOne(
-    { chatId: String(post.chat.id), messageId: post.message_id },
+    { chatId, messageId: post.message_id },
     { $set: { text: text.slice(0, 4000), postedAt } },
     { upsert: true }
   );
+  console.log(`[GameNews] 📝 saved post ${post.message_id} from ${chatId} (${text.length} chars)`);
+
+  // Retention — drop posts older than 3 months
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 3600 * 1000);
+  await GameNews.deleteMany({ chatId, postedAt: { $lt: cutoff } });
 
   // Cap storage — drop oldest beyond MAX_ENTRIES
-  const count = await GameNews.countDocuments({ chatId: String(post.chat.id) });
+  const count = await GameNews.countDocuments({ chatId });
   if (count > MAX_ENTRIES) {
-    const old = await GameNews.find({ chatId: String(post.chat.id) })
+    const old = await GameNews.find({ chatId })
       .sort({ postedAt: -1 })
       .skip(MAX_ENTRIES)
       .select('_id')
@@ -55,7 +90,7 @@ async function captureChannelPost(post) {
 module.exports = (bot) => {
   bot.on('channel_post', async (ctx, next) => {
     try {
-      await captureChannelPost(ctx.channelPost);
+      await captureChannelPost(ctx.channelPost, ctx.telegram);
     } catch (e) {
       console.error('[GameNews] capture error:', e.message);
     }
@@ -64,7 +99,7 @@ module.exports = (bot) => {
 
   bot.on('edited_channel_post', async (ctx, next) => {
     try {
-      await captureChannelPost(ctx.editedChannelPost);
+      await captureChannelPost(ctx.editedChannelPost, ctx.telegram);
     } catch (e) {
       console.error('[GameNews] edit capture error:', e.message);
     }
@@ -97,7 +132,8 @@ module.exports = (bot) => {
     let body =
       `🎮 *Game Update Channel*\n\n` +
       `📡 Channel: \`${escMd(String(st.gameNewsChannelId))}\`\n` +
-      `🗂 သိမ်းထားတဲ့ post: *${count}* ခု (နောက်ဆုံး ${MAX_ENTRIES} ခုအထိ)\n\n`;
+      `🗂 သိမ်းထားတဲ့ post: *${count}* ခု (နောက်ဆုံး ၃ လအတွင်း၊ အများဆုံး ${MAX_ENTRIES} ခု)\n` +
+      `🖼 ပုံပါ post ဆိုရင် ပုံထဲက စာ/ရက်စွဲကိုပါ AI နဲ့ ဖတ်ပြီး သိမ်းပါတယ်\n\n`;
 
     if (!latest.length) {
       body += `_Post မရှိသေးပါဘူး — channel ထဲ update တင်လိုက်တာနဲ့ bot က အလိုအလျောက် မှတ်ပါမယ်။_`;

@@ -231,6 +231,44 @@ async function answerAmbientQuery(userMessage, { telegramId = null, history = []
   }
 }
 
+// ── Vision: extract text/dates from a game update image ──────────────────────
+async function extractImageText(imageBase64, mimeType = 'image/jpeg') {
+  if (!config.ai.apiKey || !imageBase64) return null;
+
+  try {
+    const { data } = await axios.post(
+      geminiUrl('generateContent'),
+      {
+        system_instruction: {
+          parts: [{
+            text:
+              'You extract text and key facts from gaming update/promotion images for a knowledge base. ' +
+              'Summarize the update info concisely and ALWAYS include any dates, event periods, seasons, versions, or deadlines visible in the image. ' +
+              'Reply in the same language as the image text. If nothing readable, reply exactly: NONE',
+          }],
+        },
+        contents: [{
+          role: 'user',
+          parts: [
+            { inline_data: { mime_type: mimeType, data: imageBase64 } },
+            { text: 'Extract the update information and any dates from this image.' },
+          ],
+        }],
+        generationConfig: { maxOutputTokens: 300, temperature: 0.1 },
+      },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+    );
+
+    const out = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!out || /^NONE\.?$/i.test(out)) return null;
+    return out;
+  } catch (err) {
+    const reason = err.response?.data?.error?.message || err.message;
+    console.error('[AIService] Image extract failed:', reason);
+    return null;
+  }
+}
+
 // ── Game update knowledge from the game news channel ─────────────────────────
 async function loadGameNewsContext(userMessage) {
   try {
@@ -242,12 +280,16 @@ async function loadGameNewsContext(userMessage) {
     if (!st.gameNewsChannelId) return '';
     const chatId = String(st.gameNewsChannelId);
 
+    // Only use posts from the last 3 months
+    const freshSince = new Date(Date.now() - 90 * 24 * 3600 * 1000);
+    const base = { chatId, postedAt: { $gte: freshSince } };
+
     // Try relevance search first, fall back to most recent posts
     let entries = [];
     if (userMessage && userMessage.trim()) {
       try {
         entries = await GameNews.find(
-          { chatId, $text: { $search: userMessage.slice(0, 200) } },
+          { ...base, $text: { $search: userMessage.slice(0, 200) } },
           { score: { $meta: 'textScore' } }
         )
           .sort({ score: { $meta: 'textScore' } })
@@ -258,7 +300,7 @@ async function loadGameNewsContext(userMessage) {
       }
     }
     if (!entries.length) {
-      entries = await GameNews.find({ chatId }).sort({ postedAt: -1 }).limit(8).lean();
+      entries = await GameNews.find(base).sort({ postedAt: -1 }).limit(8).lean();
     }
     if (!entries.length) return '';
 
@@ -328,4 +370,5 @@ module.exports = {
   generateProductDescription,
   analyzeSentiment,
   buildUserContext,
+  extractImageText,
 };
