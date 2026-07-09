@@ -318,15 +318,124 @@ module.exports = function registerPromo(bot) {
   });
 
   // ── Announce a coupon to a channel (Owner) ─────────────────────────────────
-  bot.action(/^coupon_announce:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
-    await ctx.answerCbQuery();
-    ctx.session.adminCouponAnnounce = { promoId: ctx.match[1] };
+  function buildCouponAnnounce(promo) {
+    return (
+      `🎉 *Promo Code အသစ် ရောက်ပါပြီ!*\n\n` +
+      `🎟 Code: \`${promo.code}\`\n` +
+      `🏷 Discount: *${escMd(discountText(promo))}*\n` +
+      `📦 သုံးလို့ရမယ့် ပစ္စည်း: ${escMd(scopeText(promo))}\n` +
+      (promo.maxUses ? `👥 ဦးရေကန့်သတ်: ပထမဆုံး *${promo.maxUses}* ယောက်ပဲ ရမယ်!\n` : '') +
+      (promo.expiryDate ? `📅 ${new Date(promo.expiryDate).toLocaleDateString('en-GB')} အထိပဲ ရမယ်\n` : '') +
+      `\n🛒 Order တင်တဲ့အခါ Promo Code နေရာမှာ ဒီ code ကို ရိုက်ထည့်ပြီး လျှော့ဈေးယူလိုက်ပါ! 🚀`
+    );
+  }
+
+  async function getActiveCoupon(promoId) {
+    const Promo = require('../models/Promo');
+    const promo = await Promo.findById(promoId);
+    return promo && promo.isActive ? promo : null;
+  }
+
+  async function showAnnounceChannelPicker(ctx, promoId) {
+    const SystemStatus = require('../models/SystemStatus');
+    const st = await SystemStatus.get();
+    const channels = st.couponAnnounceChannels || [];
+
+    const rows = channels.map((c) =>
+      [Markup.button.callback(`📢 ${c.title || c.chatId}`, `cpa_send:${promoId}:${c.chatId}`)]
+    );
+    rows.push([Markup.button.callback('➕ Channel အသစ်ထည့်ရန်', `cpa_add:${promoId}`)]);
+    if (channels.length) {
+      rows.push([Markup.button.callback('🗑 Channel စာရင်းက ဖျက်ရန်', `cpa_delmenu:${promoId}`)]);
+    }
+
     await ctx.reply(
       `📢 *Channel မှာ ကြေညာမယ်*\n\n` +
-        `ကြေညာချင်တဲ့ channel ရဲ့ \`@username\` (သို့) channel ID (ဥပမာ \`-1001234567890\`) ကို ရိုက်ပါ:\n` +
+        (channels.length
+          ? `သိမ်းထားတဲ့ channel ကို နှိပ်ရုံနဲ့ ကြေညာစာ ချက်ချင်း ပို့ပါမယ် 👇`
+          : `Channel မသိမ်းရသေးပါဘူး — *➕ Channel အသစ်ထည့်ရန်* ကို နှိပ်ပြီး တစ်ခါ add ထားရင် နောက်တစ်ခါကစပြီး ခလုတ်နဲ့ တစ်ချက်နှိပ်ရုံပါပဲ။`),
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+    );
+  }
+
+  bot.action(/^coupon_announce:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    await showAnnounceChannelPicker(ctx, ctx.match[1]);
+  });
+
+  // Send to a saved channel (one tap) — identified by chatId (stable across list changes)
+  bot.action(/^cpa_send:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const [, promoId, chatId] = ctx.match;
+    const SystemStatus = require('../models/SystemStatus');
+    const st = await SystemStatus.get();
+    const chan = (st.couponAnnounceChannels || []).find((c) => String(c.chatId) === chatId);
+    if (!chan) return ctx.reply('❌ ဒီ channel က စာရင်းထဲမှာ မရှိတော့ပါဘူး — 📢 ခလုတ်ကို ပြန်နှိပ်ပြီး အသစ်ရွေးပါ။');
+
+    const promo = await getActiveCoupon(promoId);
+    if (!promo) return ctx.reply('❌ Coupon မတွေ့ပါ (သို့) ပိတ်ထားပြီးပါပြီ။');
+
+    try {
+      await ctx.telegram.sendMessage(chan.chatId, buildCouponAnnounce(promo), { parse_mode: 'Markdown' });
+      return ctx.reply(`✅ *${escMd(chan.title || chan.chatId)}* channel မှာ ကြေညာပြီးပါပြီ! 📢`, { parse_mode: 'Markdown' });
+    } catch (e) {
+      console.error('[Promo] coupon announce error:', e.message);
+      return ctx.reply(
+        `❌ ပို့လို့မရပါ — ${escMd(e.message)}\n\n_Bot ကို channel မှာ admin အနေနဲ့ ရှိနေသေးလား စစ်ကြည့်ပါ။_`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+  });
+
+  // Add a new channel (asks for @username/ID, saves it, then sends)
+  bot.action(/^cpa_add:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    // Ensure no other text wizard swallows the channel input
+    ctx.session.awaitingPromoCode = false;
+    ctx.session.adminCreatePromo = null;
+    ctx.session.adminGenCoupon = null;
+    ctx.session.adminCouponAnnounce = { promoId: ctx.match[1] };
+    await ctx.reply(
+      `➕ *Channel အသစ်ထည့်မယ်*\n\n` +
+        `Channel ရဲ့ \`@username\` (သို့) channel ID (ဥပမာ \`-1001234567890\`) ကို ရိုက်ပါ:\n` +
         `_(Bot ကို အဲဒီ channel မှာ admin အရင်ထည့်ထားရပါမယ်။ မလုပ်တော့ရင် \`cancel\` ရိုက်ပါ)_`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
+  });
+
+  // Delete menu
+  bot.action(/^cpa_delmenu:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const promoId = ctx.match[1];
+    const SystemStatus = require('../models/SystemStatus');
+    const st = await SystemStatus.get();
+    const channels = st.couponAnnounceChannels || [];
+    if (!channels.length) return ctx.reply('စာရင်းထဲမှာ channel မရှိပါ။');
+    await ctx.reply(
+      `🗑 *ဘယ် channel ကို စာရင်းက ဖျက်မလဲ?*\n_(channel ထဲက ပို့ပြီးသား စာတွေတော့ မပျက်ပါဘူး)_`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(
+          channels.map((c) => [Markup.button.callback(`🗑 ${c.title || c.chatId}`, `cpa_del:${promoId}:${c.chatId}`)])
+        ),
+      }
+    );
+  });
+
+  bot.action(/^cpa_del:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const [, promoId, chatId] = ctx.match;
+    const SystemStatus = require('../models/SystemStatus');
+    const st = await SystemStatus.get();
+    const removed = (st.couponAnnounceChannels || []).find((c) => String(c.chatId) === chatId);
+    if (!removed) return ctx.reply('❌ ဒီ channel က စာရင်းထဲမှာ မရှိတော့ပါဘူး။');
+    // Atomic pull by chatId — safe against concurrent list changes
+    await SystemStatus.updateOne(
+      { _id: st._id },
+      { $pull: { couponAnnounceChannels: { chatId } }, $set: { updatedBy: ctx.from.id } }
+    );
+    await ctx.reply(`✅ *${escMd(removed.title || removed.chatId)}* ကို စာရင်းက ဖျက်လိုက်ပါပြီ။`, { parse_mode: 'Markdown' });
+    await showAnnounceChannelPicker(ctx, promoId);
   });
 
   bot.on('text', async (ctx, next) => {
@@ -347,26 +456,30 @@ module.exports = function registerPromo(bot) {
           { parse_mode: 'Markdown' }
         );
       }
-      const Promo = require('../models/Promo');
-      const promo = await Promo.findById(state.promoId);
-      if (!promo || !promo.isActive) {
+      const promo = await getActiveCoupon(state.promoId);
+      if (!promo) {
         ctx.session.adminCouponAnnounce = null;
         return ctx.reply('❌ Coupon မတွေ့ပါ (သို့) ပိတ်ထားပြီးပါပြီ။');
       }
 
-      const announceText =
-        `🎉 *Promo Code အသစ် ရောက်ပါပြီ!*\n\n` +
-        `🎟 Code: \`${promo.code}\`\n` +
-        `🏷 Discount: *${escMd(discountText(promo))}*\n` +
-        `📦 သုံးလို့ရမယ့် ပစ္စည်း: ${escMd(scopeText(promo))}\n` +
-        (promo.maxUses ? `👥 ဦးရေကန့်သတ်: ပထမဆုံး *${promo.maxUses}* ယောက်ပဲ ရမယ်!\n` : '') +
-        (promo.expiryDate ? `📅 ${new Date(promo.expiryDate).toLocaleDateString('en-GB')} အထိပဲ ရမယ်\n` : '') +
-        `\n🛒 Order တင်တဲ့အခါ Promo Code နေရာမှာ ဒီ code ကို ရိုက်ထည့်ပြီး လျှော့ဈေးယူလိုက်ပါ! 🚀`;
-
-      await ctx.telegram.sendMessage(chat.id, announceText, { parse_mode: 'Markdown' });
+      await ctx.telegram.sendMessage(chat.id, buildCouponAnnounce(promo), { parse_mode: 'Markdown' });
       ctx.session.adminCouponAnnounce = null;
+
+      // Save channel for one-tap reuse next time (atomic guarded push, dedup by chatId)
+      const SystemStatus = require('../models/SystemStatus');
+      const st = await SystemStatus.get();
+      const chatIdStr = String(chat.id);
+      await SystemStatus.updateOne(
+        { _id: st._id, 'couponAnnounceChannels.chatId': { $ne: chatIdStr } },
+        {
+          $push: { couponAnnounceChannels: { chatId: chatIdStr, title: chat.title || input } },
+          $set: { updatedBy: ctx.from.id },
+        }
+      );
+
       return ctx.reply(
-        `✅ *${escMd(chat.title || input)}* channel မှာ ကြေညာပြီးပါပြီ! 📢`,
+        `✅ *${escMd(chat.title || input)}* channel မှာ ကြေညာပြီးပါပြီ! 📢\n\n` +
+          `💾 Channel ကို စာရင်းထဲ သိမ်းထားပေးပြီးပါပြီ — နောက်တစ်ခါ coupon ထုတ်ရင် ခလုတ်နဲ့ တစ်ချက်နှိပ်ရုံ ပို့လို့ရပါပြီ။`,
         { parse_mode: 'Markdown' }
       );
     } catch (e) {

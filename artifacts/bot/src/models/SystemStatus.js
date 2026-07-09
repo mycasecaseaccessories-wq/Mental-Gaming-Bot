@@ -71,6 +71,13 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Channel to forward new product alerts / flash sale announcements',
     },
 
+    // ── Saved Coupon Announce Channels ────────────────────────────────────────
+    couponAnnounceChannels: {
+      type: [{ chatId: String, title: String }],
+      default: () => [],
+      comment: 'Saved channels for one-tap coupon announcements (/gencoupon 📢 flow)',
+    },
+
     // ── Backup Channel ─────────────────────────────────────────────────────────
     backupChannelId: {
       type:    String,
