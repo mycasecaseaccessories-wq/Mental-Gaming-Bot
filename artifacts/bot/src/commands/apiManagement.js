@@ -187,12 +187,12 @@ module.exports = function registerApiManagement(bot) {
     const lines = products.map((p) => {
       const mode = p.deliveryMode === 'Auto' ? `🤖 ${p.apiProvider || 'no provider'}` : '👤 Manual';
       const sku  = p.apiProductSku ? ` [${p.apiProductSku}]` : '';
-      return `\`${p._id.toString().slice(-6)}\` *${p.name.slice(0, 25)}* — ${mode}${sku}`;
+      return `*${p.name.slice(0, 25)}* — ${mode}${sku}\n\`${p._id.toString()}\``;
     });
 
     await ctx.reply(
-      `📦 *Products & Delivery Modes*\n\n${lines.join('\n')}\n\n` +
-      `_Use /toggledelivery <id> to switch mode_`,
+      `📦 *Products & Delivery Modes*\n\n${lines.join('\n\n')}\n\n` +
+      `_ID ကို နှိပ်ရင် copy ရပါမယ် — /toggledelivery <id>, /testapi <id>, /announce <id> တို့မှာ သုံးပါ_`,
       { parse_mode: 'Markdown' }
     );
   });
