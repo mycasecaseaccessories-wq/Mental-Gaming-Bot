@@ -139,9 +139,10 @@ const TOPIC_GUIDANCE = {
 async function answerSupportQuery(userMessage, { telegramId = null, topic = 'general', history = [] } = {}) {
   if (!config.ai.apiKey) return { answer: null, shouldEscalate: true };
 
-  const [userContext, faqContext] = await Promise.all([
+  const [userContext, faqContext, gameNewsContext] = await Promise.all([
     telegramId ? buildUserContext(telegramId) : Promise.resolve(''),
     loadFAQContext(),
+    loadGameNewsContext(userMessage),
   ]);
   const topicGuide  = TOPIC_GUIDANCE[topic] || TOPIC_GUIDANCE.general;
 
@@ -149,6 +150,7 @@ async function answerSupportQuery(userMessage, { telegramId = null, topic = 'gen
     `You are a friendly, concise AI support agent for Mental Gaming Store — a Telegram-based gaming store in Myanmar.\n` +
     `\n${STORE_KNOWLEDGE}\n` +
     `${faqContext}\n` +
+    `${gameNewsContext}\n` +
     `${userContext}\n` +
     `CURRENT TOPIC: ${topic.toUpperCase()}\n` +
     `TOPIC GUIDANCE: ${topicGuide}\n` +
@@ -189,9 +191,10 @@ async function answerSupportQuery(userMessage, { telegramId = null, topic = 'gen
 async function answerAmbientQuery(userMessage, { telegramId = null, history = [] } = {}) {
   if (!config.ai.apiKey) return { answer: null, shouldOpenTicket: false };
 
-  const [userContext, faqContext] = await Promise.all([
+  const [userContext, faqContext, gameNewsContext] = await Promise.all([
     telegramId ? buildUserContext(telegramId) : Promise.resolve(''),
     loadFAQContext(),
+    loadGameNewsContext(userMessage),
   ]);
 
   const systemPrompt =
@@ -199,6 +202,7 @@ async function answerAmbientQuery(userMessage, { telegramId = null, history = []
     `You answer quick questions in the main chat (not in a support ticket flow).\n\n` +
     `${STORE_KNOWLEDGE}\n` +
     `${faqContext}\n` +
+    `${gameNewsContext}\n` +
     `${userContext}\n` +
     `RULES:\n` +
     `- Keep responses SHORT — max 3 sentences or 80 words\n` +
@@ -224,6 +228,54 @@ async function answerAmbientQuery(userMessage, { telegramId = null, history = []
   } catch (err) {
     console.error('[AIService] Ambient query failed:', err.message);
     return { answer: null, shouldOpenTicket: false };
+  }
+}
+
+// ── Game update knowledge from the game news channel ─────────────────────────
+async function loadGameNewsContext(userMessage) {
+  try {
+    const GameNews = require('../models/GameNews');
+    const SystemStatus = require('../models/SystemStatus');
+
+    // Only ever serve knowledge from the CURRENTLY configured channel
+    const st = await SystemStatus.get();
+    if (!st.gameNewsChannelId) return '';
+    const chatId = String(st.gameNewsChannelId);
+
+    // Try relevance search first, fall back to most recent posts
+    let entries = [];
+    if (userMessage && userMessage.trim()) {
+      try {
+        entries = await GameNews.find(
+          { chatId, $text: { $search: userMessage.slice(0, 200) } },
+          { score: { $meta: 'textScore' } }
+        )
+          .sort({ score: { $meta: 'textScore' } })
+          .limit(5)
+          .lean();
+      } catch {
+        entries = []; // text index unavailable — use recency fallback below
+      }
+    }
+    if (!entries.length) {
+      entries = await GameNews.find({ chatId }).sort({ postedAt: -1 }).limit(8).lean();
+    }
+    if (!entries.length) return '';
+
+    const lines = entries
+      .map((n) => {
+        const d = new Date(n.postedAt).toISOString().slice(0, 10);
+        return `[${d}] ${n.text.slice(0, 500)}`;
+      })
+      .join('\n---\n');
+
+    return (
+      `\nGAME UPDATES KNOWLEDGE (latest posts from our official game update channel — ` +
+      `when the user asks about games, updates, events, patches, or new releases, search THIS section first and answer from it; ` +
+      `only fall back to general knowledge if nothing here matches):\n${lines}\n`
+    );
+  } catch {
+    return '';
   }
 }
 

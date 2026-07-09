@@ -97,6 +97,7 @@ function loadCommands(bot) {
     'promoPerks.js',        // ← Promotion perks (birthday/happy hour/cashback/winback/leaderboard) — text prompts must precede ambient
     'joinReward.js',        // ← Channel join bonus (user + admin wizard)
     'channelManager.js',    // ← /channels registry panel (owner) — text wizard must precede ambient
+    'gameNews.js',          // ← Game update channel capture + /gamenews (owner)
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler

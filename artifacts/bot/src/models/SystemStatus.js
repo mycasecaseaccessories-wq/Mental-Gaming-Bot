@@ -53,6 +53,13 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Master switch for the automated feedback watcher',
     },
 
+    // ── Game News / Knowledge Channel ─────────────────────────────────────────
+    gameNewsChannelId: {
+      type:    String,
+      default: null,
+      comment: 'Channel whose posts are stored as game-update knowledge for support AI',
+    },
+
     // ── Payment Gateway Status (admin-controlled, shown to users in /topup) ──
     kpayStatus: { type: String, enum: ['Online', 'Busy', 'Offline'], default: 'Online' },
     waveStatus: { type: String, enum: ['Online', 'Busy', 'Offline'], default: 'Online' },

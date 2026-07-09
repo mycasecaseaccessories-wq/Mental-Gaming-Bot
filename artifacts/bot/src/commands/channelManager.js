@@ -72,7 +72,7 @@ module.exports = (bot) => {
   });
 
   // Purpose picker — decide what the freshly validated channel is for
-  bot.action(/^chmgr_purpose:(autopost|joinbonus|announce|backup|saved|cancel)$/, adminOnly(), async (ctx) => {
+  bot.action(/^chmgr_purpose:(autopost|joinbonus|announce|backup|review|game|saved|cancel)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const purpose = ctx.match[1];
     const state = ctx.session?.adminChannelMgr;
@@ -120,6 +120,35 @@ module.exports = (bot) => {
       await ctx.reply(
         `✅ *${escMd(chat.title)}* ကို 🔐 *Backup channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
           `နေ့စဉ် encrypt လုပ်ထားတဲ့ database backup ဖိုင်တွေ ဒီ channel ကို ပို့ပါမယ်။`,
+        { parse_mode: 'Markdown' }
+      );
+      return showPanel(ctx);
+    }
+
+    if (purpose === 'review') {
+      const st = await SystemStatus.get();
+      await SystemStatus.updateOne(
+        { _id: st._id },
+        { $set: { feedbackChannelId: chat.id, updatedBy: ctx.from.id } }
+      );
+      await ctx.reply(
+        `✅ *${escMd(chat.title)}* ကို ⭐ *Review channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
+          `Customer တွေရဲ့ ⭐4–5 review (comment ပါတဲ့) တွေကို ဒီ channel ကို အလိုအလျောက် တင်ပေးပါမယ်။`,
+        { parse_mode: 'Markdown' }
+      );
+      return showPanel(ctx);
+    }
+
+    if (purpose === 'game') {
+      const st = await SystemStatus.get();
+      await SystemStatus.updateOne(
+        { _id: st._id },
+        { $set: { gameNewsChannelId: chat.id, updatedBy: ctx.from.id } }
+      );
+      await ctx.reply(
+        `✅ *${escMd(chat.title)}* ကို 🎮 *Game Update channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
+          `ဒီ channel မှာ တင်တဲ့ post တိုင်းကို bot က မှတ်ထားပြီး — customer support မှာ game နဲ့ပတ်သက်တာ လာမေးရင် *ဒီထဲက အချက်အလက်တွေကို အရင်ရှာပြီး* ဖြေပေးပါမယ်။\n\n` +
+          `📌 Update အသစ်တွေကို channel ထဲ တင်ရုံပါပဲ — bot က အလိုအလျောက် သိမ်းပါမယ်။ \`/gamenews\` နဲ့ သိမ်းထားတာတွေ စစ်လို့ရပါတယ်။`,
         { parse_mode: 'Markdown' }
       );
       return showPanel(ctx);
@@ -221,6 +250,8 @@ module.exports = (bot) => {
             [Markup.button.callback('📣 Join Bonus (join ရင် MC ပေး)', 'chmgr_purpose:joinbonus')],
             [Markup.button.callback('📢 ကြေညာချက် channel အဖြစ်သတ်မှတ်', 'chmgr_purpose:announce')],
             [Markup.button.callback('🔐 Backup channel အဖြစ်သတ်မှတ်', 'chmgr_purpose:backup')],
+            [Markup.button.callback('⭐ Review channel (⭐4-5 review တင်)', 'chmgr_purpose:review')],
+            [Markup.button.callback('🎮 Game Update channel (AI ဖြေဖို့)', 'chmgr_purpose:game')],
             [Markup.button.callback('💾 ရိုးရိုး စာရင်းထဲ သိမ်းမယ်', 'chmgr_purpose:saved')],
             [Markup.button.callback('❌ မလုပ်တော့ပါ', 'chmgr_purpose:cancel')],
           ]),
