@@ -204,7 +204,8 @@ const GUIDE_SECTIONS = [
       `• \`/tickets\` — Open + InProgress\n` +
       `• \`/tickets all\` — resolved/archived ပါ\n` +
       `• Reply / Resolve / Assign / Archive / Urgent\n` +
-      `• 📜 Template library — အမြန် ပြန်ဖြေ\n\n` +
+      `• 📜 Template library — အမြန် ပြန်ဖြေ\n` +
+      `• 📨 *Support Contact သတ်မှတ်ရန်* ခလုတ် (သို့ \`/setsupportcontact\`) — /support ထဲက "Admin ကို တိုက်ရိုက် စာပို့ရန်" ခလုတ်နှိပ်ရင် ရောက်မယ့် account ကို ခလုတ်နဲ့ ပြောင်း/ဖျက် (Owner)\n\n` +
       `🎬 *ဥပမာ — ticket တစ်ခု ဖြေရှင်းနည်း:*\n` +
       `1️⃣ \`/tickets\` ရိုက် → Open ticket စာရင်း ပေါ်မယ်\n` +
       `2️⃣ ticket နှိပ် → *✍️ Reply* နှိပ် → ဖြေမယ့်စာ ရိုက် (သို့ 📜 Template ရွေး)\n` +
@@ -607,7 +608,10 @@ module.exports = function registerAdmin(bot) {
 
     if (!tickets.length) {
       return ctx.reply('✅ No open tickets right now.', {
-        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'nav:go:admin_main')]]),
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('📨 Support Contact သတ်မှတ်ရန်', 'sup_contact_panel')],
+          [Markup.button.callback('🔙 Back', 'nav:go:admin_main')],
+        ]),
       });
     }
 
@@ -629,6 +633,7 @@ module.exports = function registerAdmin(bot) {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
           ...ticketButtons,
+          [Markup.button.callback('📨 Support Contact သတ်မှတ်ရန်', 'sup_contact_panel')],
           [Markup.button.callback('🔙 Back', 'nav:go:admin_main')],
         ]),
       }

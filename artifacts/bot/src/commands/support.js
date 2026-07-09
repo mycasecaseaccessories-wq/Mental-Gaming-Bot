@@ -64,34 +64,55 @@ module.exports = function registerSupport(bot) {
     await ctx.scene.enter('support_scene');
   });
 
-  // ── Owner: /setsupportcontact — direct-message contact account ────────────
-  bot.command('setsupportcontact', adminOnly(), async (ctx) => {
-    const SystemStatus = require('../models/SystemStatus');
-    const arg = (ctx.message.text.split(/\s+/)[1] || '').trim();
+  // ── Owner: Support direct-contact account (panel + /setsupportcontact) ────
 
-    if (!arg) {
-      const st = await SystemStatus.get();
-      const current = st.supportContactUsername
-        ? `\`@${st.supportContactUsername}\``
-        : '_auto (owner account ရဲ့ username ကို သုံးနေတယ်)_';
-      return ctx.reply(
-        `📨 *Support Direct-Contact Account*\n\n` +
-          `လက်ရှိ: ${current}\n\n` +
-          `/support ထဲက "📨 Admin ကို တိုက်ရိုက် စာပို့ရန်" ခလုတ်နှိပ်ရင် ရောက်သွားမယ့် account ပါ။\n\n` +
-          `*အသုံးပြုနည်း:*\n` +
-          `• \`/setsupportcontact @username\` — account သတ်မှတ်\n` +
-          `• \`/setsupportcontact off\` — ဖျက်ပြီး owner account username ကို ပြန်သုံး`,
+  async function buildSupportContactPanel() {
+    const SystemStatus = require('../models/SystemStatus');
+    const st = await SystemStatus.get();
+    const current = st.supportContactUsername
+      ? `\`@${st.supportContactUsername}\``
+      : '_auto (owner account ရဲ့ username ကို သုံးနေတယ်)_';
+    const text =
+      `📨 *Support Direct-Contact Account*\n\n` +
+      `လက်ရှိ: ${current}\n\n` +
+      `/support ထဲက "📨 Admin ကို တိုက်ရိုက် စာပို့ရန်" ခလုတ်နှိပ်ရင် ရောက်သွားမယ့် account ပါ။`;
+    const rows = [
+      [Markup.button.callback('✏️ Username ပြောင်းမယ်', 'sup_contact_set')],
+    ];
+    if (st.supportContactUsername) {
+      rows.push([Markup.button.callback('🔄 Auto (owner account) ပြန်သုံးမယ်', 'sup_contact_off')]);
+    }
+    return { text, keyboard: Markup.inlineKeyboard(rows) };
+  }
+
+  async function saveSupportContact(ctx, username) {
+    const SystemStatus = require('../models/SystemStatus');
+    await SystemStatus.set({ supportContactUsername: username }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_SUPPORT_CONTACT', null, 'System', { username });
+    if (username) {
+      await ctx.reply(
+        `✅ *Support contact သတ်မှတ်ပြီးပါပြီ!*\n\n` +
+          `/support ထဲက 📨 ခလုတ်နှိပ်ရင် အခုကစပြီး \`@${username}\` ဆီ ရောက်သွားပါမယ်။`,
         { parse_mode: 'Markdown' }
       );
-    }
-
-    if (['off', 'auto', 'clear'].includes(arg.toLowerCase())) {
-      await SystemStatus.set({ supportContactUsername: null }, ctx.from.id);
-      await auditLog(ctx.from.id, 'SET_SUPPORT_CONTACT', null, 'System', { username: null });
-      return ctx.reply(
+    } else {
+      await ctx.reply(
         `✅ ဖျက်လိုက်ပါပြီ — owner account ရဲ့ username ကို အလိုအလျောက် ပြန်သုံးပါမယ်။`,
         { parse_mode: 'Markdown' }
       );
+    }
+  }
+
+  bot.command('setsupportcontact', adminOnly(), async (ctx) => {
+    const arg = (ctx.message.text.split(/\s+/)[1] || '').trim();
+
+    if (!arg) {
+      const { text, keyboard } = await buildSupportContactPanel();
+      return ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+
+    if (['off', 'auto', 'clear'].includes(arg.toLowerCase())) {
+      return saveSupportContact(ctx, null);
     }
 
     const username = arg.replace(/^@/, '');
@@ -103,14 +124,61 @@ module.exports = function registerSupport(bot) {
       );
     }
 
-    await SystemStatus.set({ supportContactUsername: username }, ctx.from.id);
-    await auditLog(ctx.from.id, 'SET_SUPPORT_CONTACT', null, 'System', { username });
+    return saveSupportContact(ctx, username);
+  });
 
+  bot.action('sup_contact_panel', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const { text, keyboard } = await buildSupportContactPanel();
+    try {
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    } catch {
+      await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+  });
+
+  bot.action('sup_contact_set', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.awaitingSupportContact = true;
     await ctx.reply(
-      `✅ *Support contact သတ်မှတ်ပြီးပါပြီ!*\n\n` +
-        `/support ထဲက 📨 ခလုတ်နှိပ်ရင် အခုကစပြီး \`@${username}\` ဆီ ရောက်သွားပါမယ်။`,
-      { parse_mode: 'Markdown' }
+      `✏️ *Support contact username ရိုက်ထည့်ပါ:*\n\n` +
+        `ဥပမာ: \`@mgs_admin\` (သို့) \`mgs_admin\`\n` +
+        `ဖျက်ချင်ရင် \`off\` လို့ ရိုက်ပါ။`,
+      { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
+  });
+
+  bot.action('sup_contact_off', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('🔄 Auto ပြန်သုံးပါပြီ');
+    await saveSupportContact(ctx, null);
+  });
+
+  // Text wizard step for ✏️ Username ပြောင်းမယ် button
+  bot.on('text', async (ctx, next) => {
+    if (!ctx.session?.awaitingSupportContact) return next();
+    if (!(await isAnyAdmin(ctx.from.id))) return next();
+
+    const input = ctx.message.text.trim();
+    if (input.startsWith('/') && !['/off'].includes(input.toLowerCase())) {
+      ctx.session.awaitingSupportContact = false;
+      return next(); // let other commands run
+    }
+
+    if (['off', 'auto', 'clear', '/off'].includes(input.toLowerCase())) {
+      ctx.session.awaitingSupportContact = false;
+      return saveSupportContact(ctx, null);
+    }
+
+    const username = input.replace(/^@/, '');
+    if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) {
+      return ctx.reply(
+        `❌ Username ပုံစံ မမှန်ပါဘူး — အက္ခရာ/ဂဏန်း/underscore ၅–၃၂ လုံး ဖြစ်ရပါမယ်။\n\nထပ်ရိုက်ပါ (ဖျက်ချင်ရင် \`off\`):`,
+        { parse_mode: 'Markdown', ...Markup.forceReply() }
+      );
+    }
+
+    ctx.session.awaitingSupportContact = false;
+    return saveSupportContact(ctx, username);
   });
 
   // ── Photo interceptor: screenshot for pending ticket ──────────────────────
