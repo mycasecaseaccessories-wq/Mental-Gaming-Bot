@@ -13,3 +13,5 @@ Rule: after swapping `BOT_TOKEN` to a different bot, assume everything tied to t
 - Users (incl. the admin account) must `/start` the new bot before it can DM them.
 
 **How to apply:** when debugging "notification never arrived" or "photo won't send" after a token change, check these before suspecting code. Verify delivery with a direct `sendMessage` to `ADMIN_ID` via curl. Wrap any resend of stored file_ids in try/catch with a text fallback.
+
+**Mitigation in place:** payment screenshots are now also persisted as raw bytes in MongoDB (ScreenshotStore, 60-day TTL) at submission time, and photo sends fall back from file_id → stored bytes → text. Only images submitted before this existed are stuck on their original bot. When adding any new photo-capture feature, follow the same pattern (persist bytes, don't rely on file_id portability).

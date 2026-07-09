@@ -234,6 +234,12 @@ const topupScene = new Scenes.WizardScene(
         method: method.shortCode,
       });
 
+      // Persist screenshot bytes so ANY bot instance (dev/prod) can view it later
+      // (fire-and-forget — must never delay the admin notification)
+      const { saveScreenshot } = require('../services/ScreenshotService');
+      saveScreenshot(ctx.telegram, fileId, txId)
+        .catch((e) => console.error('[TopupScene] screenshot persist failed:', e.message));
+
       await notifyAdminTopup(ctx, { user, amount, method, fileId, txId, bonusCoins: ctx.session.topupBonusCoins });
 
       ctx.session.topupSelectedMethod = null;

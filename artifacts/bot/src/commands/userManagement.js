@@ -280,13 +280,11 @@ module.exports = function registerUserManagement(bot) {
         [Markup.button.callback('❌ Reject', `topup_reject:${tx.txId}`)],
         [Markup.button.callback('💬 Ask for Info', `topup_askinfo:${tx.txId}`)],
       ]);
-      try {
-        if (tx.screenshotUrl) {
-          await ctx.replyWithPhoto(tx.screenshotUrl, { caption, parse_mode: 'Markdown', ...kb });
-        } else {
-          await ctx.reply(caption, { parse_mode: 'Markdown', ...kb });
-        }
-      } catch {
+      const { sendScreenshot } = require('../services/ScreenshotService');
+      const sent = await sendScreenshot(ctx.telegram, ctx.chat.id, tx, {
+        caption, parse_mode: 'Markdown', ...kb,
+      });
+      if (!sent) {
         await ctx.reply(`${caption}\n\n_(screenshot ပြလို့ မရပါ)_`, { parse_mode: 'Markdown', ...kb })
           .catch(() => ctx.reply(caption.replace(/[*_`\\]/g, ''), kb));
       }

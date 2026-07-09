@@ -15,6 +15,7 @@ const PaymentMethod = require('../models/PaymentMethod');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const { config } = require('../../config/settings');
+const { sendScreenshot } = require('../services/ScreenshotService');
 
 // Escape legacy-Markdown special chars in dynamic text (method names, etc.)
 function escMd(s) {
@@ -84,15 +85,11 @@ module.exports = function registerTopup(bot) {
         [Markup.button.callback('❌ Reject', `topup_reject:${tx.txId}`)],
         [Markup.button.callback('💬 Ask for Info', `topup_askinfo:${tx.txId}`)],
       ]);
-      try {
-        if (tx.screenshotUrl) {
-          await ctx.replyWithPhoto(tx.screenshotUrl, { caption, parse_mode: 'Markdown', ...kb });
-        } else {
-          await ctx.reply(caption, { parse_mode: 'Markdown', ...kb });
-        }
-      } catch {
-        // screenshot file_id may belong to another bot token — fall back to text
-        await ctx.reply(caption + `\n\n_📸 Screenshot ပြလို့မရပါ (bot အဟောင်းက ပုံ ဖြစ်နိုင်ပါတယ်)_`, {
+      const sent = await sendScreenshot(ctx.telegram, ctx.chat.id, tx, {
+        caption, parse_mode: 'Markdown', ...kb,
+      });
+      if (!sent) {
+        await ctx.reply(caption + `\n\n_📸 Screenshot ပြလို့မရပါ (ပုံ မသိမ်းထားခင်က request ဖြစ်နိုင်ပါတယ်)_`, {
           parse_mode: 'Markdown',
           ...kb,
         }).catch(() => {});
