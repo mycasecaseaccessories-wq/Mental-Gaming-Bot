@@ -336,24 +336,55 @@ module.exports = function registerPromo(bot) {
     return promo && promo.isActive ? promo : null;
   }
 
+  // Gather every channel the bot already knows about (saved list + auto-post
+  // channels + join-bonus channels + product announcement channel), dedup by id
+  async function getAnnounceChannelCandidates() {
+    const SystemStatus = require('../models/SystemStatus');
+    const ChannelAutoPost = require('../models/ChannelAutoPost');
+    const JoinReward = require('../models/JoinReward');
+
+    const st = await SystemStatus.get();
+    const map = new Map();
+    const add = (chatId, title) => {
+      if (!chatId) return;
+      const key = String(chatId).trim();
+      if (key && !map.has(key)) map.set(key, { chatId: key, title: title || key });
+    };
+
+    (st.couponAnnounceChannels || []).forEach((c) => add(c.chatId, c.title));
+    if (st.announcementChannelId) add(st.announcementChannelId, '📣 ကြေညာချက် Channel');
+
+    const [posts, rewards] = await Promise.all([
+      ChannelAutoPost.find({}, 'channelId title').lean().catch(() => []),
+      JoinReward.find({}, 'channelId title').lean().catch(() => []),
+    ]);
+    posts.forEach((p) => add(p.channelId, p.title));
+    rewards.forEach((r) => add(r.channelId, r.title));
+
+    return [...map.values()];
+  }
+
   async function showAnnounceChannelPicker(ctx, promoId) {
     const SystemStatus = require('../models/SystemStatus');
     const st = await SystemStatus.get();
-    const channels = st.couponAnnounceChannels || [];
+    const channels = await getAnnounceChannelCandidates();
+    const savedCount = (st.couponAnnounceChannels || []).length;
 
-    const rows = channels.map((c) =>
-      [Markup.button.callback(`📢 ${c.title || c.chatId}`, `cpa_send:${promoId}:${c.chatId}`)]
-    );
+    const rows = channels
+      .filter((c) => `cpa_send:${promoId}:${c.chatId}`.length <= 64) // Telegram callback_data limit
+      .map((c) =>
+        [Markup.button.callback(`📢 ${c.title || c.chatId}`, `cpa_send:${promoId}:${c.chatId}`)]
+      );
     rows.push([Markup.button.callback('➕ Channel အသစ်ထည့်ရန်', `cpa_add:${promoId}`)]);
-    if (channels.length) {
+    if (savedCount) {
       rows.push([Markup.button.callback('🗑 Channel စာရင်းက ဖျက်ရန်', `cpa_delmenu:${promoId}`)]);
     }
 
     await ctx.reply(
       `📢 *Channel မှာ ကြေညာမယ်*\n\n` +
         (channels.length
-          ? `သိမ်းထားတဲ့ channel ကို နှိပ်ရုံနဲ့ ကြေညာစာ ချက်ချင်း ပို့ပါမယ် 👇`
-          : `Channel မသိမ်းရသေးပါဘူး — *➕ Channel အသစ်ထည့်ရန်* ကို နှိပ်ပြီး တစ်ခါ add ထားရင် နောက်တစ်ခါကစပြီး ခလုတ်နဲ့ တစ်ချက်နှိပ်ရုံပါပဲ။`),
+          ? `Bot ထဲမှာ ရှိပြီးသား channel တွေ အကုန်ပြထားပါတယ် — နှိပ်ရုံနဲ့ ကြေညာစာ ချက်ချင်း ပို့ပါမယ် 👇`
+          : `Channel မရှိသေးပါဘူး — *➕ Channel အသစ်ထည့်ရန်* ကို နှိပ်ပြီး တစ်ခါ add ထားရင် နောက်တစ်ခါကစပြီး ခလုတ်နဲ့ တစ်ချက်နှိပ်ရုံပါပဲ။`),
       { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
     );
   }
@@ -363,13 +394,12 @@ module.exports = function registerPromo(bot) {
     await showAnnounceChannelPicker(ctx, ctx.match[1]);
   });
 
-  // Send to a saved channel (one tap) — identified by chatId (stable across list changes)
-  bot.action(/^cpa_send:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
+  // Send to a known channel (one tap) — identified by chatId (stable across list changes)
+  bot.action(/^cpa_send:([a-f0-9]{24}):(.+)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const [, promoId, chatId] = ctx.match;
-    const SystemStatus = require('../models/SystemStatus');
-    const st = await SystemStatus.get();
-    const chan = (st.couponAnnounceChannels || []).find((c) => String(c.chatId) === chatId);
+    const candidates = await getAnnounceChannelCandidates();
+    const chan = candidates.find((c) => String(c.chatId) === chatId);
     if (!chan) return ctx.reply('❌ ဒီ channel က စာရင်းထဲမှာ မရှိတော့ပါဘူး — 📢 ခလုတ်ကို ပြန်နှိပ်ပြီး အသစ်ရွေးပါ။');
 
     const promo = await getActiveCoupon(promoId);
@@ -422,7 +452,7 @@ module.exports = function registerPromo(bot) {
     );
   });
 
-  bot.action(/^cpa_del:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^cpa_del:([a-f0-9]{24}):(.+)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const [, promoId, chatId] = ctx.match;
     const SystemStatus = require('../models/SystemStatus');
