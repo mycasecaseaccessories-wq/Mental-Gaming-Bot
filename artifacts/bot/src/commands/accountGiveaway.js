@@ -83,13 +83,28 @@ async function checkRequirements(ga, ctx) {
   return checks;
 }
 
+const joinUrlCache = new Map(); // chatId -> { url, exp }
+
 async function channelJoinUrl(ctx, chatId) {
+  const key = String(chatId);
+  const hit = joinUrlCache.get(key);
+  if (hit && hit.exp > Date.now()) return hit.url;
+
+  let url = null;
   try {
     const chat = await ctx.telegram.getChat(chatId);
-    if (chat?.username) return `https://t.me/${chat.username}`;
-    if (chat?.invite_link) return chat.invite_link;
+    if (chat?.username) url = `https://t.me/${chat.username}`;
+    else if (chat?.invite_link) url = chat.invite_link;
   } catch {}
-  return null;
+  if (!url) {
+    // Private channel with no existing link — generate one (bot must be
+    // channel admin with "invite users" right)
+    try {
+      url = await ctx.telegram.exportChatInviteLink(chatId);
+    } catch {}
+  }
+  if (url) joinUrlCache.set(key, { url, exp: Date.now() + 10 * 60 * 1000 });
+  return url;
 }
 
 // ── User: giveaway detail view ───────────────────────────────────────────────
