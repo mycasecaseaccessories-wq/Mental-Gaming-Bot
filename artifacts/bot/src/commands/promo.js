@@ -336,32 +336,10 @@ module.exports = function registerPromo(bot) {
     return promo && promo.isActive ? promo : null;
   }
 
-  // Gather every channel the bot already knows about (saved list + auto-post
-  // channels + join-bonus channels + product announcement channel), dedup by id
+  // Gather every channel the bot already knows about (shared registry service)
   async function getAnnounceChannelCandidates() {
-    const SystemStatus = require('../models/SystemStatus');
-    const ChannelAutoPost = require('../models/ChannelAutoPost');
-    const JoinReward = require('../models/JoinReward');
-
-    const st = await SystemStatus.get();
-    const map = new Map();
-    const add = (chatId, title) => {
-      if (!chatId) return;
-      const key = String(chatId).trim();
-      if (key && !map.has(key)) map.set(key, { chatId: key, title: title || key });
-    };
-
-    (st.couponAnnounceChannels || []).forEach((c) => add(c.chatId, c.title));
-    if (st.announcementChannelId) add(st.announcementChannelId, '📣 ကြေညာချက် Channel');
-
-    const [posts, rewards] = await Promise.all([
-      ChannelAutoPost.find({}, 'channelId title').lean().catch(() => []),
-      JoinReward.find({}, 'channelId title').lean().catch(() => []),
-    ]);
-    posts.forEach((p) => add(p.channelId, p.title));
-    rewards.forEach((r) => add(r.channelId, r.title));
-
-    return [...map.values()];
+    const { getKnownChannels } = require('../services/ChannelRegistryService');
+    return getKnownChannels();
   }
 
   async function showAnnounceChannelPicker(ctx, promoId) {
@@ -424,6 +402,7 @@ module.exports = function registerPromo(bot) {
     ctx.session.awaitingPromoCode = false;
     ctx.session.adminCreatePromo = null;
     ctx.session.adminGenCoupon = null;
+    ctx.session.adminChannelMgr = null;
     ctx.session.adminCouponAnnounce = { promoId: ctx.match[1] };
     await ctx.reply(
       `➕ *Channel အသစ်ထည့်မယ်*\n\n` +

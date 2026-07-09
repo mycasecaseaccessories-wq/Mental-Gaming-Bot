@@ -304,6 +304,10 @@ Promo model extended: `perUserLimit`, `scopeType` (all/category/product), `scope
 - **/mycoupons (user)** — lists own usable coupons (`PromoService.listUserCoupons`) with discount/scope/expiry
 - **Checkout integration** — orderScene promo step shows up to 5 applicable personal coupons as `order_use_coupon:<id>` buttons; `validatePromo(code, tgId, amount, {productId, category})` enforces scope + perUserLimit on both button and typed paths
 
+### Channel Registry (Owner) — `/channels`
+
+Standalone channel manager, independent of coupons. `services/ChannelRegistryService.js` (`getKnownChannels()` merges saved list + ChannelAutoPost + JoinReward + `announcementChannelId` with source tags; `saveChannel`/`removeChannel` atomic guarded $push/$pull on `SystemStatus.couponAnnounceChannels`). `src/commands/channelManager.js` (ORDER before `admin.js`): panel lists all known channels with source labels, ➕ add wizard (getChat-validated, channels only, session `adminChannelMgr`), 🗑 delete (saved-list entries only), 🔄 refresh. Coupon announce picker (`promo.js`) reuses the same service.
+
 ### Channel Join Bonus (Owner) — opt-in, NOT force-join
 
 - Models: `JoinReward` (channelId, channelLink, title, mcReward, isActive, claimCount), `JoinRewardClaim` (unique rewardId+telegramId)

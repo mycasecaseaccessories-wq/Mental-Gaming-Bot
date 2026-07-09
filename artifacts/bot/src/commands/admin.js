@@ -362,7 +362,7 @@ const GUIDE_SECTIONS = [
       `3️⃣ လူဘယ်နှစ်ယောက်စာ — စုစုပေါင်း အသုံးပြုနိုင်မယ့် အကြိမ် (\`unlimited\` ရ)\n` +
       `4️⃣ တစ်ယောက် ဘယ်နှစ်ခါ — per-account limit\n` +
       `5️⃣ သက်တမ်း ရက် (\`never\` ရ)\n` +
-      `➕ ထုတ်ပြီးရင် *📢 Channel မှာ ကြေညာမယ်* ခလုတ်နှိပ်ရင် — bot ထဲမှာ ရှိပြီးသား channel တွေ (auto-post, join bonus, ကြေညာချက် channel) အကုန် ခလုတ်နဲ့ပေါ်မယ်၊ တစ်ချက်နှိပ်ရုံ ကြေညာစာပို့နိုင်။ အသစ်ထည့်ချင်ရင် *➕ Channel အသစ်ထည့်ရန်* နဲ့ @username/ID ရိုက်ထည့်ရင် အလိုအလျောက် သိမ်းပေးထားမယ် (bot က channel admin ဖြစ်ရမယ်)။ 🗑 နဲ့ စာရင်းက ပြန်ဖျက်နိုင်\n\n` +
+      `➕ ထုတ်ပြီးရင် *📢 Channel မှာ ကြေညာမယ်* ခလုတ်နှိပ်ရင် — bot ထဲမှာ ရှိပြီးသား channel တွေ (auto-post, join bonus, ကြေညာချက် channel) အကုန် ခလုတ်နဲ့ပေါ်မယ်၊ တစ်ချက်နှိပ်ရုံ ကြေညာစာပို့နိုင်။ Channel စာရင်းကို ကြိုတင် စီမံချင်ရင် \`/channels\` panel မှာ ဒီတိုင်း ထည့်/ဖျက် လုပ်နိုင် (bot က channel admin ဖြစ်ရမယ်)\n\n` +
       `*၂။ Top-up Coupon (အလိုအလျောက်လက်ဆောင်)*\n` +
       `\`/promoperks\` → 🎟 TC ပြင်မယ် → \`10000-pct-5-7\` = 10,000 KS+ ဖြည့်တိုင်း 5% coupon (7 ရက်သက်တမ်း) အလိုအလျောက်ရ။ Toggle နဲ့ ဖွင့်-ပိတ်နိုင်။\n\n` +
       `*၃။ ဝယ်သူဘက်မြင်ကွင်း*\n` +
@@ -381,7 +381,8 @@ const GUIDE_SECTIONS = [
       `• \`/flushcache\` — cache ရှင်း\n` +
       `• \`/systemhealth\` — gateway + system\n` +
       `• \`/setgateway <method> <Online|Busy|Offline>\`\n` +
-      `• \`/setbackupchan\`, \`/setstalesupport <min>\`\n\n` +
+      `• \`/setbackupchan\`, \`/setstalesupport <min>\`\n` +
+      `• \`/channels\` — Channel စာရင်း panel: bot သိထားတဲ့ channel အားလုံး (auto-post, join bonus, ကြေညာချက်, သိမ်းထားတဲ့) ကြည့်/➕ ထည့်/🗑 ဖျက်။ ထည့်ထားတဲ့ channel တွေက coupon ကြေညာတဲ့ picker မှာ အလိုအလျောက် ပေါ်မယ်\n\n` +
       `🎬 *ဥပမာ ၁ — data backup လက်ဖြင့် ဆွဲနည်း:*\n` +
       `1️⃣ \`/runbackup\` ရိုက် → bot က collection တွေ AES-256 encrypt လုပ်\n` +
       `2️⃣ → backup ဖိုင် (\`.json.gz.enc\`) ကို backup channel (သို့ owner DM) ဆီ ပို့ပေးမယ်\n\n` +
