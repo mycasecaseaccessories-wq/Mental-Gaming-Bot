@@ -146,7 +146,7 @@ module.exports = (bot) => {
           return `${i + 1}. _(${d})_ ${escMd(preview)}`;
         })
         .join('\n');
-      body += `\n\n_Customer support မှာ game မေးခွန်းလာရင် ဒီ post တွေထဲက ရှာပြီး AI က ဖြေပါမယ်။_`;
+      body += `\n\n_Customer က game မေးခွန်းမေးရင် ကိုက်ညီတဲ့ post ကို channel နာမည်ပေါ်အောင် တိုက်ရိုက် forward လုပ်ပြီး ဖြေပေးပါမယ်။_`;
     }
 
     await ctx.reply(body, {

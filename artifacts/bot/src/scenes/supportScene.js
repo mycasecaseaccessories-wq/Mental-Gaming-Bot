@@ -20,7 +20,7 @@
 
 const { Scenes, Markup } = require('telegraf');
 const { AI_ENABLED, answerSupportQuery, analyzeSentiment } = require('../services/aiService');
-const { findPosts } = require('../services/GameNewsService');
+const { findPosts, sendPostsAsForwards } = require('../services/GameNewsService');
 const { config } = require('../../config/settings');
 const { price, formatDate } = require('../utils/ui');
 const SupportTicket = require('../models/SupportTicket');
@@ -140,23 +140,21 @@ const supportScene = new Scenes.WizardScene(
       try {
         const posts = await findPosts(message, 3);
         if (posts.length) {
-          const chunks = posts.map((p) => {
-            const d = new Date(p.postedAt).toISOString().slice(0, 10);
-            const t = String(p.text || '');
-            return `📅 ${d}\n${t.length > 600 ? `${t.slice(0, 600)}…` : t}`;
-          });
           ctx.session.supportAiResponse = null;
           ctx.session.supportSentiment  = 'neutral';
 
-          await ctx.reply(`📰 Game Update သတင်းများ —\n\n${chunks.join('\n\n──────────\n\n')}`);
-          await ctx.reply(
-            `Was this helpful?`,
-            Markup.inlineKeyboard([
-              [Markup.button.callback('✅ Yes, solved!',        'sup_solved')],
-              [Markup.button.callback('❌ No, need human help', 'sup_escalate')],
-            ])
-          );
-          return ctx.wizard.next();
+          await ctx.reply(`📰 Game Update သတင်းများ —`);
+          const delivered = await sendPostsAsForwards(ctx, posts);
+          if (delivered) {
+            await ctx.reply(
+              `Was this helpful?`,
+              Markup.inlineKeyboard([
+                [Markup.button.callback('✅ Yes, solved!',        'sup_solved')],
+                [Markup.button.callback('❌ No, need human help', 'sup_escalate')],
+              ])
+            );
+            return ctx.wizard.next();
+          }
         }
       } catch (e) {
         console.error('[SupportScene] game news lookup failed:', e.message);

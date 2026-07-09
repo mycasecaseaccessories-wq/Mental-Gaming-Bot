@@ -59,4 +59,44 @@ async function findPosts(query, limit = 3) {
   return entries;
 }
 
-module.exports = { findPosts, RETENTION_DAYS };
+/**
+ * Forward the original channel posts to the user (keeps the channel name —
+ * real forward, not a copy). Falls back to a plain-text excerpt if a forward
+ * fails (e.g. post deleted from the channel).
+ * Returns true if at least one post was delivered.
+ */
+async function sendPostsAsForwards(ctx, posts) {
+  if (!posts || !posts.length) return false;
+
+  let delivered = 0;
+  const fallbacks = [];
+
+  for (const p of posts) {
+    try {
+      await ctx.telegram.forwardMessage(ctx.chat.id, p.chatId, p.messageId);
+      delivered++;
+    } catch (e) {
+      console.error(`[GameNews] forward failed (${p.chatId}/${p.messageId}):`, e.message);
+      fallbacks.push(p);
+    }
+  }
+
+  // Text fallback for posts that could not be forwarded
+  if (fallbacks.length) {
+    const chunks = fallbacks.map((p) => {
+      const d = new Date(p.postedAt).toLocaleDateString('en-GB');
+      const t = String(p.text || '');
+      return `📅 ${d}\n${t.length > 600 ? `${t.slice(0, 600)}…` : t}`;
+    });
+    try {
+      await ctx.reply(chunks.join('\n\n──────────\n\n'));
+      delivered += fallbacks.length;
+    } catch (e) {
+      console.error('[GameNews] fallback text reply failed:', e.message);
+    }
+  }
+
+  return delivered > 0;
+}
+
+module.exports = { findPosts, sendPostsAsForwards, RETENTION_DAYS };
