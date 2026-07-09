@@ -15,6 +15,10 @@ const { config } = require('../../config/settings');
 const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_BASE  = 'https://generativelanguage.googleapis.com/v1beta/models';
 
+// Master switch — flip to true when a working Gemini key (with quota) is configured.
+// While false, support/ambient flows run in no-AI mode (direct game-news lookup + tickets).
+const AI_ENABLED = false;
+
 function geminiUrl(endpoint) {
   return `${GEMINI_BASE}/${GEMINI_MODEL}:${endpoint}?key=${config.ai.apiKey}`;
 }
@@ -365,6 +369,7 @@ async function generateProductDescription(productName, category, region) {
 }
 
 module.exports = {
+  AI_ENABLED,
   answerSupportQuery,
   answerAmbientQuery,
   generateProductDescription,

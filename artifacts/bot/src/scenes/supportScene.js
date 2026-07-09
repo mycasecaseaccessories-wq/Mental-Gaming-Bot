@@ -1,9 +1,11 @@
 /**
- * SupportScene — AI-powered customer support wizard
+ * SupportScene — customer support wizard (AI or no-AI mode via AI_ENABLED)
  *
  * Step 0 → Topic selection
- * Step 1 → User types question → AI generates instant answer (with "thinking" animation)
- * Step 2 → Show AI answer → [✅ Solved!] [❌ Need human help]
+ * Step 1 → User types question →
+ *   AI mode:    AI generates instant answer (with "thinking" animation)
+ *   no-AI mode: direct game-news lookup answers if matched; else straight to ticket
+ * Step 2 → Show answer → [✅ Solved!] [❌ Need human help]
  *   ✅ → Thank user + mark resolved
  *   ❌ → Ask for optional screenshot → Create SupportTicket → Notify admin → Ticket ID to user
  *
@@ -17,7 +19,8 @@
  */
 
 const { Scenes, Markup } = require('telegraf');
-const { answerSupportQuery, analyzeSentiment } = require('../services/aiService');
+const { AI_ENABLED, answerSupportQuery, analyzeSentiment } = require('../services/aiService');
+const { findPosts } = require('../services/GameNewsService');
 const { config } = require('../../config/settings');
 const { price, formatDate } = require('../utils/ui');
 const SupportTicket = require('../models/SupportTicket');
@@ -63,9 +66,9 @@ async function notifyAdminNewTicket(ctx, ticket, user) {
     `🕐 Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT\n\n` +
     `*User Message:*\n${ticket.userMessage}\n\n` +
     (ticket.aiResponse
-      ? `*AI Attempted Response:*\n_${ticket.aiResponse.slice(0, 200)}${ticket.aiResponse.length > 200 ? '...' : ''}_\n\n`
-      : '') +
-    `_User said AI answer was not helpful — needs human support._`;
+      ? `*AI Attempted Response:*\n_${ticket.aiResponse.slice(0, 200)}${ticket.aiResponse.length > 200 ? '...' : ''}_\n\n` +
+        `_User said AI answer was not helpful — needs human support._`
+      : `_Needs human support._`);
 
   try {
     await ctx.telegram.sendMessage(config.bot.adminId, text, {
@@ -104,8 +107,9 @@ const supportScene = new Scenes.WizardScene(
   async (ctx) => {
     await ctx.reply(
       `💬 *Customer Support*\n\n` +
-      `🤖 Our AI assistant will try to help you instantly.\n` +
-      `If it can't solve your issue, we'll connect you with a human.\n\n` +
+      (AI_ENABLED
+        ? `🤖 Our AI assistant will try to help you instantly.\nIf it can't solve your issue, we'll connect you with a human.\n\n`
+        : `📩 Describe your issue and our team will help you.\nGame update questions get answered instantly from our news channel.\n\n`) +
       `*What do you need help with?*`,
       {
         parse_mode: 'Markdown',
@@ -129,6 +133,41 @@ const supportScene = new Scenes.WizardScene(
     const topic   = ctx.session.supportTopic || 'general';
     const message = ctx.message.text.trim();
     ctx.session.supportUserMessage = message;
+
+    // ── No-AI path ──────────────────────────────────────────────────────────
+    if (!AI_ENABLED) {
+      // 1) Try a direct game-news lookup (zero cost, no AI)
+      try {
+        const posts = await findPosts(message, 3);
+        if (posts.length) {
+          const chunks = posts.map((p) => {
+            const d = new Date(p.postedAt).toISOString().slice(0, 10);
+            const t = String(p.text || '');
+            return `📅 ${d}\n${t.length > 600 ? `${t.slice(0, 600)}…` : t}`;
+          });
+          ctx.session.supportAiResponse = null;
+          ctx.session.supportSentiment  = 'neutral';
+
+          await ctx.reply(`📰 Game Update သတင်းများ —\n\n${chunks.join('\n\n──────────\n\n')}`);
+          await ctx.reply(
+            `Was this helpful?`,
+            Markup.inlineKeyboard([
+              [Markup.button.callback('✅ Yes, solved!',        'sup_solved')],
+              [Markup.button.callback('❌ No, need human help', 'sup_escalate')],
+            ])
+          );
+          return ctx.wizard.next();
+        }
+      } catch (e) {
+        console.error('[SupportScene] game news lookup failed:', e.message);
+      }
+
+      // 2) No match — go straight to the team (no fake AI animation)
+      ctx.session.supportAiResponse = null;
+      ctx.session.supportSentiment  = 'neutral';
+      await ctx.reply(`📩 _Connecting you with our support team..._`, { parse_mode: 'Markdown' });
+      return askForScreenshot(ctx);
+    }
 
     const thinkRef = await showThinking(ctx);
 

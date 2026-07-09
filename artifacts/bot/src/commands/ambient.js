@@ -17,7 +17,7 @@
  */
 
 const { Markup }           = require('telegraf');
-const { answerAmbientQuery } = require('../services/aiService');
+const { AI_ENABLED, answerAmbientQuery } = require('../services/aiService');
 
 // How long a conversation history stays valid (30 minutes)
 const HISTORY_TTL_MS = 30 * 60_000;
@@ -83,8 +83,8 @@ module.exports = function registerAmbient(bot) {
       console.error('[Ambient] game news lookup failed:', e.message);
     }
 
-    // ── AI TEMPORARILY DISABLED ─────────────────────────────────────────────
-    return next();
+    // ── AI ambient chat — only when a working key is configured ────────────
+    if (!AI_ENABLED) return next();
     // ───────────────────────────────────────────────────────────────────────
 
     const text = ctx.message?.text;

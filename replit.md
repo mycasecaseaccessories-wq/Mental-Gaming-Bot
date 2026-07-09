@@ -4,35 +4,18 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
-## Stack
+- **Stack**: Node.js 24, pnpm workspaces, TypeScript 5.9, Express 5, PostgreSQL + Drizzle ORM, Zod (`zod/v4`), Orval codegen, esbuild
+- **Key commands**: `pnpm run typecheck` · `pnpm run build` · `pnpm --filter @workspace/api-spec run codegen` · `pnpm --filter @workspace/db run push` (dev only) · `pnpm --filter @workspace/api-server run dev`
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
-
-## Key Commands
-
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
-
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+See the `pnpm-workspace` skill for workspace structure and package details.
 
 ---
 
-## Mental Gaming Store — Telegram Bot (`artifacts/bot`)
+# Mental Gaming Store — Telegram Bot (`artifacts/bot`)
 
-A Telegram bot built with **Telegraf 4.16.3** and **Mongoose 8.x** (MongoDB Atlas). CommonJS, standalone package — not part of the pnpm workspace typecheck.
+Telegram bot built with **Telegraf 4.16.3** + **Mongoose 8.x** (MongoDB Atlas). CommonJS, standalone package — not part of the pnpm workspace typecheck. Run via workflow "Telegram Bot" (`pnpm --filter @workspace/bot run start`).
 
-### Environment Variables (Replit Secrets)
+## Environment Variables (Replit Secrets)
 
 | Variable | Description |
 |---|---|
@@ -42,299 +25,118 @@ A Telegram bot built with **Telegraf 4.16.3** and **Mongoose 8.x** (MongoDB Atla
 | `AI_API_KEY` | Gemini 2.0 Flash API key |
 | `SESSION_SECRET` | AES-256 backup encryption key |
 
-### Architecture
+## ⚠️ AI Status: DISABLED (no-AI mode)
 
-#### Role System
-- **Owner** — full access (`adminOnly()`)
-- **Manager** — analytics, broadcast, products (`requireRole('MANAGER')`)
-- **Staff** — order management, support tickets (`requireRole('STAFF')`)
-- `isAnyAdmin(telegramId)` — async boolean for non-middleware checks
+The Gemini key's free-tier quota is exhausted (429). Master switch `AI_ENABLED = false` in `services/aiService.js` — flip to `true` when a working key is configured.
 
-#### Command Loading
-All files in `src/commands/` are auto-loaded at startup. Order controlled by `ORDER` array in `index.js`. `ambient.js` MUST be last (catch-all AI handler).
+While disabled:
+- **Ambient chat** (`ambient.js`): no AI replies; only the direct game-news lookup answers (see Game Update Channel below)
+- **Support scene**: no "AI thinking" step — tries direct game-news lookup first; no match → straight to screenshot prompt + ticket creation (sentiment = neutral)
+- **Photo OCR** for game-news posts silently skips (caption-only capture works)
+- AI analytics commands (`/analyticsai`, `/forecast`, `/sentimentreport`) will fail until a key with quota is set
 
-#### Scene System
-Telegraf `Scenes.Stage` — order flow, topup flow, broadcast, rate manager, spin wheel, support chat.
+## Architecture
 
-### Directory Structure
+### Core structure
 
 ```
 artifacts/bot/
-├── config/
-│   └── settings.js            # Env config + validation
-├── src/
-│   ├── index.js               # Entry point — boots bot, loads commands, starts services
-│   ├── database.js            # Mongoose connect
-│   ├── commands/              # Bot command handlers (26 files, auto-loaded)
-│   │   ├── start.js           # /start, main menu
-│   │   ├── shop.js            # Product browser (cached via CacheService)
-│   │   ├── orders.js          # User order history
-│   │   ├── wallet.js          # Wallet balance, history
-│   │   ├── topup.js           # KPay/Wave/AYA/CB payment flow
-│   │   ├── spin.js            # Spin wheel game
-│   │   ├── checkin.js         # Daily check-in & streaks
-│   │   ├── promo.js           # Promo code redemption
-│   │   ├── addressBook.js     # Saved game IDs
-│   │   ├── referral.js        # Referral program
-│   │   ├── support.js         # AI customer support + tickets
-│   │   ├── profile.js         # User profile
-│   │   ├── settings.js        # Theme & display settings
-│   │   ├── dashboard.js       # Admin dashboard (gateway panel + analytics buttons)
-│   │   ├── adminOrders.js     # Admin order management
-│   │   ├── userManagement.js  # User admin: ban/warn/adjust balance
-│   │   ├── systemManagement.js# RBAC, maintenance mode, templates
-│   │   ├── financialExport.js # CSV financial reports
-│   │   ├── faq.js             # FAQ library + video tutorials
-│   │   ├── feedback.js        # Post-order review collection
-│   │   ├── apiManagement.js   # External API providers + attribution
-│   │   ├── analytics.js       # Financial analytics + AI insights + sentiment
-│   │   ├── sysinfo.js         # /sysinfo, /runbackup, /runcron, /flushcache
-│   │   ├── health.js          # /checkhealth (50-op load test), /checkmodules
-│   │   ├── launch.js          # /launchbroadcast, /setseason, /seasonlist, /previewseason
-│   │   ├── channelAutoPost.js # /addchannelpost, /listchannelposts, /sendchannelpost, /togglechannelpost, /delchannelpost
-│   │   ├── admin.js           # Admin panel
-│   │   ├── help.js            # Help menu
-│   │   └── ambient.js         # LAST: catch-all AI ambient handler
-│   ├── models/                # Mongoose schemas
-│   │   ├── User.js
-│   │   ├── Product.js
-│   │   ├── Order.js
-│   │   ├── OrderArchive.js    # Archived orders > 6 months (collection: orders_archive)
-│   │   ├── Transaction.js
-│   │   ├── Currency.js
-│   │   ├── Promo.js
-│   │   ├── Review.js          # sentimentLabel + sentimentAnalyzedAt
-│   │   ├── SystemStatus.js    # Singleton: maintenance, gateways, backupChannelId
-│   │   ├── Admin.js
-│   │   ├── AuditLog.js
-│   │   ├── SupportTicket.js
-│   │   ├── PaymentMethod.js
-│   │   ├── FAQ.js
-│   │   ├── Template.js
-│   │   ├── CheckIn.js
-│   │   ├── Referral.js
-│   │   ├── FraudFlag.js
-│   │   ├── GameCode.js
-│   │   ├── AddressBook.js
-│   │   ├── WebhookEvent.js
-│   │   └── ProviderLog.js
-│   ├── middlewares/
-│   │   ├── adminCheck.js      # adminOnly(), requireRole(), isAnyAdmin()
-│   │   ├── antiSpam.js        # Rate limiting
-│   │   ├── authUser.js        # ctx.user attachment
-│   │   ├── errorHandler.js    # Per-update handler + global crash reporter
-│   │   ├── maintenanceCheck.js# Maintenance/holiday gate
-│   │   └── navigationMiddleware.js
-│   ├── services/
-│   │   ├── CacheService.js    # node-cache: currency (15min), products (5min)
-│   │   ├── CronService.js     # node-cron: archive/purge/audit/backup daily at 3AM MMT
-│   │   ├── BackupService.js   # AES-256 encrypted gzip JSON backup → Telegram
-│   │   ├── AnalyticsService.js# Revenue, profit, trends, category breakdown
-│   │   ├── AIInsightsService.js# Gemini: monthly report, 7-day forecast, flash recs
-│   │   ├── SentimentService.js# Batch AI sentiment + negative review alerts
-│   │   ├── ExportService.js   # CSV export: orders/transactions/users
-│   │   ├── FlashSaleService.js# Flash sale watcher
-│   │   ├── FeedbackService.js # Review collection watcher
-│   │   ├── currencyService.js # Rate fetch/update (cached via CacheService)
-│   │   ├── NavigationService.js
-│   │   ├── StyleService.js    # Seasonal theme engine (standard/thingyan/christmas/lunarnewyear/eid/custom)
-│   │   ├── ThemeService.js
-│   │   ├── FAQService.js
-│   │   ├── PriceCalculator.js
-│   │   ├── WebhookProcessor.js
-│   │   ├── OrderTrackingService.js  # Live order status thread (Pending→Processing→Complete)
-│   │   ├── ChannelAutoPostService.js # Scheduled channel auto-posts (10-min tick)
-│   │   └── aiService.js       # callGemini() wrapper
-│   ├── scenes/                # Telegraf Scenes
-│   │   ├── orderScene.js      # → sends OrderTrackingService.sendOrderPlaced() after createOrder()
-│   │   ├── topupScene.js
-│   │   ├── rateManagerScene.js
-│   │   ├── broadcastScene.js
-│   │   ├── spinWheelScene.js
-│   │   ├── supportScene.js
-│   │   └── onboardingScene.js # 3-step tour + 100 MC welcome bonus for new users
-│   └── utils/
-│       ├── ui.js              # buildMessage, stat, divider, price
-│       └── animations.js      # loadingMessage, pulseLoading, resolveMessage
-└── package.json
+├── config/settings.js        # Env config + validation (config.bot.adminId, config.ai.apiKey)
+└── src/
+    ├── index.js              # Entry — boots bot, loads commands (ORDER array), starts services
+    ├── database.js           # Mongoose connect
+    ├── commands/             # Auto-loaded handlers; ORDER controls sequence; ambient.js MUST be last
+    ├── models/               # Mongoose schemas (User, Product, Order, Promo, SystemStatus singleton, …)
+    ├── middlewares/          # adminCheck (adminOnly/requireRole/isAnyAdmin), antiSpam, authUser,
+    │                         # errorHandler (global crash reporter, no process.exit), maintenanceCheck, navigation
+    ├── services/             # Cache, Cron, Backup, Analytics, AI, Wallet, Order, Referral, etc.
+    ├── scenes/               # Telegraf Scenes: order, topup, rateManager, broadcast, spinWheel, support, onboarding
+    └── utils/                # ui.js (buildMessage/stat/price), animations.js, accountAge.js
 ```
 
-### Referral Tier System
+### Conventions
 
-Configurable 3-tier commission model stored in `SystemStatus.referralTiers`.
+- **Roles**: Owner (`adminOnly()`), Manager (`requireRole('MANAGER')`), Staff (`requireRole('STAFF')`); `isAnyAdmin(telegramId)` for non-middleware checks
+- **Command loading**: all files in `src/commands/` auto-load; ORDER array in `index.js`; text-wizard commands must come before `admin.js`/`ambient.js`
+- **SystemStatus**: singleton model (`SystemStatus.get()` + `updateOne` `$set`) holds maintenance mode, gateways, channel IDs, and most feature settings
+- **Escaping**: backticks inside `admin.js` GUIDE template literals must be escaped `` \` `` (unescaped ones crash command loading)
+- **Global middlewares are channel_post-safe** (they skip when `ctx.from` is missing)
 
-| Tier | Min Referrals | Commission |
-|---|---|---|
-| 🥉 Bronze | 1–5 | 2% |
-| 🥈 Silver | 6–15 | 3% |
-| 🥇 Gold | 16+ | 5% |
+### SRE systems
 
-- Rate is resolved dynamically in `ReferralService.processTopupCommission()` via `resolveTierInfo(completedCount, tiers)`
-- `getStats()` returns `tier`, `nextTier`, `completedCount` — used to render progress bar in `/referral`
-- Admin commands: `/setreftiers 1:2 6:3 16:5` (Owner), `/reftiers` (Manager+)
+- **CacheService** — node-cache: currency rates 15 min, products per-category 5 min; `invalidateProducts()` after admin product changes; stats in `/sysinfo`
+- **CronService** (MMT = UTC+6:30) — 03:00 archive orders >6 months → `OrderArchive`; 03:05 deactivate expired promos; 03:10 stale screenshot audit; 03:20 flush cache; 06:00 encrypted backup; 09:00 account expiry reminders; 09:05 birthday gifts; 09:15 win-back; 09:30 (1st) monthly leaderboard awards; every 10 min channel auto-posts
+- **BackupService** — 14 collections → JSON → gzip → AES-256-CBC (key = SHA-256 of `SESSION_SECRET`) → `SystemStatus.backupChannelId` or owner DM; `MGS_Backup_*.json.gz.enc`
+- **Error handling** — per-update generic reply + rate-limited admin alert; global `uncaughtException`/`unhandledRejection` → stack trace to owner (5-min cooldown), keeps bot alive
 
-### Live Order Tracking Thread
+## Features
 
-Every order generates a status thread in the customer's Telegram chat:
+### Orders & tracking
+- **Live order tracking thread**: order placed → `OrderTrackingService.sendOrderPlaced()`; admin buttons drive Processing → Complete (delivery receipt with timeline) / Cancel & Refund; `trackingMsgId` + `statusHistory[{status, at, byAdminId, note}]` on Order; status enum includes `Processing`
+- **Stale-order support prompt**: `SystemStatus.orderSupportThresholdMinutes` (default 30); age measured from last statusHistory entry; `[⚠️ Contact Support]` button auto-escalates (dedup, High-priority ticket, admin notified); `/setstalesupport <min>` (Owner)
+- `/trackorder [shortId]` (all users) — live status card + refresh
 
-1. **Order placed** (`orderScene.js`) → `sendOrderPlaced()` replies to the checklist message; `trackingMsgId` + `statusHistory[Pending]` saved to Order
-2. **Admin taps 🔄 Processing** → `sendProcessing()` replies to tracking card; new `trackingMsgId` stored
-3. **Admin taps ✅ Complete** → `sendDeliveredReceipt()` replies to last tracking msg; includes full timeline + delivery data
-4. **Admin taps ❌ Cancel & Refund** → `sendCancelled()` replies to tracking card with refund + reason
+### Support
+- `supportScene.js`: topic → question → (AI answer if enabled | direct game-news lookup if not) → solved / escalate → optional screenshot → `SupportTicket` + admin notify with reply/template/resolve/assign/urgent buttons
+- Photo interceptor for `awaitingTicketScreenshot` lives in `support.js`
 
-Order model additions: `status` enum now includes `'Processing'`; new fields `trackingMsgId: Number` and `statusHistory: [{status, at, byAdminId, note}]`.
+### Game Update Knowledge Channel — `/gamenews` (Owner)
+- Assign channel via `/channels` → ➕ → 🎮 purpose (`SystemStatus.gameNewsChannelId`); bot must be channel admin
+- `commands/gameNews.js` captures `channel_post`/`edited_channel_post` into `GameNews` model (unique chatId+messageId, text index); retention: **90 days + newest 300 cap**
+- Photo posts: largest photo → `aiService.extractImageText(base64)` (Gemini vision, extracts text + dates) appended as `[From image] …` — needs working AI key
+- **No-AI direct lookup**: `services/GameNewsService.js` `findPosts(query)` ($text search → latin-keyword regex fallback; channel-scoped; 90-day fresh). Wired into: (1) top of `ambient.js` text handler, (2) support scene step 1 — matching posts replied verbatim (plain text, 3×600 chars)
+- **AI path (when enabled)**: `aiService.loadGameNewsContext()` injects "GAME UPDATES KNOWLEDGE" block (channel-scoped, 90-day fresh, top 5 by relevance / 8 recent) into support + ambient prompts
 
-#### Stale-Order Support Prompt
+### Channels — `/channels` (Owner)
+- `services/ChannelRegistryService.js` `getKnownChannels()` merges saved list (`SystemStatus.couponAnnounceChannels`) + ChannelAutoPost + JoinReward + announcement/backup/review/game-news channel IDs with source tags; atomic guarded $push/$pull
+- `commands/channelManager.js`: panel + ➕ add wizard (getChat-validated, channels only) → **purpose picker** (`chmgr_purpose:*`): 💾 saved / 📢 announce / 🔐 backup / ⭐ review (`feedbackChannelId` — FeedbackService auto-posts ⭐4–5 reviews with comments) / 🎮 game (`gameNewsChannelId`) / 📅 autopost (hands off to `ctx.session.cap` wizard) / 📣 joinbonus (hands off to `ctx.session.jbAdmin` wizard). `chmgr_add` clears rival wizard flags and vice versa
+- **Channel auto-posts**: `ChannelAutoPost` model (title, body, HH:MM MMT, isActive, lastSentDate, sendCount); 10-min cron tick, dedup per MMT date; `/addchannelpost`, `/listchannelposts`, `/sendchannelpost`, `/togglechannelpost`, `/delchannelpost`
 
-Configurable via `SystemStatus.orderSupportThresholdMinutes` (default: 30).
+### Wallet, promos & perks
+- **Coupon system** (extends Promo): `perUserLimit`, `scopeType` all/category/product, `source` admin/topup/reward; `/gencoupon` (Owner) 5-step wizard → auto code `MGS-XXXXXX` + 📢 announce-to-channel picker; **top-up coupon** granted in `WalletService.approveTopup()` (prefix `TU-`, personal, configurable via `/promoperks`); `/mycoupons` (user); orderScene shows up to 5 applicable coupons as buttons; `validatePromo` enforces scope + perUserLimit
+- **Promotion perks** — `/promoperks` (Owner), engine `services/PromoPerksService.js`, settings on SystemStatus: birthday gift (`/setbirthday DD-MM`, 09:05 cron, once/year atomic), happy hour (bonus MC % in `approveTopup`, overnight ok), cashback (% MC on order complete), first-order discount (orderScene step 0, baked into unitPrice), win-back (09:15 cron, ≥N days inactive, max once/90d), monthly leaderboard (`/toplist`, 1st-of-month awards)
+- **Referral tiers**: `SystemStatus.referralTiers` (Bronze 1–5→2%, Silver 6–15→3%, Gold 16+→5%); resolved in `ReferralService.processTopupCommission()`; `/setreftiers 1:2 6:3 16:5` (Owner), `/reftiers` (Manager+)
+- **Referral campaigns** — `/refcamp` (Owner), `/campaign` (user): "invite N friends → reward"; one active at a time (partial unique index); `RefCampaign` + `RefCampaignEntry` models; hooked into first commission completion only; all counters conditional `findOneAndUpdate` + `$inc`; quota-full auto-end; optional `minRefereeAgeDays` (account age estimated from Telegram ID, `utils/accountAge.js`)
+- **Channel join bonus** (opt-in, NOT force-join) — `/joinbonus` (user, getChatMember verify, claim-record-first), `/joinbonusadmin` (Owner); `JoinReward` + `JoinRewardClaim` models
 
-- `ageMinutes(order)` measures time since the **last** `statusHistory` entry (or `order.timestamp` if no history), so the clock resets when admin marks Processing
-- When `age >= threshold` AND order is Pending/Processing → `[⚠️ Contact Support]` button appears on the tracking card + a warning line in the card text
-- Tapping it calls `autoEscalate()` which: deduplicates (no second ticket for the same order), creates a `SupportTicket` (`topic: order`, `priority: High`), notifies admin with full ticket keyboard, and confirms to the customer with the ticket ID
-- `/setstalesupport <minutes>` (Owner) — update threshold; `/setstalesupport` with no args shows current value and usage
+### Premium Accounts (separate from Product system)
+- Sells credentials (e.g. ExpressVPN): `AccountProduct` + `AccountCredential` (atomic `claimOne()`); buy = `debitKS` → claim → instant delivery (refund on failure); `/accounts`, `/myaccounts` (user); `/accadmin` (Owner) — add wizard, bulk `email:password` paste, discount/price/toggle/delete; daily 09:00 expiry reminders
 
-### SRE Systems (Performance, Automation, Backup)
+### Spin wheel custom rewards
+- `/dashboard` → 🎰 Spin → ➕ Add Custom Reward; types coin/ks/spin/none with label/amount/weight; `GameConfig.customSpinPrizes[]` merged via `GameService.getEffectivePrizePool()`
 
-#### CacheService (`services/CacheService.js`)
-- `getCachedRates()` — currency rates, 15-min TTL
-- `getCachedProducts(category)` — per-category product list, 5-min TTL
-- `invalidateProducts()` — call after any admin product change
-- `invalidateRates()` — called automatically after rate updates
-- `getStats()` — hit rate, key count (shown in /sysinfo)
-
-#### CronService (`services/CronService.js`)
-Daily schedule (Myanmar Time = UTC+6:30):
-- **03:00 MMT** — Archive `Success/Cancelled/Refunded` orders > 6 months → `OrderArchive`
-- **03:05 MMT** — Deactivate expired/exhausted promo codes
-- **03:10 MMT** — Log stale screenshot URLs on rejected transactions
-- **03:20 MMT** — Flush in-memory cache
-- **06:00 MMT** — Trigger encrypted database backup
-
-#### BackupService (`services/BackupService.js`)
-- Dumps 14 collections to compact JSON (Orders/Transactions: last 90 days)
-- Compresses with `zlib.gzip`
-- Encrypts with AES-256-CBC (key = SHA-256 of `SESSION_SECRET`; IV prepended)
-- Sends to `SystemStatus.backupChannelId` or owner DM if not set
-- Format: `MGS_Backup_YYYY-MM-DD_HHMMSS.json.gz.enc`
-
-#### Error Handler (`middlewares/errorHandler.js`)
-- Per-update: generic user reply + rate-limited admin alert
-- `setupGlobalErrorHandlers(telegram)` — `uncaughtException` + `unhandledRejection`
-  - Sends stack trace to owner; 5-min cooldown between alerts
-  - Does NOT call `process.exit()` — keeps bot alive
-
-### Admin Commands Reference
+## Admin Commands Reference
 
 | Command | Role | Description |
 |---|---|---|
+| `/dashboard` | Owner | Admin dashboard (gateway panel + analytics) |
 | `/sysinfo` | Manager+ | Memory, CPU, DB, cache stats, pending orders |
-| `/runbackup` | Owner | Trigger manual DB backup now |
-| `/runcron` | Owner | Run all maintenance jobs manually |
+| `/runbackup` / `/runcron` | Owner | Manual backup / maintenance jobs |
 | `/flushcache` | Manager+ | Flush in-memory cache |
 | `/setbackupchan` | Owner | Set backup destination channel |
 | `/analytics [period]` | Manager+ | Revenue/profit dashboard |
-| `/analyticsai [period]` | Manager+ | Gemini AI business report |
-| `/forecast` | Manager+ | 7-day sales forecast |
-| `/sentimentreport` | Manager+ | Review sentiment analysis |
+| `/analyticsai` `/forecast` `/sentimentreport` | Manager+ | AI reports (need working AI key) |
 | `/systemhealth` | Manager+ | Gateway + system status |
 | `/exportdetail` | Manager+ | CSV export (orders/transactions/users) |
-| `/setgateway` | Owner | Set payment gateway online/busy/offline |
-| `/setgatewaynote` | Owner | Add note to gateway status |
-| `/dashboard` | Owner | Admin dashboard |
-| `/setreftiers 1:2 6:3 16:5` | Owner | Set referral commission tiers (minRefs:rate pairs) |
-| `/reftiers` | Manager+ | View current referral tier table |
-| `/trackorder [shortId]` | All | Live order status card + 🔄 Refresh + ⚠️ Support prompt after threshold |
-| `/setstalesupport <min>` | Owner | Set minutes before [Contact Support] button appears on stale orders |
-| `/addchannelpost` | Owner | Wizard to schedule a daily channel auto-post (HH:MM MMT) |
-| `/listchannelposts` | Owner | List all configured channel auto-posts |
-| `/sendchannelpost <id>` | Owner | Send a configured post immediately (test) |
-| `/togglechannelpost <id>` | Owner | Toggle auto-post active/inactive |
-| `/delchannelpost <id>` | Owner | Delete a channel auto-post |
-| `/refcamp` | Owner | Referral campaign panel (create/end/top participants) |
-| `/joinbonusadmin` | Owner | Channel join bonus panel (add/toggle/delete/announce) |
-| `/promoperks` | Owner | Promotion perks panel: birthday gift, happy hour, cashback, first-order discount, win-back, monthly leaderboard |
-| `/toplist` | All | Current-month top spender leaderboard |
-| `/setbirthday` | All | Save birthday (DD-MM) for yearly MC gift |
+| `/setgateway` `/setgatewaynote` | Owner | Payment gateway status/note |
+| `/setreftiers` / `/reftiers` | Owner / Manager+ | Referral commission tiers |
+| `/setstalesupport <min>` | Owner | Stale-order support threshold |
+| `/addchannelpost` `/listchannelposts` `/sendchannelpost` `/togglechannelpost` `/delchannelpost` | Owner | Channel auto-posts |
+| `/channels` | Owner | Channel registry + purpose picker |
+| `/gamenews` | Owner | Game update knowledge channel status |
+| `/gencoupon` | Owner | Coupon generator wizard |
+| `/refcamp` | Owner | Referral campaign panel |
+| `/joinbonusadmin` | Owner | Channel join bonus panel |
+| `/promoperks` | Owner | Promotion perks panel (incl. top-up coupon config) |
+| `/accadmin` | Owner | Premium accounts admin |
+| `/checkhealth` / `/checkmodules` | Owner | Load test / module check |
+| `/launchbroadcast` `/setseason` `/seasonlist` `/previewseason` | Owner | Broadcast + seasonal themes |
+| `/trackorder [shortId]` | All | Live order status card |
+| `/toplist` / `/setbirthday` | All | Leaderboard / birthday gift |
 
-### Channel Auto-Posts
+## Packages
 
-Owner-only system for scheduling daily promotional posts to Telegram channels:
-- Model: `ChannelAutoPost` — `channelId`, `title`, `body` (Markdown), `scheduledHour`, `scheduledMinute`, `isActive`, `lastSentDate` (MST), `sendCount`
-- Cron tick: every 10 minutes via `ChannelAutoPostService.runDuePosts()`; deduplicates per MST date
-- Bot must be admin in the destination channel with post permission
-
-### Premium Accounts System (separate from Product system)
-
-Sells account credentials (e.g. ExpressVPN) with instant delivery, per-product duration/expiry, and discounts. Completely independent of the game top-up Product system.
-
-- Models: `AccountProduct` (serviceName, planLabel, price KS, discountPercent 0–90, durationDays, isActive) and `AccountCredential` (loginId, password, status available/sold, buyer + soldAt/expiresAt + name snapshots; atomic `claimOne()`)
-- User: `/accounts` (+ 🔐 main-menu button, i18n `menu.accounts`), buy flow = `debitKS` → `claimOne` → instant credential delivery (refund on any failure/out-of-stock); `/myaccounts` shows remaining days
-- Admin (Owner): admin menu **🔐 Accounts** / `/accadmin` — add-product wizard (5 steps), bulk stock paste (`email:password` per line), discount %, price edit, toggle, delete
-- Cron: daily 09:00 MMT expiry reminders (3 days before + on expiry; `notified3d`/`notifiedExpired` flags, set only after successful send or 403)
-- File: `src/commands/accounts.js` in ORDER before `admin.js` (text wizard must precede ambient)
-
-### Referral Campaigns (Owner)
-
-"Invite N friends → get reward" campaigns; only ONE active at a time (DB partial unique index on `isActive:true`).
-
-- Models: `RefCampaign` (title, requiredRefs, rewardType mc/ks/product, rewardAmount/rewardLabel, maxInvitesPerUser, maxRewardsPerUser, totalRewardLimit, totalRewardsClaimed, endReason quota_full/manual) and `RefCampaignEntry` (unique campaignId+telegramId; countedRefs/totalRefs/rewardsClaimed)
-- `RefCampaignService.onReferralCompleted(referrer, telegram, referee)` — hooked into `ReferralService.processTopupCommission` on FIRST completion only (`commissionHistory.length === 1`). All counters use conditional `findOneAndUpdate` + `$inc` (concurrency-safe; rollback on delivery failure)
-- Quota full → campaign auto-ends, admin notified; unfinished progress discarded; next campaign starts fresh
-- `minRefereeAgeDays` (wizard step 8, 0 = off): invited user's Telegram account age is *estimated* from their numeric ID via `utils/accountAge.js` (anchor-table interpolation); refs from too-new accounts are not counted (referrer notified, `REF_CAMPAIGN_AGE_REJECT` audit)
-- Admin: `/refcamp` / admin menu **🎯 Ref Campaign** — 8-step wizard, end, top participants. User: `/campaign`
-- File: `src/commands/refCampaign.js`
-
-### Promotion Perks (Owner) — `/promoperks` panel
-
-Six promotion mechanics controlled from a single owner panel; all settings on the SystemStatus singleton, engine in `services/PromoPerksService.js`, commands in `src/commands/promoPerks.js` (ORDER before `admin.js`).
-
-- **Birthday gift** — user saves `/setbirthday DD-MM` (`birthdayMonth/Day` on User); daily 09:05 MMT cron credits `birthdayGiftMC` once per year (`lastBirthdayGiftYear` claimed atomically)
-- **Happy Hour** — `happyHourEnabled/StartMMT/EndMMT/BonusPct`; extra MC credited inside `WalletService.approveTopup()` (lazy-required to avoid circular dep); shown on e-receipt; supports overnight windows
-- **Cashback** — `cashbackPct`; MC credited in `OrderService.completeOrder` post-complete hook via `PromoPerksService.giveCashback(order, telegram)`
-- **First-order discount** — `firstOrderDiscountPct`; applied in orderScene step 0 (baked into `unitPrice` after tier discount; eligibility = no Pending/Processing/Success order ever)
-- **Win-back** — `winbackEnabled/Days/BonusMC`; daily 09:15 MMT cron messages users with `lastActive` older than N days + credits MC; max once per 90 days (`lastWinbackAt` claimed atomically)
-- **Monthly leaderboard** — `leaderboardEnabled/Prizes[]`; user `/toplist` (masked names); cron on 1st 09:30 MMT awards previous-month top spenders (aggregate on Success orders) + admin summary
-
-### Coupon System (extends Promo)
-
-Promo model extended: `perUserLimit`, `scopeType` (all/category/product), `scopeCategories[]`, `scopeProducts[]`, `source` (admin/topup/reward). Methods: `hasUserUsed` (vs perUserLimit), `userUseCount`, `appliesToProduct({productId, category})`.
-
-- **/gencoupon (Owner)** — 5-step wizard in `promo.js` (`ctx.session.adminGenCoupon`): discount (`pct 10`/`flat 500`), scope (`all`/`cat A,B`/`prod <search>`), total uses (`unlimited` ok), per-user limit, expiry days (`never` ok). Auto code `MGS-XXXXXX` via `PromoService.generateCoupon()` (5 retries on dup key). Success message has 📢 announce button (`coupon_announce:<id>`) → channel picker merges ALL known channels (`SystemStatus.couponAnnounceChannels[]` + ChannelAutoPost + JoinReward + `announcementChannelId`, dedup by chatId, 64-byte callback_data guard); one-tap `cpa_send` resolves by chatId at tap time, `cpa_add` new channel via getChat-validated text input + atomic guarded $push auto-save, `cpa_delmenu`/`cpa_del` atomic $pull (saved list only); bot must be channel admin
-- **Top-up coupon** — SystemStatus fields `topupCouponEnabled/MinKS/Type/Value/ExpiryDays/ScopeType/ScopeCategories/ScopeProducts`; granted inside `WalletService.approveTopup()` (code prefix `TU-`, personal via `restrictedToUserId`, maxUses 1); user notified after receipt in `topup.js`. Config: `/promoperks` → 🎟 TC ပြင်မယ် (`minKS-pct/flat-value-days`, e.g. `10000-pct-5-7`) + toggle
-- **/mycoupons (user)** — lists own usable coupons (`PromoService.listUserCoupons`) with discount/scope/expiry
-- **Checkout integration** — orderScene promo step shows up to 5 applicable personal coupons as `order_use_coupon:<id>` buttons; `validatePromo(code, tgId, amount, {productId, category})` enforces scope + perUserLimit on both button and typed paths
-
-### Channel Registry (Owner) — `/channels`
-
-Standalone channel manager, independent of coupons. Entry: admin menu **📡 Channels** button (keyboard.js) or `/channels`. `services/ChannelRegistryService.js` (`getKnownChannels()` merges saved list + ChannelAutoPost + JoinReward + `announcementChannelId` + `backupChannelId` with source tags; `saveChannel`/`removeChannel` atomic guarded $push/$pull on `SystemStatus.couponAnnounceChannels`). `src/commands/channelManager.js` (ORDER before `admin.js`): panel lists all known channels with source labels, ➕ add wizard (getChat-validated, channels only, session `adminChannelMgr`, step-guarded), 🗑 delete (saved-list entries only), 🔄 refresh. After validation a **purpose picker** (`chmgr_purpose:*`) assigns the channel: `saved` → registry, `announce`/`backup`/`review` (feedbackChannelId) /`game` (gameNewsChannelId) → $set SystemStatus field, `autopost` → hands off to `ctx.session.cap` (label step) in channelAutoPost.js wizard, `joinbonus` → hands off to `ctx.session.jbAdmin` (title step, prefilled channelId/chatTitle/channelLink) in joinReward.js wizard. `chmgr_add` clears rival wizard flags (`cap`, `jbAdmin`, promo flags) and vice versa. Coupon announce picker (`promo.js`) reuses the same service.
-
-### Game Update Knowledge Channel (Owner) — `/gamenews`
-
-AI support knowledge base fed by a Telegram channel. Assign via `/channels` → ➕ → 🎮 Game Update purpose (`SystemStatus.gameNewsChannelId`). `src/commands/gameNews.js` (ORDER after channelManager.js) listens to `channel_post`/`edited_channel_post` (global middlewares are safe — they skip when no `ctx.from`), stores text/caption posts in `GameNews` model (unique chatId+messageId, text index; retention: 90 days + newest 300 cap). Photo posts: largest photo downloaded via getFileLink → `aiService.extractImageText(base64)` (Gemini vision, extracts text + dates, returns null on NONE/failure) appended as `[From image] …`. `aiService.loadGameNewsContext(userMessage)` does `$text` relevance search (top 5, fallback: 8 most recent) and injects a "GAME UPDATES KNOWLEDGE" block into BOTH `answerSupportQuery` and `answerAmbientQuery` prompts — AI answers game/update questions from channel posts first. `/gamenews` (Owner) shows channel, entry count, latest 5 posts. **No-AI fallback:** `services/GameNewsService.js` `findPosts(query)` ($text search → latin-keyword regex fallback, channel-scoped, 90-day fresh) is called at the top of ambient.js's text handler (before the disabled-AI early return) — matching posts are replied verbatim (plain text, 3×600 chars max) so game update questions get answered even with AI disabled/out of quota. Review channel (⭐ purpose) sets the existing `feedbackChannelId` used by FeedbackService.forwardToChannel (auto-posts ⭐4–5 reviews with comments).
-
-### Channel Join Bonus (Owner) — opt-in, NOT force-join
-
-- Models: `JoinReward` (channelId, channelLink, title, mcReward, isActive, claimCount), `JoinRewardClaim` (unique rewardId+telegramId)
-- User: `/joinbonus` — join channel → ✅ Claim → `getChatMember` verify → MC credited once (claim-record-first blocks double-claim races). Bot must be admin in the channel
-- Admin: `/joinbonusadmin` / admin menu **📣 Join Bonus Admin** — 3-step add wizard (getChat validation), toggle/delete, 📢 announce to all users (50ms delay loop)
-- File: `src/commands/joinReward.js`
-
-### Spin Wheel — Custom Rewards (Owner)
-
-Admin can add unlimited custom prizes via `/dashboard → 🎰 Spin → ➕ Add Custom Reward`:
-- 4 types: `coin` (Mental Coins), `ks` (cash), `spin` (free spin), `none` (thank-you)
-- Each prize: label, amount, weight (probability)
-- Stored in `GameConfig.customSpinPrizes[]`; merged with default pool by `GameService.getEffectivePrizePool()`
-- Remove via 🗑 button in spin panel
-
-### Packages
-
-- `telegraf` ^4.16.3
-- `mongoose` ^8.4.0
-- `node-cron` ^3.0.3
-- `node-cache` ^5.x
-- `axios` ^1.7.2
-- `dotenv` ^16.4.5
+`telegraf` ^4.16.3 · `mongoose` ^8.4.0 · `node-cron` ^3.0.3 · `node-cache` ^5.x · `axios` ^1.7.2 · `dotenv` ^16.4.5
 
 ---
 
