@@ -99,7 +99,10 @@ artifacts/bot/
 - **Promotion perks** — `/promoperks` (Owner), engine `services/PromoPerksService.js`, settings on SystemStatus: birthday gift (`/setbirthday DD-MM`, 09:05 cron, once/year atomic), happy hour (bonus MC % in `approveTopup`, overnight ok), cashback (% MC on order complete), first-order discount (orderScene step 0, baked into unitPrice), win-back (09:15 cron, ≥N days inactive, max once/90d), monthly leaderboard (`/toplist`, 1st-of-month awards)
 - **Referral tiers**: `SystemStatus.referralTiers` (Bronze 1–5→2%, Silver 6–15→3%, Gold 16+→5%); resolved in `ReferralService.processTopupCommission()`; `/setreftiers 1:2 6:3 16:5` (Owner), `/reftiers` (Manager+)
 - **Referral campaigns** — `/refcamp` (Owner), `/campaign` (user): "invite N friends → reward"; one active at a time (partial unique index); `RefCampaign` + `RefCampaignEntry` models; hooked into first commission completion only; all counters conditional `findOneAndUpdate` + `$inc`; quota-full auto-end; optional `minRefereeAgeDays` (account age estimated from Telegram ID, `utils/accountAge.js`)
-- **Channel join bonus** (opt-in, NOT force-join) — `/joinbonus` (user, getChatMember verify, claim-record-first), `/joinbonusadmin` (Owner); `JoinReward` + `JoinRewardClaim` models
+- **Channel join bonus** (opt-in, NOT force-join) — `/joinbonus` (user, getChatMember verify, claim-record-first), `/joinbonusadmin` (Owner); `JoinReward` + `JoinRewardClaim` models; 📢 announce button posts to ALL bot users AND `announcementChannelId` (channel post: join URL + bot deep link, no callback claim button)
+
+### Product announcements — `/announce` (Manager+)
+- `/announce` (no arg) → picker of 15 recent active products → style choice 🆕 New Product / ⚡ Flash Sale (flash only if `flashSalePrice > 0`) → `BroadcastService.announceProductEverywhere()` sends formatted card + 🛒 deep-link buy button to BOTH announcement channel and all non-blocked bot users (`broadcastToUsers`: batch 25 / 1.1 s delay); `/announce <productId>` skips picker; result summary shows channel ok + sent/failed counts
 
 ### Premium Accounts (separate from Product system)
 - Sells credentials (e.g. ExpressVPN): `AccountProduct` + `AccountCredential` (atomic `claimOne()`); buy = `debitKS` → claim → instant delivery (refund on failure); `/accounts`, `/myaccounts` (user); `/accadmin` (Owner) — add wizard, bulk `email:password` paste, discount/price/toggle/delete; daily 09:00 expiry reminders
@@ -124,6 +127,7 @@ artifacts/bot/
 | `/setreftiers` / `/reftiers` | Owner / Manager+ | Referral commission tiers |
 | `/setstalesupport <min>` | Owner | Stale-order support threshold |
 | `/setsupportcontact @username\|off` | Owner | Support direct-message contact account |
+| `/announce [productId]` | Manager+ | Product announcement → all bot users + announce channel |
 | `/addchannelpost` `/listchannelposts` `/sendchannelpost` `/togglechannelpost` `/delchannelpost` | Owner | Channel auto-posts |
 | `/channels` | Owner | Channel registry + purpose picker |
 | `/gamenews` | Owner | Game update knowledge channel status |

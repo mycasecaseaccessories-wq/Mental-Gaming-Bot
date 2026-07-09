@@ -25,11 +25,16 @@ function productDeepLink(productId) {
   return `https://t.me/${BOT_USERNAME}?start=product_${productId}`;
 }
 
+// Escape Markdown-reserved chars in user-supplied text (product names, descriptions…)
+function mdEsc(s) {
+  return String(s == null ? '' : s).replace(/([_*`\[])/g, '\\$1');
+}
+
 // ── Product announcement formatter ───────────────────────────────────────────
 
 function formatNewProductAnnouncement(product) {
   const priceStr    = `${product.finalPrice.toLocaleString()} KS`;
-  const categoryLine = `📂 ${product.category} · ${product.region}`;
+  const categoryLine = `📂 ${mdEsc(product.category)} · ${mdEsc(product.region)}`;
   const typeLine    = product.productType === 'DigitalCode' ? '⚡ Instant delivery' : '⏱ Delivered within 30 mins';
 
   const stockLine = product.stockCount > 0
@@ -41,12 +46,12 @@ function formatNewProductAnnouncement(product) {
   return (
     `🆕 *New Product Alert!*\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-    `🎮 *${product.name}*\n` +
+    `🎮 *${mdEsc(product.name)}*\n` +
     `${categoryLine}\n` +
     `💰 Price: *${priceStr}*\n` +
     `${typeLine}\n` +
     (stockLine ? `${stockLine}\n` : ``) +
-    (product.description ? `\n📝 _${product.description}_\n` : ``) +
+    (product.description ? `\n📝 _${mdEsc(product.description)}_\n` : ``) +
     `\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
     `🏪 Mental Gaming Store`
   );
@@ -59,7 +64,7 @@ function formatPriceUpdateAnnouncement(product, oldPrice, newPrice) {
   const dirWord = diff < 0 ? 'Price Drop' : 'Price Update';
 
   return (
-    `${arrow} *${dirWord}: ${product.name}*\n\n` +
+    `${arrow} *${dirWord}: ${mdEsc(product.name)}*\n\n` +
     `~~${oldPrice.toLocaleString()} KS~~ → *${newPrice.toLocaleString()} KS*\n` +
     `${diff < 0 ? `🎉 Save *${Math.abs(diff).toLocaleString()} KS* (${pct}% off!)` : `+${pct}% update`}\n\n` +
     `🏪 Mental Gaming Store`
@@ -77,7 +82,7 @@ function formatFlashSaleAnnouncement(product, salePrice, endsAt) {
   return (
     `⚡ *FLASH SALE!*\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-    `🎮 *${product.name}*\n\n` +
+    `🎮 *${mdEsc(product.name)}*\n\n` +
     `~~${originalPrice.toLocaleString()} KS~~ → *${salePrice.toLocaleString()} KS*\n` +
     `🎉 Save *${savings.toLocaleString()} KS* (${pct}% OFF!)\n\n` +
     `⏰ Ends at: *${endsStr} MMT*\n\n` +
@@ -112,6 +117,35 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
     console.error(`[BroadcastService] Channel send failed (${channelId}):`, err.message);
     return null;
   }
+}
+
+// ── Broadcast to all bot users ───────────────────────────────────────────────
+
+const USER_BATCH_SIZE  = 25;
+const USER_BATCH_DELAY = 1100; // ms — keeps under Telegram's ~30 msg/sec limit
+
+/**
+ * Send a message to every non-blocked bot user (batched, rate-limit safe).
+ * @returns {Promise<{sent:number, failed:number}>}
+ */
+async function broadcastToUsers(telegram, text, extra = {}) {
+  const User  = require('../models/User');
+  const users = await User.find({ isBlocked: { $ne: true } }).select('telegramId').lean();
+
+  let sent = 0, failed = 0;
+  for (let i = 0; i < users.length; i += USER_BATCH_SIZE) {
+    const batch = users.slice(i, i + USER_BATCH_SIZE);
+    await Promise.all(batch.map(async (u) => {
+      try {
+        await telegram.sendMessage(u.telegramId, text, { parse_mode: 'Markdown', ...extra });
+        sent++;
+      } catch { failed++; }
+    }));
+    if (i + USER_BATCH_SIZE < users.length) {
+      await new Promise((r) => setTimeout(r, USER_BATCH_DELAY));
+    }
+  }
+  return { sent, failed };
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -158,7 +192,7 @@ async function sendStockAlert(product, telegram) {
     await telegram.sendMessage(
       adminId,
       `⚠️ *Low Stock Alert*\n\n` +
-      `📦 Product: *${product.name}*\n` +
+      `📦 Product: *${mdEsc(product.name)}*\n` +
       `🔢 Remaining: *${product.stockCount}* units\n\n` +
       `_Restock soon or pause the listing._`,
       { parse_mode: 'Markdown' }
@@ -166,11 +200,35 @@ async function sendStockAlert(product, telegram) {
   } catch {}
 }
 
+/**
+ * Announce a product to BOTH the announcement channel and all bot users.
+ * @param {object} product  Mongoose Product doc
+ * @param {'new'|'flash'} style
+ * @returns {Promise<{channelOk:boolean, sent:number, failed:number}>}
+ */
+async function announceProductEverywhere(product, style, telegram) {
+  const text = style === 'flash'
+    ? formatFlashSaleAnnouncement(product, product.flashSalePrice, product.flashSaleEnd)
+    : formatNewProductAnnouncement(product);
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.url(`🛒 ${product.name} ဝယ်မယ်`, productDeepLink(product._id))],
+  ]);
+
+  const channelMsg = await sendToChannel(telegram, text, null, { ...keyboard });
+  const { sent, failed } = await broadcastToUsers(telegram, text, { ...keyboard });
+
+  return { channelOk: !!channelMsg, sent, failed };
+}
+
 module.exports = {
   announceNewProduct,
   announcePriceUpdate,
   announceFlashSale,
+  announceProductEverywhere,
+  broadcastToUsers,
   customAnnounce,
   sendStockAlert,
   productDeepLink,
+  mdEsc,
 };

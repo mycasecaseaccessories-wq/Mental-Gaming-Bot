@@ -9,6 +9,7 @@ const { auditLog } = require('../services/logger');
 const JoinReward = require('../models/JoinReward');
 const JoinRewardClaim = require('../models/JoinRewardClaim');
 const User = require('../models/User');
+const SystemStatus = require('../models/SystemStatus');
 const { config } = require('../../config/settings');
 
 function esc(s) {
@@ -149,13 +150,37 @@ module.exports = function registerJoinReward(bot) {
     await editOrReply(ctx, text, keyboard);
   });
 
-  // 📢 Announce to all users (opt-in advert, not force-join)
+  // 📢 Announce to all users + announcement channel (opt-in advert, not force-join)
   bot.action(/^jba_announce:(.+)$/, adminOnly(), async (ctx) => {
     const r = await JoinReward.findById(ctx.match[1]);
     if (!r || !r.isActive) return ctx.answerCbQuery('❌ ဖွင့်ထားမှ ကြေညာလို့ရပါမယ်', { show_alert: true });
     await ctx.answerCbQuery('📢 ကြေညာနေသည်...');
-    const users = await User.find({}, 'telegramId').lean();
+    const users = await User.find({ isBlocked: { $ne: true } }, 'telegramId').lean();
     const url = linkOf(r);
+
+    // Post to announcement channel first (if configured)
+    let channelOk = false;
+    try {
+      const st = await SystemStatus.get();
+      if (st.announcementChannelId) {
+        const botUsername = process.env.BOT_USERNAME || (await ctx.telegram.getMe()).username;
+        await ctx.telegram.sendMessage(
+          st.announcementChannelId,
+          `📣 *Join Bonus ကြေညာချက်!*\n\n*${esc(r.title)}* channel ကို join ရင် *${r.mcReward} MC* အလကား ရပါမယ်! 🪙\n\n1️⃣ Channel ဝင်ပါ\n2️⃣ Bot ထဲက /joinbonus မှာ ✅ Claim နှိပ်ပါ`,
+          {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              ...(url ? [[Markup.button.url('↗️ Channel ဝင်မယ်', url)]] : []),
+              [Markup.button.url('🤖 Bot ထဲ Claim လုပ်ရန်', `https://t.me/${botUsername}`)],
+            ]),
+          }
+        );
+        channelOk = true;
+      }
+    } catch (e) {
+      console.error('[JoinReward] Channel announce failed:', e.message);
+    }
+
     let sent = 0, failed = 0;
     for (const u of users) {
       try {
@@ -174,8 +199,12 @@ module.exports = function registerJoinReward(bot) {
       } catch { failed++; }
       await new Promise((res) => setTimeout(res, 50)); // rate-limit safety
     }
-    await auditLog(ctx.from.id, 'ANNOUNCE_JOIN_BONUS', r._id.toString(), 'System', { sent, failed });
-    await ctx.reply(`📢 ကြေညာပြီးပါပြီ — ✅ ${sent} ယောက် / ❌ ${failed} ယောက် မရောက်`);
+    await auditLog(ctx.from.id, 'ANNOUNCE_JOIN_BONUS', r._id.toString(), 'System', { sent, failed, channelOk });
+    await ctx.reply(
+      `📢 ကြေညာပြီးပါပြီ!\n\n` +
+        `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : '⚠️ မတင်နိုင်ပါ (ကြေညာချက် channel မသတ်မှတ်ရသေး)'}\n` +
+        `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`
+    );
   });
 
   bot.action('jba_add', adminOnly(), async (ctx) => {

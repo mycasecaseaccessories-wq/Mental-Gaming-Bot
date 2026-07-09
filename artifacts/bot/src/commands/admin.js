@@ -146,9 +146,14 @@ const GUIDE_SECTIONS = [
     body:
       `📢 *Broadcast & Channel Posts* _(Owner)_\n\n` +
       `• *Broadcast* — user အားလုံး / tier အလိုက် / active (၃၀ ရက်) ဆီ message (စာ + ပုံ)\n` +
+      `• \`/announce\` — *Product ကြေညာချက်* — product စာရင်းထဲက ရွေး → 🆕 New Product / ⚡ Flash Sale ပုံစံရွေး → *bot user အားလုံး + ကြေညာချက် channel နှစ်ခုလုံး* ကို 🛒 ဝယ်မယ့်ခလုတ်နဲ့တကွ တစ်ပြိုင်နက် ပို့ပေးမယ်\n` +
       `• \`/addchannelpost\` — channel ကို နေ့စဉ် auto post (HH:MM MMT)\n` +
       `• \`/listchannelposts\`, \`/sendchannelpost\`, \`/togglechannelpost\`, \`/delchannelpost\`\n` +
       `• \`/setseason\` — အခါသမယ theme (Thingyan/Christmas…)\n\n` +
+      `🎬 *ဥပမာ — product ကြေညာနည်း:*\n` +
+      `1️⃣ \`/announce\` ရိုက် → product ခလုတ်တွေထဲက တစ်ခု ရွေး\n` +
+      `2️⃣ ပုံစံရွေး — 🆕 New Product (ဒါမှမဟုတ် flash sale price သတ်မှတ်ထားရင် ⚡ Flash Sale)\n` +
+      `3️⃣ → user အားလုံး + channel မှာ "🛒 ဝယ်မယ်" ခလုတ်ပါတဲ့ ကြေညာစာ တစ်ပြိုင်နက် ရောက်မယ်\n\n` +
       `🎬 *ဥပမာ ၁ — user အားလုံးဆီ message ပို့နည်း:*\n` +
       `1️⃣ menu → *📢 Broadcast* နှိပ် → ဘယ်သူဆီပို့မလဲ ရွေး (👥 All / tier / active)\n` +
       `2️⃣ ပို့မယ့် စာ (ဒါမှမဟုတ် ပုံ+စာ) ရိုက်ထည့် → *✅ Send* အတည်ပြု\n` +
@@ -324,7 +329,7 @@ const GUIDE_SECTIONS = [
       `Channel join ရင် MC ပေးတဲ့ စနစ် — *force join မဟုတ်ပါ*၊ ဆန္ဒရှိမှ ဝင်တာပါ။\n\n` +
       `Admin menu → *📣 Join Bonus Admin* (သို့ \`/joinbonusadmin\`):\n` +
       `• ➕ *Add* — ၃ ဆင့် (channel → ပြမယ့်နာမည် → MC ပမာဏ)\n` +
-      `• 📢 — user အားလုံးဆီ ကြေညာစာ ပို့ (join link + claim button ပါပြီးသား)\n` +
+      `• 📢 — user အားလုံးဆီ ကြေညာစာ ပို့ (join link + claim button ပါပြီးသား) — *ကြေညာချက် channel သတ်မှတ်ထားရင် channel မှာပါ တစ်ပြိုင်နက် တင်ပေးမယ်*\n` +
       `• 🟢🔴 ဖွင့်-ပိတ် / 🗑 ဖျက်\n\n` +
       `⚠️ *အရေးကြီး:* Bot ကို channel ထဲ *admin* အဖြစ် အရင်ထည့်ပါ — မဟုတ်ရင် member ဝင်မဝင် စစ်လို့မရပါ။\n\n` +
       `🎬 *ဥပမာ — "News channel join ရင် 50 MC":*\n` +

@@ -24,8 +24,8 @@ const {
   getProvider,
 }                  = require('../services/ExternalApiService');
 const {
-  announceNewProduct,
-  customAnnounce,
+  announceProductEverywhere,
+  mdEsc,
 }                  = require('../services/BroadcastService');
 const { auditLog } = require('../services/logger');
 const Product      = require('../models/Product');
@@ -220,24 +220,86 @@ module.exports = function registerApiManagement(bot) {
     );
   });
 
-  // ── /announce <productId> — manual product broadcast ────────────────────────
+  // ── /announce — product broadcast to channel + ALL bot users ────────────────
+
+  async function showAnnounceStyles(ctx, product) {
+    const hasFlash = product.flashSalePrice > 0;
+    const rows = [
+      [Markup.button.callback('🆕 New Product ပုံစံ', `ann_send:new:${product._id}`)],
+    ];
+    if (hasFlash) rows.push([Markup.button.callback('⚡ Flash Sale ပုံစံ', `ann_send:flash:${product._id}`)]);
+    rows.push([Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')]);
+
+    await ctx.reply(
+      `📣 *${mdEsc(product.name)}* ကို ကြေညာမယ်\n\n` +
+      `Bot user အားလုံး + ကြေညာချက် channel နှစ်ခုလုံးကို ပို့ပါမယ်။\n` +
+      `ပုံစံ ရွေးပါ:` +
+      (hasFlash ? '' : `\n\n_⚡ Flash Sale ပုံစံ လိုချင်ရင် product မှာ flash sale price အရင် သတ်မှတ်ပါ။_`),
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+    );
+  }
 
   bot.command('announce', requireRole('MANAGER'), async (ctx) => {
     const productId = ctx.message.text.split(/\s+/)[1];
-    if (!productId) return ctx.reply('Usage: /announce <productId>');
 
-    const product = await Product.findById(productId);
-    if (!product) return ctx.reply('❌ Product not found.');
-
-    const msg = await announceNewProduct(product, ctx.telegram);
-    if (!msg) {
-      return ctx.reply(
-        `❌ No announcement channel configured.\nUse /setannouncechannel first.`
-      );
+    if (productId) {
+      const product = await Product.findById(productId).catch(() => null);
+      if (!product) return ctx.reply('❌ Product ရှာမတွေ့ပါ။');
+      return showAnnounceStyles(ctx, product);
     }
 
-    await auditLog(ctx.from.id, 'PRODUCT_ANNOUNCED', productId, 'System', {});
-    await ctx.reply(`✅ Product *${product.name}* announced to channel.`, { parse_mode: 'Markdown' });
+    const products = await Product.find({ isActive: true })
+      .sort({ updatedAt: -1 })
+      .limit(15)
+      .select('name finalPrice')
+      .lean();
+
+    if (!products.length) return ctx.reply('❌ Active product မရှိသေးပါ။');
+
+    const rows = products.map((p) => [
+      Markup.button.callback(`${p.name} — ${p.finalPrice.toLocaleString()} KS`, `ann_pick:${p._id}`),
+    ]);
+    rows.push([Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')]);
+
+    await ctx.reply(
+      `📣 *Product ကြေညာချက်*\n\nဘယ် product ကို ကြေညာမလဲ ရွေးပါ:\n_(bot user အားလုံး + channel နှစ်ခုလုံး ပို့ပါမယ်)_`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+    );
+  });
+
+  bot.action(/^ann_pick:(.+)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const product = await Product.findById(ctx.match[1]).catch(() => null);
+    if (!product) return ctx.reply('❌ Product ရှာမတွေ့ပါ။');
+    try { await ctx.deleteMessage(); } catch {}
+    await showAnnounceStyles(ctx, product);
+  });
+
+  bot.action('ann_cancel', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('ပယ်ဖျက်ပြီး');
+    try { await ctx.deleteMessage(); } catch {}
+  });
+
+  bot.action(/^ann_send:(new|flash):(.+)$/, requireRole('MANAGER'), async (ctx) => {
+    const style = ctx.match[1];
+    const product = await Product.findById(ctx.match[2]).catch(() => null);
+    if (!product) return ctx.answerCbQuery('❌ Product ရှာမတွေ့ပါ', { show_alert: true });
+    if (style === 'flash' && !(product.flashSalePrice > 0)) {
+      return ctx.answerCbQuery('❌ Flash sale price မသတ်မှတ်ရသေးပါ', { show_alert: true });
+    }
+
+    await ctx.answerCbQuery('📤 ပို့နေပါပြီ...');
+    try { await ctx.editMessageText(`📤 *${mdEsc(product.name)}* ကြေညာချက် ပို့နေပါတယ်... ခဏစောင့်ပါ။`, { parse_mode: 'Markdown' }); } catch {}
+
+    const { channelOk, sent, failed } = await announceProductEverywhere(product, style, ctx.telegram);
+    await auditLog(ctx.from.id, 'PRODUCT_ANNOUNCED', product._id.toString(), 'System', { style, channelOk, sent, failed });
+
+    await ctx.reply(
+      `✅ *ကြေညာပြီးပါပြီ!*\n\n` +
+      `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : '⚠️ မတင်နိုင်ပါ (channel မသတ်မှတ်ရသေး / bot admin မဟုတ်)'}\n` +
+      `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
+      { parse_mode: 'Markdown' }
+    );
   });
 
   // ── /webhookstats — webhook event processing overview ────────────────────────
