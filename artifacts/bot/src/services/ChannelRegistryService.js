@@ -12,6 +12,7 @@ const SOURCE_LABELS = {
   autopost: '📅 Auto-post',
   joinbonus: '📣 Join Bonus',
   announce: '📢 ကြေညာချက်',
+  backup: '🔐 Backup',
 };
 
 /**
@@ -37,6 +38,7 @@ async function getKnownChannels() {
 
   (st.couponAnnounceChannels || []).forEach((c) => add(c.chatId, c.title, 'saved'));
   if (st.announcementChannelId) add(st.announcementChannelId, 'ကြေညာချက် Channel', 'announce');
+  if (st.backupChannelId) add(st.backupChannelId, 'Backup Channel', 'backup');
 
   const [posts, rewards] = await Promise.all([
     ChannelAutoPost.find({}, 'channelId title').lean().catch(() => []),

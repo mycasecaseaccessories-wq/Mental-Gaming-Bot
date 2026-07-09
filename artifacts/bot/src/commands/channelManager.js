@@ -60,6 +60,8 @@ module.exports = (bot) => {
     ctx.session.adminCreatePromo = null;
     ctx.session.adminGenCoupon = null;
     ctx.session.adminCouponAnnounce = null;
+    ctx.session.cap = null;
+    ctx.session.jbAdmin = null;
     ctx.session.adminChannelMgr = { step: 'awaiting_channel' };
     await ctx.reply(
       `➕ *Channel ထည့်မယ်*\n\n` +
@@ -67,6 +69,88 @@ module.exports = (bot) => {
         `_(Bot ကို အဲဒီ channel မှာ admin အရင်ထည့်ထားရပါမယ်။ မလုပ်တော့ရင် \`cancel\` ရိုက်ပါ)_`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
+  });
+
+  // Purpose picker — decide what the freshly validated channel is for
+  bot.action(/^chmgr_purpose:(autopost|joinbonus|announce|backup|saved|cancel)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const purpose = ctx.match[1];
+    const state = ctx.session?.adminChannelMgr;
+    ctx.session.adminChannelMgr = null;
+
+    if (purpose === 'cancel') return ctx.reply('👌 ပယ်ဖျက်လိုက်ပါပြီ။');
+
+    const chat = state?.chat;
+    if (!state || state.step !== 'purpose' || !chat) {
+      return ctx.reply('❌ Session ကုန်သွားပါပြီ — ➕ Channel ထည့်မယ် ကို ပြန်နှိပ်ပြီး ထပ်စမ်းပါ။');
+    }
+
+    const SystemStatus = require('../models/SystemStatus');
+
+    if (purpose === 'saved') {
+      const saved = await saveChannel({ id: chat.id, title: chat.title }, ctx.from.id);
+      await ctx.reply(
+        `✅ *${escMd(saved.title)}* ကို channel စာရင်းထဲ သိမ်းလိုက်ပါပြီ! 💾\n\n` +
+          `Coupon ကြေညာတဲ့အခါ ဒီ channel က ခလုတ်နဲ့ အလိုအလျောက် ပေါ်လာပါမယ်။`,
+        { parse_mode: 'Markdown' }
+      );
+      return showPanel(ctx);
+    }
+
+    if (purpose === 'announce') {
+      const st = await SystemStatus.get();
+      await SystemStatus.updateOne(
+        { _id: st._id },
+        { $set: { announcementChannelId: chat.id, updatedBy: ctx.from.id } }
+      );
+      await ctx.reply(
+        `✅ *${escMd(chat.title)}* ကို 📢 *ကြေညာချက် channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
+          `Product/flash sale ကြေညာချက်တွေ ဒီ channel ကို ပို့ပါမယ်။`,
+        { parse_mode: 'Markdown' }
+      );
+      return showPanel(ctx);
+    }
+
+    if (purpose === 'backup') {
+      const st = await SystemStatus.get();
+      await SystemStatus.updateOne(
+        { _id: st._id },
+        { $set: { backupChannelId: chat.id, updatedBy: ctx.from.id } }
+      );
+      await ctx.reply(
+        `✅ *${escMd(chat.title)}* ကို 🔐 *Backup channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
+          `နေ့စဉ် encrypt လုပ်ထားတဲ့ database backup ဖိုင်တွေ ဒီ channel ကို ပို့ပါမယ်။`,
+        { parse_mode: 'Markdown' }
+      );
+      return showPanel(ctx);
+    }
+
+    if (purpose === 'autopost') {
+      // Hand off to the existing /addchannelpost wizard with channel prefilled (label step next)
+      ctx.session.cap = { step: 'label', channelId: chat.id };
+      return ctx.reply(
+        `📅 *Auto-post အတွက် သတ်မှတ်မယ်*\n\n` +
+          `✅ Channel: *${escMd(chat.title)}*\n\n` +
+          `Step 2/5: Admin စာရင်းမှာ ပြမယ့် *နာမည်တို* ရိုက်ပါ (မထည့်ချင်ရင် \`skip\`):`,
+        { parse_mode: 'Markdown', ...Markup.forceReply() }
+      );
+    }
+
+    if (purpose === 'joinbonus') {
+      // Hand off to the existing Join Bonus wizard with channel prefilled (title step next)
+      ctx.session.jbAdmin = {
+        step: 'title',
+        channelId: chat.id,
+        chatTitle: chat.title,
+        channelLink: chat.username ? `https://t.me/${chat.username}` : (chat.invite_link || ''),
+      };
+      return ctx.reply(
+        `📣 *Join Bonus အတွက် သတ်မှတ်မယ်*\n\n` +
+          `✅ Channel: *${escMd(chat.title)}*\n\n` +
+          `Step 2/3: *ပြသမယ့် နာမည်* ရိုက်ပါ:\n_(ဥပမာ "MGS News Channel")_`,
+        { parse_mode: 'Markdown', ...Markup.forceReply() }
+      );
+    }
   });
 
   bot.action('chmgr_delmenu', adminOnly(), async (ctx) => {
@@ -100,7 +184,7 @@ module.exports = (bot) => {
   // Text input: channel @username/ID for the add wizard
   bot.on('text', async (ctx, next) => {
     const state = ctx.session?.adminChannelMgr;
-    if (!state || ctx.from.id !== config.bot.adminId) return next();
+    if (!state || state.step !== 'awaiting_channel' || ctx.from.id !== config.bot.adminId) return next();
     const input = ctx.message.text.trim();
     if (input.startsWith('/')) { ctx.session.adminChannelMgr = null; return next(); }
     if (/^cancel$/i.test(input)) {
@@ -117,14 +201,31 @@ module.exports = (bot) => {
         );
       }
 
-      const saved = await saveChannel(chat, ctx.from.id);
-      ctx.session.adminChannelMgr = null;
-      await ctx.reply(
-        `✅ *${escMd(saved.title)}* ကို channel စာရင်းထဲ ထည့်လိုက်ပါပြီ! 💾\n\n` +
-          `Coupon ကြေညာတဲ့အခါ ဒီ channel က ခလုတ်နဲ့ အလိုအလျောက် ပေါ်လာပါမယ်။`,
-        { parse_mode: 'Markdown' }
+      // Channel validated — now ask what it's for
+      ctx.session.adminChannelMgr = {
+        step: 'purpose',
+        chat: {
+          id: String(chat.id),
+          title: chat.title || input,
+          username: chat.username || '',
+          invite_link: chat.invite_link || '',
+        },
+      };
+      return ctx.reply(
+        `✅ Channel တွေ့ပါပြီ: *${escMd(chat.title || input)}*\n\n` +
+          `ဒီ channel ကို *ဘာအတွက်* သုံးမလဲ? 👇`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('📅 Auto-post (နေ့စဉ် ကြော်ငြာတင်)', 'chmgr_purpose:autopost')],
+            [Markup.button.callback('📣 Join Bonus (join ရင် MC ပေး)', 'chmgr_purpose:joinbonus')],
+            [Markup.button.callback('📢 ကြေညာချက် channel အဖြစ်သတ်မှတ်', 'chmgr_purpose:announce')],
+            [Markup.button.callback('🔐 Backup channel အဖြစ်သတ်မှတ်', 'chmgr_purpose:backup')],
+            [Markup.button.callback('💾 ရိုးရိုး စာရင်းထဲ သိမ်းမယ်', 'chmgr_purpose:saved')],
+            [Markup.button.callback('❌ မလုပ်တော့ပါ', 'chmgr_purpose:cancel')],
+          ]),
+        }
       );
-      return showPanel(ctx);
     } catch (e) {
       console.error('[ChannelManager] add channel error:', e.message);
       return ctx.reply(
