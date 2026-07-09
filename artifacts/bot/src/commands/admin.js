@@ -382,7 +382,7 @@ const GUIDE_SECTIONS = [
       `• \`/systemhealth\` — gateway + system\n` +
       `• \`/setgateway <method> <Online|Busy|Offline>\`\n` +
       `• \`/setbackupchan\`, \`/setstalesupport <min>\`\n` +
-      `• \`/channels\` — Channel စာရင်း panel: bot သိထားတဲ့ channel အားလုံး (auto-post, join bonus, ကြေညာချက်, သိမ်းထားတဲ့) ကြည့်/➕ ထည့်/🗑 ဖျက်။ ထည့်ထားတဲ့ channel တွေက coupon ကြေညာတဲ့ picker မှာ အလိုအလျောက် ပေါ်မယ်\n\n` +
+      `• Admin menu → *📡 Channels* (သို့ \`/channels\`) — Channel စာရင်း panel: bot သိထားတဲ့ channel အားလုံး (auto-post, join bonus, ကြေညာချက်, သိမ်းထားတဲ့) ကြည့်/➕ ထည့်/🗑 ဖျက်။ ထည့်ထားတဲ့ channel တွေက coupon ကြေညာတဲ့ picker မှာ အလိုအလျောက် ပေါ်မယ်\n\n` +
       `🎬 *ဥပမာ ၁ — data backup လက်ဖြင့် ဆွဲနည်း:*\n` +
       `1️⃣ \`/runbackup\` ရိုက် → bot က collection တွေ AES-256 encrypt လုပ်\n` +
       `2️⃣ → backup ဖိုင် (\`.json.gz.enc\`) ကို backup channel (သို့ owner DM) ဆီ ပို့ပေးမယ်\n\n` +

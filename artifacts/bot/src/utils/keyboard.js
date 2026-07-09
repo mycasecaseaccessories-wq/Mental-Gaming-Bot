@@ -30,7 +30,8 @@ function adminMenuKeyboard() {
     ['🪙 Coins & Tiers',   '🎁 Rewards'],
     ['💳 Payment Gateways', '🔐 Accounts'],
     ['🎯 Ref Campaign',     '📣 Join Bonus Admin'],
-    ['📖 Admin Guide',     '🔙 Back to Main'],
+    ['📡 Channels',        '📖 Admin Guide'],
+    ['🔙 Back to Main'],
   ]).resize();
 }
 

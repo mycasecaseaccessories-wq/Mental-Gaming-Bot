@@ -46,6 +46,7 @@ module.exports = (bot) => {
   }
 
   bot.command('channels', adminOnly(), (ctx) => showPanel(ctx));
+  bot.hears('📡 Channels', adminOnly(), (ctx) => showPanel(ctx));
 
   bot.action('chmgr_refresh', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();

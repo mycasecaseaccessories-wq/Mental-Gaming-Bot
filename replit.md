@@ -306,7 +306,7 @@ Promo model extended: `perUserLimit`, `scopeType` (all/category/product), `scope
 
 ### Channel Registry (Owner) — `/channels`
 
-Standalone channel manager, independent of coupons. `services/ChannelRegistryService.js` (`getKnownChannels()` merges saved list + ChannelAutoPost + JoinReward + `announcementChannelId` with source tags; `saveChannel`/`removeChannel` atomic guarded $push/$pull on `SystemStatus.couponAnnounceChannels`). `src/commands/channelManager.js` (ORDER before `admin.js`): panel lists all known channels with source labels, ➕ add wizard (getChat-validated, channels only, session `adminChannelMgr`), 🗑 delete (saved-list entries only), 🔄 refresh. Coupon announce picker (`promo.js`) reuses the same service.
+Standalone channel manager, independent of coupons. Entry: admin menu **📡 Channels** button (keyboard.js) or `/channels`. `services/ChannelRegistryService.js` (`getKnownChannels()` merges saved list + ChannelAutoPost + JoinReward + `announcementChannelId` with source tags; `saveChannel`/`removeChannel` atomic guarded $push/$pull on `SystemStatus.couponAnnounceChannels`). `src/commands/channelManager.js` (ORDER before `admin.js`): panel lists all known channels with source labels, ➕ add wizard (getChat-validated, channels only, session `adminChannelMgr`), 🗑 delete (saved-list entries only), 🔄 refresh. Coupon announce picker (`promo.js`) reuses the same service.
 
 ### Channel Join Bonus (Owner) — opt-in, NOT force-join
 
