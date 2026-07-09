@@ -55,6 +55,34 @@ async function showTyping(ctx) {
 module.exports = function registerAmbient(bot) {
 
   bot.on('text', async (ctx, next) => {
+    // ── No-AI game update lookup (works even while AI is disabled) ─────────
+    try {
+      const q = ctx.message?.text;
+      const inScene = ctx.session?.__scenes?.current;
+      const adminBusy = ADMIN_SESSION_KEYS.some((k) => ctx.session?.[k]);
+      if (q && !q.startsWith('/') && !inScene && !adminBusy && !ctx.from?.is_bot) {
+        const { findPosts } = require('../services/GameNewsService');
+        const posts = await findPosts(q, 3);
+        if (posts.length) {
+          const chunks = posts.map((p) => {
+            const d = new Date(p.postedAt).toISOString().slice(0, 10);
+            const t = String(p.text || '');
+            const body = t.length > 600 ? `${t.slice(0, 600)}…` : t;
+            return `📅 ${d}\n${body}`;
+          });
+          await ctx.reply(
+            `📰 Game Update သတင်းများ —\n\n${chunks.join('\n\n──────────\n\n')}`,
+            Markup.inlineKeyboard([
+              [Markup.button.callback('🎫 အကူအညီ ထပ်လိုရင်', 'support_ai_start')],
+            ])
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('[Ambient] game news lookup failed:', e.message);
+    }
+
     // ── AI TEMPORARILY DISABLED ─────────────────────────────────────────────
     return next();
     // ───────────────────────────────────────────────────────────────────────
