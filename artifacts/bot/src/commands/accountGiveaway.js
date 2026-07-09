@@ -365,6 +365,15 @@ module.exports = function registerAccountGiveaway(bot) {
     await editOrReply(ctx, text, keyboard);
   });
 
+  bot.hears('🎁 Giveaway', adminOnly(), async (ctx) => {
+    const { text, keyboard } = await buildAdminGaPanel();
+    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  });
+  bot.command('giveaway', adminOnly(), async (ctx) => {
+    const { text, keyboard } = await buildAdminGaPanel();
+    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  });
+
   bot.action(/^accga_pick:(.+)$/, adminOnly(), async (ctx) => {
     const p = await AccountProduct.findById(ctx.match[1]);
     if (!p) return ctx.answerCbQuery('❌ Product မတွေ့ပါ', { show_alert: true });

@@ -32,7 +32,8 @@ function adminMenuKeyboard() {
     ['🎯 Ref Campaign',     '📣 Join Bonus Admin'],
     ['🎁 Promo Perks',     '🎟 Coupons'],
     ['📣 Announce',        '🎮 Game News'],
-    ['📡 Channels',        '📖 Admin Guide'],
+    ['🎁 Giveaway',        '📡 Channels'],
+    ['📖 Admin Guide'],
     ['🔙 Back to Main'],
   ]).resize();
 }

@@ -102,7 +102,7 @@ artifacts/bot/
 - **Channel join bonus** (opt-in, NOT force-join) — `/joinbonus` (user, getChatMember verify, claim-record-first), `/joinbonusadmin` (Owner); `JoinReward` + `JoinRewardClaim` models; 📢 announce button posts to ALL bot users AND `announcementChannelId` (channel post: join URL + bot deep link, no callback claim button)
 
 ### Admin menu buttons
-- `adminMenuKeyboard()` in `utils/keyboard.js`; new rows: 🎁 Promo Perks / 🎟 Coupons / 📣 Announce / 🎮 Game News — `bot.hears` handlers live next to the matching `bot.command` in promoPerks.js, promo.js (gencoupon), apiManagement.js, gameNews.js
+- `adminMenuKeyboard()` in `utils/keyboard.js`; new rows: 🎁 Promo Perks / 🎟 Coupons / 📣 Announce / 🎮 Game News / 🎁 Giveaway — `bot.hears` handlers live next to the matching `bot.command` in promoPerks.js, promo.js (gencoupon), apiManagement.js, gameNews.js, accountGiveaway.js (`/giveaway`)
 
 ### Product announcements — `/announce` or 📣 Announce button (Manager+)
 - `/announce` (no arg) → picker of 15 recent active products → style choice 🆕 New Product / ⚡ Flash Sale (flash only if `flashSalePrice > 0`) → `BroadcastService.announceProductEverywhere()` sends formatted card + 🛒 deep-link buy button to BOTH announcement channel and all non-blocked bot users (`broadcastToUsers`: batch 25 / 1.1 s delay); `/announce <productId>` skips picker; result summary shows channel ok + sent/failed counts
