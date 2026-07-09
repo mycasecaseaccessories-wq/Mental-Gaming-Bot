@@ -78,6 +78,7 @@ artifacts/bot/
 
 ### Support
 - `supportScene.js`: topic → question → (AI answer if enabled | direct game-news lookup if not) → solved / escalate → optional screenshot → `SupportTicket` + admin notify with reply/template/resolve/assign/urgent buttons
+- Topic picker: 2-column button layout + "📨 Admin ကို တိုက်ရိုက် စာပို့ရန်" t.me URL button (admin username auto-fetched via `getChat(adminId)`, cached 10 min; hidden if admin has no username)
 - Photo interceptor for `awaitingTicketScreenshot` lives in `support.js`
 
 ### Knowledge Channels (Game Update + FAQ) — `/gamenews` (Owner)

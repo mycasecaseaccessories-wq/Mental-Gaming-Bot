@@ -37,6 +37,27 @@ const TOPIC_META = {
 
 async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+// ── Admin direct-contact button (t.me link — needs admin to have a username) ─
+let adminContactCache = null; // { username: string|null, at: number }
+
+async function getAdminContactRow(ctx) {
+  const TTL = 10 * 60 * 1000;
+  if (!adminContactCache || Date.now() - adminContactCache.at > TTL) {
+    let username = null;
+    try {
+      const chat = await ctx.telegram.getChat(config.bot.adminId);
+      username = chat.username || null;
+    } catch (e) {
+      console.error('[SupportScene] getChat(admin) failed:', e.message);
+    }
+    adminContactCache = { username, at: Date.now() };
+  }
+  if (!adminContactCache.username) return [];
+  return [
+    [Markup.button.url('📨 Admin ကို တိုက်ရိုက် စာပို့ရန်', `https://t.me/${adminContactCache.username}`)],
+  ];
+}
+
 // ── Typing animation ──────────────────────────────────────────────────────────
 async function showThinking(ctx) {
   const msg = await ctx.reply('🤖 _AI is thinking..._', { parse_mode: 'Markdown' });
@@ -105,6 +126,7 @@ const supportScene = new Scenes.WizardScene(
 
   // ── Step 0: Topic selection ──────────────────────────────────────────────
   async (ctx) => {
+    const adminRow = await getAdminContactRow(ctx);
     await ctx.reply(
       `💬 *Customer Support*\n\n` +
       (AI_ENABLED
@@ -114,12 +136,19 @@ const supportScene = new Scenes.WizardScene(
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('📦 Order Issue',      'sup_topic:order')],
-          [Markup.button.callback('💳 Payment / Wallet', 'sup_topic:payment')],
-          [Markup.button.callback('🎮 Game Help',         'sup_topic:game')],
-          [Markup.button.callback('🐛 Bug Report',        'sup_topic:bug')],
-          [Markup.button.callback('❓ General Query',     'sup_topic:general')],
-          [Markup.button.callback('❌ Cancel',            'sup_cancel')],
+          [
+            Markup.button.callback('📦 Order Issue',      'sup_topic:order'),
+            Markup.button.callback('💳 Payment / Wallet', 'sup_topic:payment'),
+          ],
+          [
+            Markup.button.callback('🎮 Game Help',        'sup_topic:game'),
+            Markup.button.callback('🐛 Bug Report',       'sup_topic:bug'),
+          ],
+          [
+            Markup.button.callback('❓ General Query',    'sup_topic:general'),
+            Markup.button.callback('❌ Cancel',           'sup_cancel'),
+          ],
+          ...adminRow,
         ]),
       }
     );
