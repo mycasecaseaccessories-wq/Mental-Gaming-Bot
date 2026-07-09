@@ -6,7 +6,8 @@
  *   - FAQ channel (SystemStatus.faqChannelId) — evergreen, no age cutoff
  *
  * Used as a zero-cost fallback so the bot can answer questions even when the
- * AI is disabled or out of quota: matching posts are forwarded verbatim.
+ * AI is disabled or out of quota: the matching post's text is sent as the
+ * answer, with a link back to the original channel post as reference.
  */
 
 const RETENTION_DAYS = 90;
@@ -70,44 +71,72 @@ async function findPosts(query, limit = 3) {
   return entries;
 }
 
+// Cache channel info (username/title) so we don't hit getChat on every answer
+const CHAT_INFO_TTL = 10 * 60 * 1000;
+const chatInfoCache = new Map(); // chatId -> { username, title, at }
+
+async function getChatInfo(telegram, chatId) {
+  const cid = String(chatId);
+  const cached = chatInfoCache.get(cid);
+  if (cached && Date.now() - cached.at < CHAT_INFO_TTL) return cached;
+  let info = { username: null, title: '', at: Date.now() };
+  try {
+    const chat = await telegram.getChat(cid);
+    info = { username: chat.username || null, title: chat.title || '', at: Date.now() };
+  } catch (e) {
+    console.error(`[GameNews] getChat failed (${cid}):`, e.message);
+    if (cached) return cached; // stale is better than nothing
+  }
+  chatInfoCache.set(cid, info);
+  return info;
+}
+
+function buildPostLink(chatId, messageId, username) {
+  if (username) return `https://t.me/${username}/${messageId}`;
+  const cid = String(chatId);
+  if (cid.startsWith('-100')) return `https://t.me/c/${cid.slice(4)}/${messageId}`;
+  return null;
+}
+
 /**
- * Forward the original channel posts to the user (keeps the channel name —
- * real forward, not a copy). Falls back to a plain-text excerpt if a forward
- * fails (e.g. post deleted from the channel).
- * Returns true if at least one post was delivered.
+ * Answer the user directly with the stored post text, attaching the original
+ * channel post as a "reference" link button (instead of forwarding the whole
+ * post). Public channels get a t.me/<username>/<id> link; private channels
+ * get a t.me/c/... link (opens only for channel members).
+ * Returns true if at least one answer was delivered.
  */
-async function sendPostsAsForwards(ctx, posts) {
+async function sendPostsAsAnswers(ctx, posts) {
   if (!posts || !posts.length) return false;
 
   let delivered = 0;
-  const fallbacks = [];
 
   for (const p of posts) {
     try {
-      await ctx.telegram.forwardMessage(ctx.chat.id, p.chatId, p.messageId);
+      const info = await getChatInfo(ctx.telegram, p.chatId);
+      const url = buildPostLink(p.chatId, p.messageId, info.username);
+
+      const d = new Date(p.postedAt).toLocaleDateString('en-GB');
+      const header = `${info.title ? `📢 ${info.title}` : '📢 Channel'} · 📅 ${d}`;
+      const t = String(p.text || '').trim();
+      const body = t.length > 3500 ? `${t.slice(0, 3500)}…` : t;
+
+      const extra = { disable_web_page_preview: true };
+      if (url) {
+        extra.reply_markup = {
+          inline_keyboard: [[{ text: '🔗 မူရင်း post ကြည့်ရန်', url }]],
+        };
+      }
+
+      // Plain text (no parse_mode) — stored channel content may contain
+      // characters that would break Markdown parsing
+      await ctx.reply(`${header}\n\n${body}`, extra);
       delivered++;
     } catch (e) {
-      console.error(`[GameNews] forward failed (${p.chatId}/${p.messageId}):`, e.message);
-      fallbacks.push(p);
-    }
-  }
-
-  // Text fallback for posts that could not be forwarded
-  if (fallbacks.length) {
-    const chunks = fallbacks.map((p) => {
-      const d = new Date(p.postedAt).toLocaleDateString('en-GB');
-      const t = String(p.text || '');
-      return `📅 ${d}\n${t.length > 600 ? `${t.slice(0, 600)}…` : t}`;
-    });
-    try {
-      await ctx.reply(chunks.join('\n\n──────────\n\n'));
-      delivered += fallbacks.length;
-    } catch (e) {
-      console.error('[GameNews] fallback text reply failed:', e.message);
+      console.error(`[GameNews] answer reply failed (${p.chatId}/${p.messageId}):`, e.message);
     }
   }
 
   return delivered > 0;
 }
 
-module.exports = { findPosts, sendPostsAsForwards, RETENTION_DAYS };
+module.exports = { findPosts, sendPostsAsAnswers, RETENTION_DAYS };

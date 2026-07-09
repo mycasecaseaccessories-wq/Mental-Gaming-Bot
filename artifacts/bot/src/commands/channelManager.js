@@ -162,7 +162,7 @@ module.exports = (bot) => {
       );
       await ctx.reply(
         `✅ *${escMd(chat.title)}* ကို 📖 *FAQ channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
-          `ဒီ channel မှာ တင်တဲ့ FAQ post တိုင်းကို bot က မှတ်ထားပြီး — customer က မေးခွန်းမေးလာရင် ကိုက်ညီတဲ့ post ကို *channel နာမည်ပေါ်အောင် တိုက်ရိုက် forward* လုပ်ပြီး ဖြေပေးပါမယ်။\n\n` +
+          `ဒီ channel မှာ တင်တဲ့ FAQ post တိုင်းကို bot က မှတ်ထားပြီး — customer က မေးခွန်းမေးလာရင် *post ထဲက စာကို တိုက်ရိုက် ဖြေပေးပြီး မူရင်း post link ကို 🔗 reference ခလုတ်နဲ့ တွဲပေးပါမယ်*။\n\n` +
           `📌 FAQ post တွေက သက်တမ်းမကုန်ပါဘူး (game update လို ၃ လအကန့်အသတ် မရှိပါ)။ ပုံပါ post ဆိုရင် caption မှာ စာရေးပေးပါ။ \`/gamenews\` နဲ့ သိမ်းထားတာတွေ စစ်လို့ရပါတယ်။`,
         { parse_mode: 'Markdown' }
       );

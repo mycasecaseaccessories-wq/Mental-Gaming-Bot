@@ -20,7 +20,7 @@
 
 const { Scenes, Markup } = require('telegraf');
 const { AI_ENABLED, answerSupportQuery, analyzeSentiment } = require('../services/aiService');
-const { findPosts, sendPostsAsForwards } = require('../services/GameNewsService');
+const { findPosts, sendPostsAsAnswers } = require('../services/GameNewsService');
 const { config } = require('../../config/settings');
 const { price, formatDate } = require('../utils/ui');
 const SupportTicket = require('../models/SupportTicket');
@@ -143,8 +143,8 @@ const supportScene = new Scenes.WizardScene(
           ctx.session.supportAiResponse = null;
           ctx.session.supportSentiment  = 'neutral';
 
-          await ctx.reply(`📰 Game Update သတင်းများ —`);
-          const delivered = await sendPostsAsForwards(ctx, posts);
+          await ctx.reply(`📰 မေးခွန်းနဲ့ ကိုက်ညီတဲ့ အချက်အလက် တွေ့ပါတယ် —`);
+          const delivered = await sendPostsAsAnswers(ctx, posts);
           if (delivered) {
             await ctx.reply(
               `Was this helpful?`,

@@ -61,14 +61,14 @@ module.exports = function registerAmbient(bot) {
       const inScene = ctx.session?.__scenes?.current;
       const adminBusy = ADMIN_SESSION_KEYS.some((k) => ctx.session?.[k]);
       if (q && !q.startsWith('/') && !inScene && !adminBusy && !ctx.from?.is_bot) {
-        const { findPosts, sendPostsAsForwards } = require('../services/GameNewsService');
+        const { findPosts, sendPostsAsAnswers } = require('../services/GameNewsService');
         const posts = await findPosts(q, 3);
         if (posts.length) {
-          await ctx.reply('📰 Game Update သတင်းများ —');
-          const delivered = await sendPostsAsForwards(ctx, posts);
+          await ctx.reply('📰 မေးခွန်းနဲ့ ကိုက်ညီတဲ့ အချက်အလက် တွေ့ပါတယ် —');
+          const delivered = await sendPostsAsAnswers(ctx, posts);
           if (delivered) {
             await ctx.reply(
-              'အပေါ်က post တွေက channel ကနေ တိုက်ရိုက် forward ထားတာပါ ⬆️',
+              'မူရင်း post ကို ကြည့်ချင်ရင် အပေါ်က 🔗 ခလုတ်လေး နှိပ်လို့ရပါတယ် ⬆️',
               Markup.inlineKeyboard([
                 [Markup.button.callback('🎫 အကူအညီ ထပ်လိုရင်', 'support_ai_start')],
               ])

@@ -170,7 +170,7 @@ module.exports = (bot) => {
       body += `\n`;
     }
 
-    body += `_Customer က မေးခွန်းမေးရင် ကိုက်ညီတဲ့ post ကို channel နာမည်ပေါ်အောင် တိုက်ရိုက် forward လုပ်ပြီး ဖြေပေးပါမယ်။ ပုံပါ post ဆိုရင် caption ရေးပေးပါ။_`;
+    body += `_Customer က မေးခွန်းမေးရင် ကိုက်ညီတဲ့ post ထဲက စာကို တိုက်ရိုက် ဖြေပေးပြီး မူရင်း post link ကို 🔗 reference ခလုတ်နဲ့ တွဲပေးပါမယ်။ ပုံပါ post ဆိုရင် caption ရေးပေးပါ။_`;
 
     await ctx.reply(body, {
       parse_mode: 'Markdown',

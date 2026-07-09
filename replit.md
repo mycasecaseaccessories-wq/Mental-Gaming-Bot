@@ -85,7 +85,7 @@ artifacts/bot/
 - `commands/gameNews.js` captures `channel_post`/`edited_channel_post` from BOTH channels into `GameNews` model (unique chatId+messageId, text index); retention: game news **90 days + newest 300 cap**; FAQ **evergreen (no age cutoff), 300 cap only**
 - `findPosts()` searches both: game channel 90-day fresh, FAQ channel without age filter; `/gamenews` panel shows both channels' status
 - Photo posts: largest photo → `aiService.extractImageText(base64)` (Gemini vision, extracts text + dates) appended as `[From image] …` — needs working AI key
-- **No-AI direct lookup**: `services/GameNewsService.js` `findPosts(query)` ($text search → latin-keyword regex fallback; channel-scoped; 90-day fresh). Wired into: (1) top of `ambient.js` text handler, (2) support scene step 1 — matching posts delivered via `sendPostsAsForwards()` (**real `forwardMessage` — keeps channel name + original post date + photos**; plain-text excerpt fallback if a forward fails, e.g. post deleted)
+- **No-AI direct lookup**: `services/GameNewsService.js` `findPosts(query)` ($text search → latin-keyword regex fallback; channel-scoped; game 90-day fresh, FAQ evergreen). Wired into: (1) top of `ambient.js` text handler, (2) support scene step 1 — matching posts delivered via `sendPostsAsAnswers()` (**sends stored post text directly as the answer + 🔗 "view original post" URL button**; public channels t.me/username/id, private t.me/c/… (members only); channel username/title cached 10 min via getChat)
 - **AI path (when enabled)**: `aiService.loadGameNewsContext()` injects "GAME UPDATES KNOWLEDGE" block (channel-scoped, 90-day fresh, top 5 by relevance / 8 recent) into support + ambient prompts
 
 ### Channels — `/channels` (Owner)
