@@ -61,6 +61,32 @@ const accountProductSchema = new mongoose.Schema(
       comment: 'Devices per account (shared) / members per link (invite)',
     },
 
+    // ── Stock-date expiry (opt-in) ────────────────────────────────────────────
+    // When true, each credential's lifetime is FIXED and starts the moment it is
+    // added to stock (stockExpiresAt = addedAt + durationDays). Buyers receive
+    // the REMAINING days, not a fresh durationDays. Expired stock auto-retires.
+    stockDateExpiry: {
+      type: Boolean,
+      default: false,
+      comment: 'Count validity from stock-add date instead of purchase date',
+    },
+    // Aging price tier (only when stockDateExpiry is on): once a credential's
+    // remaining days <= agingThresholdDays, it is sold at agingDiscountPercent
+    // off the base price (100 = free). 0 threshold = aging tier disabled.
+    agingThresholdDays: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'Remaining-days cutoff below which the aging discount applies',
+    },
+    agingDiscountPercent: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+      comment: 'Discount % for aging (near-expiry) stock (100 = free)',
+    },
+
     description: {
       type: String,
       default: '',
@@ -81,6 +107,26 @@ accountProductSchema.index({ isActive: 1, displayOrder: 1 });
 
 accountProductSchema.methods.finalPrice = function () {
   return Math.max(0, Math.round(this.price * (1 - (this.discountPercent || 0) / 100)));
+};
+
+// Price when a credential has reached the aging tier (near-expiry stock).
+accountProductSchema.methods.agingPrice = function () {
+  return Math.max(0, Math.round(this.price * (1 - (this.agingDiscountPercent || 0) / 100)));
+};
+
+// Whether the aging price tier is configured (and applicable) for this product.
+accountProductSchema.methods.agingEnabled = function () {
+  return !!(this.stockDateExpiry && this.agingThresholdDays > 0 && this.agingDiscountPercent > 0);
+};
+
+// Effective per-unit price for a specific credential, honouring the aging tier.
+// Falls back to finalPrice() for non stock-date products or fresh stock.
+accountProductSchema.methods.priceForCredential = function (cred) {
+  const base = this.finalPrice();
+  if (!this.agingEnabled() || !cred || !cred.stockExpiresAt) return base;
+  const remaining = Math.ceil((new Date(cred.stockExpiresAt).getTime() - Date.now()) / 86400000);
+  if (remaining > this.agingThresholdDays) return base;
+  return Math.min(base, this.agingPrice());
 };
 
 accountProductSchema.statics.getActive = function () {

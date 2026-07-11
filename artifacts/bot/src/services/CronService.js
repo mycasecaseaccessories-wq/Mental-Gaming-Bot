@@ -233,6 +233,15 @@ async function notifyExpiringAccounts(telegram) {
     const in3d = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
     let sent = 0;
 
+    // Stock-date expiry: auto-remove unsold stock whose fixed shelf life ran out
+    try {
+      const retired = await AccountCredential.retireExpiredStock();
+      const n = retired?.modifiedCount ?? retired?.nModified ?? 0;
+      if (n > 0) console.log(`[Cron] ⌛ Retired ${n} expired account stock credential(s).`);
+    } catch (err) {
+      console.error('[Cron] retireExpiredStock failed:', err.message);
+    }
+
     // Expiring within 3 days
     const expiring = await AccountCredential.find({
       status: 'sold', notified3d: false,

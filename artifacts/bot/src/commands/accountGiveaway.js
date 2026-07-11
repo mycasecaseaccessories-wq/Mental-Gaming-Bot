@@ -115,6 +115,15 @@ async function buildUserView(ctx) {
   const p = ga.productId;
 
   const stock = await AccountCredential.countAvailable(p._id);
+  // Stock-date products: the claimer inherits the next credential's remaining
+  // shelf life, not a fresh durationDays. Peek it so the view is accurate.
+  let stockRemainingDays = null;
+  if (p.stockDateExpiry) {
+    const nextCred = await AccountCredential.nextAvailable(p._id);
+    if (nextCred?.stockExpiresAt) {
+      stockRemainingDays = Math.ceil((new Date(nextCred.stockExpiresAt).getTime() - Date.now()) / DAY_MS);
+    }
+  }
   const already = await AccountGiveawayClaim.exists({ giveawayId: ga._id, telegramId: ctx.from.id });
   const quotaLeft = ga.maxClaims > 0 ? Math.max(0, ga.maxClaims - ga.claimedCount) : null;
   const checks = await checkRequirements(ga, ctx);
@@ -123,7 +132,9 @@ async function buildUserView(ctx) {
   let text =
     `🎁 *အခမဲ့ Premium Account!*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
     `${p.emoji} *${esc(p.serviceName)}* — ${esc(p.planLabel)}\n` +
-    `⏳ သက်တမ်း: *${p.durationDays} ရက်* (ရယူချိန်မှ စတွက်)\n` +
+    (p.stockDateExpiry
+      ? `⏳ သက်တမ်း: *${stockRemainingDays != null ? `${stockRemainingDays} ရက်` : `${p.durationDays} ရက်`}* (stock သက်တမ်းအတိုင်း ကျန်ရက်)\n`
+      : `⏳ သက်တမ်း: *${p.durationDays} ရက်* (ရယူချိန်မှ စတွက်)\n`) +
     `💵 တန်ဖိုး: ~${Number(p.price).toLocaleString()} KS~ → *အခမဲ့!*\n\n`;
 
   if (quotaLeft !== null) text += `📦 ကျန်တဲ့ အခွင့်အရေး: *${Math.min(quotaLeft, stock)} ခု*\n`;
@@ -334,6 +345,12 @@ module.exports = function registerAccountGiveaway(bot) {
       return ctx.answerCbQuery('😢 Stock ကုန်သွားပါပြီ', { show_alert: true });
     }
 
+    // Stock-date products: winner inherits the credential's remaining shelf life
+    if (p.stockDateExpiry && cred.stockExpiresAt) {
+      cred.expiresAt = cred.stockExpiresAt;
+      try { await cred.save(); } catch (e) { console.error('[Giveaway] ⚠️ expiry sync failed:', e.message); }
+    }
+
     await AccountGiveawayClaim.updateOne({ _id: claim._id }, { $set: { credentialId: cred._id } }).catch(() => {});
     await ctx.answerCbQuery('🎉 ရပါပြီ!');
     await auditLog(ctx.from.id, 'CLAIM_GIVEAWAY_ACCOUNT', cred._id.toString(), 'System', {
@@ -348,7 +365,7 @@ module.exports = function registerAccountGiveaway(bot) {
           `📧 Login: \`${cleanCred(cred.loginId)}\`\n` +
           `🔑 Password: \`${cleanCred(cred.password)}\`\n` +
           (cred.note ? `📝 ${esc(cred.note)}\n` : '') +
-          `\n⏳ သက်တမ်းကုန်: *${fmtDate(cred.expiresAt)}* (${p.durationDays} ရက်)\n` +
+          `\n⏳ သက်တမ်းကုန်: *${fmtDate(cred.expiresAt)}* (${Math.ceil((new Date(cred.expiresAt).getTime() - Date.now()) / DAY_MS)} ရက်)\n` +
           `💵 ကျသင့်ငွေ: *အခမဲ့! 🎁*\n\n` +
           `_👆 Login/Password ကို နှိပ်ရင် copy ဖြစ်ပါမယ်။_`,
         {
