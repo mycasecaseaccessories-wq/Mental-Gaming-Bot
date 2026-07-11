@@ -177,7 +177,9 @@ async function buildAdminGaPanel() {
   const ga = await getAdminGa({ populate: true });
 
   if (!ga || !ga.productId) {
-    const products = await AccountProduct.find().sort({ displayOrder: 1, serviceName: 1 });
+    // Giveaway delivers a single login/password per claim → only single-type products.
+    const products = await AccountProduct.find({ accountType: { $nin: ['shared', 'invite'] } })
+      .sort({ displayOrder: 1, serviceName: 1 });
     const rows = products.map((p) => [
       Markup.button.callback(`${p.emoji} ${p.serviceName} — ${p.planLabel}`, `accga_pick:${p._id}`),
     ]);
@@ -186,8 +188,8 @@ async function buildAdminGaPanel() {
       text:
         `🎁 *Free Giveaway — Admin*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
         (products.length
-          ? `Giveaway မရှိသေးပါ။ အခမဲ့ပေးမယ့် *account product* ကို ရွေးပါ:`
-          : `_Account product မရှိသေးပါ။ 🔐 Accounts panel မှာ အရင်ထည့်ပါ။_`),
+          ? `Giveaway မရှိသေးပါ။ အခမဲ့ပေးမယ့် *account product* ကို ရွေးပါ:\n_(👤 Single account တွေပဲ giveaway လုပ်လို့ရပါတယ်။)_`
+          : `_Giveaway လုပ်လို့ရတဲ့ 👤 Single account product မရှိသေးပါ။ 🔐 Accounts panel မှာ အရင်ထည့်ပါ။_`),
       keyboard: Markup.inlineKeyboard(rows),
     };
   }
@@ -251,6 +253,19 @@ module.exports = function registerAccountGiveaway(bot) {
     const ga = await AccountGiveaway.getActive();
     if (!ga || !ga.productId) return ctx.answerCbQuery('😢 Giveaway ပြီးသွားပါပြီ', { show_alert: true });
     const p = ga.productId;
+
+    // Safety net: giveaway only supports single accounts (claimOne + login/pw
+    // delivery). If a multi-type product somehow got linked, auto-disable it
+    // rather than mis-deliver, and alert the owner.
+    if (p.accountType === 'shared' || p.accountType === 'invite') {
+      await AccountGiveaway.updateOne({ _id: ga._id }, { $set: { isActive: false } }).catch(() => {});
+      try {
+        await ctx.telegram.sendMessage(config.bot.adminId,
+          `⚠️ Giveaway ကို အလိုအလျောက် ရပ်လိုက်ပါပြီ — *${p.serviceName} ${p.planLabel}* သည် multi-device/invite account ဖြစ်၍ giveaway မလုပ်နိုင်ပါ။`,
+          { parse_mode: 'Markdown' });
+      } catch (_) {}
+      return ctx.answerCbQuery('😢 Giveaway ပြီးသွားပါပြီ', { show_alert: true });
+    }
 
     const user = await User.findByTelegramId(ctx.from.id);
     if (!user) return ctx.answerCbQuery('❌ /start အရင်နှိပ်ပါ', { show_alert: true });
@@ -392,6 +407,9 @@ module.exports = function registerAccountGiveaway(bot) {
   bot.action(/^accga_pick:(.+)$/, adminOnly(), async (ctx) => {
     const p = await AccountProduct.findById(ctx.match[1]);
     if (!p) return ctx.answerCbQuery('❌ Product မတွေ့ပါ', { show_alert: true });
+    if (p.accountType === 'shared' || p.accountType === 'invite') {
+      return ctx.answerCbQuery('❌ Multi-device / Invite link account ကို giveaway လုပ်လို့ မရပါ။ 👤 Single account ပဲ ရွေးပါ။', { show_alert: true });
+    }
     let ga = await getAdminGa();
     if (ga) {
       ga.productId = p._id;
@@ -409,13 +427,14 @@ module.exports = function registerAccountGiveaway(bot) {
 
   bot.action('accga_repick', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const products = await AccountProduct.find().sort({ displayOrder: 1, serviceName: 1 });
-    if (!products.length) return ctx.reply('❌ Account product မရှိသေးပါ။');
+    const products = await AccountProduct.find({ accountType: { $nin: ['shared', 'invite'] } })
+      .sort({ displayOrder: 1, serviceName: 1 });
+    if (!products.length) return ctx.reply('❌ Giveaway လုပ်လို့ရတဲ့ 👤 Single account product မရှိသေးပါ။');
     const rows = products.map((p) => [
       Markup.button.callback(`${p.emoji} ${p.serviceName} — ${p.planLabel}`, `accga_pick:${p._id}`),
     ]);
     rows.push([Markup.button.callback('🔙 Giveaway Panel', 'accga_admin')]);
-    await editOrReply(ctx, `♻️ *Product ပြောင်းရန်* — အခမဲ့ပေးမယ့် product ရွေးပါ:`, Markup.inlineKeyboard(rows));
+    await editOrReply(ctx, `♻️ *Product ပြောင်းရန်* — အခမဲ့ပေးမယ့် product ရွေးပါ:\n_(👤 Single account တွေပဲ။)_`, Markup.inlineKeyboard(rows));
   });
 
   bot.action('accga_toggle', adminOnly(), async (ctx) => {
@@ -423,6 +442,9 @@ module.exports = function registerAccountGiveaway(bot) {
     if (!ga || !ga.productId) return ctx.answerCbQuery('❌ Giveaway မရှိသေးပါ', { show_alert: true });
 
     if (!ga.isActive) {
+      if (ga.productId.accountType === 'shared' || ga.productId.accountType === 'invite') {
+        return ctx.answerCbQuery('❌ Multi-device / Invite link account ကို giveaway လုပ်လို့ မရပါ။ ♻️ Product ပြောင်း၍ 👤 Single account ရွေးပါ။', { show_alert: true });
+      }
       const stock = await AccountCredential.countAvailable(ga.productId._id);
       if (stock === 0) return ctx.answerCbQuery('❌ Stock မရှိလို့ မစနိုင်ပါ — 📥 Stock အရင်ထည့်ပါ', { show_alert: true });
       if (ga.endAt && ga.endAt.getTime() <= Date.now()) {

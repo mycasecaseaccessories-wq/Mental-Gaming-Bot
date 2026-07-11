@@ -285,6 +285,58 @@ async function notifyExpiringAccounts(telegram) {
       }
     }
 
+    // ── Shared / invite slot purchases (AccountSlot) ──────────────────────────
+    const AccountSlot = require('../models/AccountSlot');
+
+    const slotExpiring = await AccountSlot.find({
+      notified3d: false,
+      expiresAt: { $gt: now, $lte: in3d },
+      buyerTelegramId: { $ne: null },
+    }).limit(200);
+    for (const s of slotExpiring) {
+      const days = Math.ceil((s.expiresAt - now) / (24 * 60 * 60 * 1000));
+      const name = String(s.serviceNameSnap || 'Account');
+      const plan = String(s.planLabelSnap || '');
+      try {
+        await telegram.sendMessage(
+          s.buyerTelegramId,
+          `⏳ သတိပေးချက်\n\n🔐 ${name}${plan ? ` (${plan})` : ''} သက်တမ်း ${days} ရက်ပဲ ကျန်ပါတော့တယ်။\n\nအသစ် ပြန်ဝယ်ချင်ရင် /accounts ကို နှိပ်ပါ။`
+        );
+        sent++;
+        s.notified3d = true;
+        await s.save();
+      } catch (err) {
+        if (err?.response?.error_code === 403 || err?.response?.error_code === 400) {
+          s.notified3d = true;
+          await s.save();
+        }
+      }
+    }
+
+    const slotExpired = await AccountSlot.find({
+      notifiedExpired: false,
+      expiresAt: { $lte: now },
+      buyerTelegramId: { $ne: null },
+    }).limit(200);
+    for (const s of slotExpired) {
+      const name = String(s.serviceNameSnap || 'Account');
+      const plan = String(s.planLabelSnap || '');
+      try {
+        await telegram.sendMessage(
+          s.buyerTelegramId,
+          `🔴 သက်တမ်းကုန်ပါပြီ\n\n🔐 ${name}${plan ? ` (${plan})` : ''} သက်တမ်း ကုန်သွားပါပြီ။\n\nအသစ် ပြန်ဝယ်ချင်ရင် /accounts ကို နှိပ်ပါ။`
+        );
+        sent++;
+        s.notifiedExpired = true;
+        await s.save();
+      } catch (err) {
+        if (err?.response?.error_code === 403 || err?.response?.error_code === 400) {
+          s.notifiedExpired = true;
+          await s.save();
+        }
+      }
+    }
+
     if (sent > 0) console.log(`[CronService] 🔐 Account expiry reminders sent: ${sent}`);
     return { success: true, sent };
   } catch (err) {

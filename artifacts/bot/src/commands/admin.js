@@ -294,22 +294,34 @@ const GUIDE_SECTIONS = [
     key: 'accounts', label: '🔐 Premium Accounts',
     body:
       `🔐 *Premium Accounts* _(Owner)_\n\n` +
-      `Account (ဥပမာ ExpressVPN) ရောင်းတဲ့ စနစ် — ဝယ်တာနဲ့ ဝယ်သူဆီ login + password *ချက်ချင်း* ရောက်။\n` +
+      `Account (ဥပမာ ExpressVPN) ရောင်းတဲ့ စနစ် — ဝယ်တာနဲ့ ဝယ်သူဆီ login/password (သို့) invite link *ချက်ချင်း* ရောက်။\n` +
       `_ရိုးရိုး product system နဲ့ လုံးဝ သီးသန့် — မရောထွေးပါ။_\n\n` +
+      `📂 *အမျိုးအစား ၃ မျိုး* (➕ Add Product နှိပ်တာနဲ့ အရင်ရွေးရ):\n` +
+      `• 👤 *Single* — login/password တစ်ခုကို လူတစ်ယောက်တည်း သုံး (ပုံမှန်)\n` +
+      `• 📱 *Multi-device* — login/password တစ်ခုကို device အများ မျှသုံး (ဥပမာ ExpressVPN 8-device)\n` +
+      `• 🔗 *Invite link* — link တစ်ခုကို member အများ ဝင် (ဥပမာ Duolingo family 5-member)\n` +
+      `_📱/🔗 နှစ်မျိုးမှာ စျေးက *slot (device/member) တစ်ခုစီ* အလိုက် — ဝယ်သူက ဘယ်နှစ်ခု ဝယ်မလဲ ရွေးပြီး စုစုပေါင်း = စျေး × အရေအတွက်။ slot ပြည့်သွားရင် နောက် account/link ကို အလိုအလျောက် သုံးတယ်။_\n\n` +
       `Admin menu → *🔐 Accounts* (သို့ \`/accadmin\`):\n` +
-      `• ➕ *Add Product* — ၅ ဆင့် wizard (service → plan → စျေး → သက်တမ်းရက် → emoji)\n` +
-      `• 📥 *Stock ထည့်* — \`email:password\` တစ်ကြောင်းချင်း paste (တစ်ခါတည်း အများကြီးရ)\n` +
+      `• ➕ *Add Product* — အမျိုးအစားရွေး → service → plan → စျေး → သက်တမ်းရက် → (📱/🔗 ဆို: slot အရေအတွက်) → emoji\n` +
+      `• 📥 *Stock/Account/Link ထည့်* — Single/Multi-device ဆို \`email:password\` တစ်ကြောင်းချင်း; Invite link ဆို link (\`https://...\`) တစ်ကြောင်းချင်း paste\n` +
       `• 🏷 *Discount* — % လျှော့စျေး (0 = ဖြုတ်)\n` +
       `• 💵 *စျေးပြင်* / 🟢🔴 *ဖွင့်-ပိတ်* / 🗑 *ဖျက်*\n\n` +
-      `🎬 *ဥပမာ — ExpressVPN 1 လစာ ရောင်းနည်း:*\n` +
-      `1️⃣ *🔐 Accounts* → ➕ Add Product → "ExpressVPN" → "1 Month" → 15000 → 30 → 🛡\n` +
-      `2️⃣ 📥 Stock ထည့် → \`myvpn@gmail.com:Pass123\` စသဖြင့် paste\n` +
-      `3️⃣ ဝယ်သူက menu → *🔐 Premium Accounts* → ဝယ် → wallet ဖြတ် → account ချက်ချင်းရ\n` +
-      `4️⃣ ဝယ်ချိန်မှ ရက် ၃၀ သက်တမ်း စတွက် — ဝယ်သူက *🎟 ကျွန်ုပ်၏ Accounts* မှာ ကျန်ရက် ကြည့်နိုင်\n\n` +
-      `🤖 *Auto:* သက်တမ်း ၃ ရက်အလို + ကုန်ချိန်မှာ ဝယ်သူဆီ သတိပေးစာ အလိုအလျောက် ပို့ပေးတယ် (မနက် 9 နာရီ)။\n` +
+      `🎬 *ဥပမာ ၁ — ExpressVPN 8-device ရောင်းနည်း:*\n` +
+      `1️⃣ *🔐 Accounts* → ➕ Add Product → 📱 Multi-device → "ExpressVPN" → "1 Month" → device တစ်ခု 3000 → 30 → device 8 → 🛡\n` +
+      `2️⃣ 📥 Account ထည့် → \`myvpn@gmail.com:Pass123\` (account တစ်ခုကို device 8 ခုစာ ရောင်းပေးမယ်)\n` +
+      `3️⃣ ဝယ်သူက ဝယ် → device ဘယ်နှစ်ခု ရွေး → စုစုပေါင်း = 3000 × device အရေအတွက် → login/pw ချက်ချင်းရ\n\n` +
+      `🎬 *ဥပမာ ၂ — Duolingo family 5-member:*\n` +
+      `1️⃣ ➕ Add Product → 🔗 Invite link → "Duolingo" → "Family" → member တစ်ခု 2000 → 30 → member 5 → 🦉\n` +
+      `2️⃣ 📥 Link ထည့် → \`https://duolingo.com/invite/abc\` (link တစ်ခုကို member 5 ယောက်စာ)\n` +
+      `3️⃣ ဝယ်သူက member အရေအတွက်ရွေး → invite link ချက်ချင်းရ\n\n` +
+      `🎬 *ဥပမာ ၃ — Single (ပုံမှန်):*\n` +
+      `➕ Add Product → 👤 Single → "Netflix" → "1 Month" → 15000 → 30 → 📺 → 📥 Stock ထည့် \`mail:pass\` → ဝယ်သူ ဝယ်တာနဲ့ account တစ်ခု ချက်ချင်းရ\n\n` +
+      `ဝယ်ချိန်မှ သက်တမ်း စတွက် — ဝယ်သူက *🎟 ကျွန်ုပ်၏ Accounts* မှာ ကျန်ရက် အမြဲ ကြည့်နိုင်။\n` +
+      `🤖 *Auto:* သက်တမ်း ၃ ရက်အလို + ကုန်ချိန်မှာ ဝယ်သူဆီ သတိပေးစာ အလိုအလျောက် ပို့ပေးတယ် (single + multi/invite နှစ်မျိုးလုံး)။\n` +
       `_Stock ကုန်ရင် ဝယ်လို့မရတော့ဘဲ ငွေလည်း မဖြတ်ပါ — stock အမြဲ ဖြည့်ထားပါ။_\n\n` +
       `🎁 *Free Giveaway* — account တစ်မျိုးကို *အခမဲ့* ဝေတဲ့စနစ် (တစ်ကြိမ် တစ်ခုပဲ ဖွင့်လို့ရ):\n` +
       `Admin menu → *🎁 Giveaway* (သို့ \`/giveaway\`, သို့ *🔐 Accounts* panel → 🎁 Free Giveaway) → product ရွေး → ကန့်သတ်ချက်တွေ ဖွင့်-ပိတ်:\n` +
+      `⚠️ *👤 Single account* တွေပဲ giveaway လုပ်လို့ရ — multi-device / invite link account တွေ မရပါ။\n` +
       `• 📦 *အရေအတွက်* — ပထမဆုံး N ယောက်ပဲ (0 = stock ကုန်သည်အထိ)\n` +
       `• ⏰ *ရက်သတ်မှတ်* — ဒီနေ့ကစ N ရက်အတွင်းပဲ (0 = မကန့်သတ်)\n` +
       `• 📅 *Acc သက်တမ်း* — Telegram account N ရက်ကျော်မှ ရ (fake account ကာကွယ်၊ 0 = မစစ်)\n` +

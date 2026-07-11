@@ -41,6 +41,26 @@ const accountProductSchema = new mongoose.Schema(
       min: 1,
       comment: 'Account validity in days, counted from purchase time',
     },
+
+    // ── Account type ──────────────────────────────────────────────────────────
+    // single = one login/password per buyer (classic)
+    // shared = one login/password shared by up to `slotsPerUnit` devices
+    // invite = one invite link (URL) shared by up to `slotsPerUnit` members
+    accountType: {
+      type: String,
+      enum: ['single', 'shared', 'invite'],
+      default: 'single',
+    },
+    // For shared/invite: how many devices/members each credential (account/link)
+    // can serve. For single this stays 1. Price is charged PER slot for
+    // shared/invite (buyer picks how many devices/members to buy).
+    slotsPerUnit: {
+      type: Number,
+      default: 1,
+      min: 1,
+      comment: 'Devices per account (shared) / members per link (invite)',
+    },
+
     description: {
       type: String,
       default: '',
