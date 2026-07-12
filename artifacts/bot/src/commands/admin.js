@@ -322,6 +322,7 @@ const GUIDE_SECTIONS = [
       `_📱/🔗 နှစ်မျိုးမှာ စျေးက *slot (device/member) တစ်ခုစီ* အလိုက် — ဝယ်သူက ဘယ်နှစ်ခု ဝယ်မလဲ ရွေးပြီး စုစုပေါင်း = စျေး × အရေအတွက်။ slot ပြည့်သွားရင် နောက် account/link ကို အလိုအလျောက် သုံးတယ်။_\n\n` +
       `Admin menu → *🔐 Accounts* (သို့ \`/accadmin\`):\n` +
       `• ➕ *Add Product* — အမျိုးအစားရွေး → service → plan → စျေး → သက်တမ်းရက် → (📱/🔗 ဆို: slot အရေအတွက်) → emoji\n` +
+      `   _💡 wizard ဘယ်အဆင့်မှာမဆို \`cancel\` ရိုက်ရင် ပယ်ဖျက်လို့ရ_\n` +
       `• 📥 *Stock/Account/Link ထည့်* — Single/Multi-device ဆို \`email:password\` တစ်ကြောင်းချင်း; Invite link ဆို link (\`https://...\`) တစ်ကြောင်းချင်း paste\n` +
       `• 🏷 *Discount* — % လျှော့စျေး (0 = ဖြုတ်)\n` +
       `• 📆 *Stock-date* — သက်တမ်း ရေတွက်ပုံ ပြောင်း (အောက်မှာ ရှင်း)\n` +

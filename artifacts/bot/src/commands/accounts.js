@@ -851,7 +851,7 @@ module.exports = function registerAccounts(bot) {
     ctx.session.accAdmin = { step: 'service', accountType };
     const badge = TYPE_BADGE[accountType];
     await ctx.reply(
-      `➕ *Account Product အသစ်* (${badge})\n\nStep 1: *Service နာမည်* ရိုက်ပါ:\n_(ဥပမာ ExpressVPN, Netflix, Duolingo)_`,
+      `➕ *Account Product အသစ်* (${badge})\n\nStep 1: *Service နာမည်* ရိုက်ပါ:\n_(ဥပမာ ExpressVPN, Netflix, Duolingo)_\n\n_❌ ပယ်ဖျက်ရန် \`cancel\` ရိုက်ပါ။_`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
   });
@@ -974,6 +974,14 @@ module.exports = function registerAccounts(bot) {
     const state = ctx.session?.accAdmin;
     if (!state || ctx.from.id !== config.bot.adminId) return next();
     const input = ctx.message.text.trim();
+
+    // ❌ Cancel — works at any wizard step (forceReply can't carry a button)
+    if (/^(\/cancel|cancel|ပယ်ဖျက်|မလုပ်တော့)$/i.test(input)) {
+      ctx.session.accAdmin = null;
+      const { text, keyboard } = await buildAdminPanel();
+      await ctx.reply('❌ ပယ်ဖျက်လိုက်ပါပြီ။');
+      return ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    }
 
     // ➕ Add product wizard
     if (state.step === 'service') {
