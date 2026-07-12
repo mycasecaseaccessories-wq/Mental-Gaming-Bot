@@ -17,6 +17,13 @@ const { config } = require('../../config/settings');
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_QTY_BUTTONS = 8; // cap the per-purchase quantity picker
 
+// Human-readable label for each account type (used in admin views & wizards)
+const TYPE_BADGE = {
+  single: '👤 Single',
+  shared: '📱 Multi-device',
+  invite: '🔗 Invite link',
+};
+
 function isMulti(p) {
   return p.accountType === 'shared' || p.accountType === 'invite';
 }
