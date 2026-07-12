@@ -8,6 +8,7 @@ const { auditLog } = require('../services/logger');
 const { rewardText } = require('../services/RefCampaignService');
 const RefCampaign = require('../models/RefCampaign');
 const RefCampaignEntry = require('../models/RefCampaignEntry');
+const Product = require('../models/Product');
 const { config } = require('../../config/settings');
 
 function esc(s) {
@@ -176,6 +177,7 @@ module.exports = function registerRefCampaign(bot) {
         Markup.inlineKeyboard([
           [Markup.button.callback('🪙 MC (Mental Coins)', 'rcw_type:mc')],
           [Markup.button.callback('💵 KS (Wallet ငွေ)', 'rcw_type:ks')],
+          [Markup.button.callback('🎁 Bot Product (အခမဲ့ ဝယ်ခွင့်)', 'rcw_type:product_free')],
           [Markup.button.callback('📦 Product (ကိုယ်တိုင်ပို့)', 'rcw_type:product')],
         ])
       );
@@ -226,6 +228,7 @@ module.exports = function registerRefCampaign(bot) {
         rewardType: st.rewardType,
         rewardAmount: st.rewardAmount || 0,
         rewardLabel: st.rewardLabel || '',
+        rewardProductId: st.rewardProductId || null,
         maxInvitesPerUser: st.maxInvitesPerUser,
         maxRewardsPerUser: st.maxRewardsPerUser,
         totalRewardLimit: st.totalRewardLimit,
@@ -241,7 +244,7 @@ module.exports = function registerRefCampaign(bot) {
   });
 
   // Reward type selector (wizard step 3→4)
-  bot.action(/^rcw_type:(mc|ks|product)$/, adminOnly(), async (ctx) => {
+  bot.action(/^rcw_type:(mc|ks|product|product_free)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const st = ctx.session?.rcAdmin;
     if (!st || st.step !== 'rtype') return;
@@ -250,7 +253,38 @@ module.exports = function registerRefCampaign(bot) {
       st.step = 'rlabel';
       return ctx.reply(`Step 4/8: *ဆု product နာမည်* ရိုက်ပါ:\n_(ဥပမာ "ExpressVPN 1 Month" — ဆုရသူကို admin က ကိုယ်တိုင် ပို့ရပါမယ်)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
+    if (st.rewardType === 'product_free') {
+      const prods = await Product.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).limit(30);
+      if (!prods.length) {
+        st.rewardType = null;
+        return ctx.reply('❌ Bot ထဲမှာ ရောင်းနေတဲ့ product မရှိသေးပါ။ Product အရင်ထည့်ပြီးမှ ဒီဆုအမျိုးအစားကို သုံးပါ။');
+      }
+      st.step = 'rprod';
+      const rows = prods.map((p) => [
+        Markup.button.callback(`${p.name} — ${p.finalPrice.toLocaleString()} KS`, `rcw_prod:${p._id}`),
+      ]);
+      return ctx.reply(
+        `Step 4/8: *ဆုအဖြစ်ပေးမယ့် Product* ရွေးပါ:\n_(ref ပြည့်တဲ့သူဟာ ဒီ product ကို ၁ ကြိမ် အခမဲ့ ဝယ်လို့ရမယ် — coupon အလိုအလျောက် ထုတ်ပေးပါမယ်)_`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+      );
+    }
     st.step = 'ramount';
     return ctx.reply(`Step 4/8: *ဆု ပမာဏ* ရိုက်ပါ (${st.rewardType === 'mc' ? 'MC' : 'KS'}):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+  });
+
+  // Product picker for product_free reward (wizard step 4→5)
+  bot.action(/^rcw_prod:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const st = ctx.session?.rcAdmin;
+    if (!st || st.step !== 'rprod') return;
+    const p = await Product.findById(ctx.match[1]);
+    if (!p) return ctx.reply('❌ Product မတွေ့ပါ။ ပြန်ရွေးပါ။');
+    st.rewardProductId = p._id;
+    st.rewardLabel = p.name;
+    st.step = 'maxinv';
+    return ctx.reply(
+      `✅ ဆု Product: *${esc(p.name)}* (အခမဲ့)\n\nStep 5/8: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`,
+      { parse_mode: 'Markdown', ...Markup.forceReply() }
+    );
   });
 };

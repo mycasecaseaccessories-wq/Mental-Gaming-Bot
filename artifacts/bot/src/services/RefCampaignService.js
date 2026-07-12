@@ -8,6 +8,7 @@
 const RefCampaign = require('../models/RefCampaign');
 const RefCampaignEntry = require('../models/RefCampaignEntry');
 const { creditCoin, creditKS } = require('./WalletService');
+const { generateCoupon } = require('./PromoService');
 const { auditLog } = require('./logger');
 const { estimateAccountAgeDays } = require('../utils/accountAge');
 const { config } = require('../../config/settings');
@@ -15,6 +16,7 @@ const { config } = require('../../config/settings');
 function rewardText(c) {
   if (c.rewardType === 'mc') return `${c.rewardAmount} MC`;
   if (c.rewardType === 'ks') return `${c.rewardAmount.toLocaleString()} KS`;
+  if (c.rewardType === 'product_free') return `🎁 ${c.rewardLabel || 'Product'} (အခမဲ့)`;
   return c.rewardLabel || 'Product';
 }
 
@@ -64,6 +66,7 @@ async function onReferralCompleted(referrer, telegram, referee = null) {
     if (!entry) return null; // invite cap reached — not counted
 
     const granted = [];
+    const coupons = []; // product_free reward coupon codes issued this round
 
     // Grant as many rewards as earned (usually 0 or 1)
     // Each iteration: (1) atomically reserve from user's counters,
@@ -110,6 +113,37 @@ async function onReferralCompleted(referrer, telegram, referee = null) {
           await creditKS(referrer._id, camp.rewardAmount, {
             type: 'Bonus', note: `Ref campaign reward: ${camp.title}`,
           });
+        } else if (camp.rewardType === 'product_free') {
+          // product_free — auto-issue a personal 100%-off coupon for the bot
+          // product so the winner can buy it once for free in the shop.
+          // Only mint if the product still exists AND is active, otherwise the
+          // coupon would be un-redeemable (orderScene/OrderService reject
+          // missing/inactive products) — fall back to manual admin delivery.
+          const Product = require('../models/Product');
+          const prod = camp.rewardProductId ? await Product.findById(camp.rewardProductId) : null;
+          if (prod && prod.isActive) {
+            const promo = await generateCoupon(config.bot.adminId, {
+              discountType: 'Percentage',
+              value: 100,
+              maxUses: null,
+              perUserLimit: 1,
+              scopeType: 'product',
+              scopeProducts: [prod._id],
+              restrictedToUserId: referrer._id,
+              source: 'reward',
+              description: `Ref campaign free product: ${camp.title}`,
+              prefix: 'REF',
+            });
+            coupons.push(promo.code);
+          } else {
+            // linked product deleted/inactive — alert admin for manual remedy
+            try {
+              await telegram.sendMessage(
+                config.bot.adminId,
+                `🎯 Campaign ဆု ပေးရန်! (⚠️ ဆု product မရှိတော့/ပိတ်ထား — coupon မထုတ်နိုင်)\n\nCampaign: ${camp.title}\nUser: ${referrer.username ? '@' + referrer.username : referrer.telegramId} (ID: ${referrer.telegramId})\nဆု: ${camp.rewardLabel}\n\n→ လက်ဖြင့် ပို့ပေးပါ။`
+              );
+            } catch {}
+          }
         } else {
           // product — manual delivery: alert admin
           try {
@@ -158,7 +192,7 @@ async function onReferralCompleted(referrer, telegram, referee = null) {
       }
     }
 
-    await notifyUser(telegram, referrer, camp, entry, granted);
+    await notifyUser(telegram, referrer, camp, entry, granted, coupons);
     return { granted };
   } catch (err) {
     console.error('[RefCampaign] ❌ onReferralCompleted:', err.message);
@@ -166,14 +200,25 @@ async function onReferralCompleted(referrer, telegram, referee = null) {
   }
 }
 
-async function notifyUser(telegram, referrer, camp, entry, granted) {
+async function notifyUser(telegram, referrer, camp, entry, granted, coupons = []) {
   if (!telegram) return;
   try {
     if (granted.length) {
+      let tail;
+      if (camp.rewardType === 'product_free') {
+        tail = coupons.length
+          ? `\n\n🎟 သင့် coupon code: ${coupons.join(', ')}\n\n` +
+            `👉 Shop ထဲဝင် → "${camp.rewardLabel}" ကို ရွေး → coupon သုံးပြီး အခမဲ့ ဝယ်လိုက်ပါ!\n` +
+            `(order လုပ်တဲ့အခါ ဒီ coupon က button အဖြစ် အလိုအလျောက် ပေါ်ပါလိမ့်မယ်။)`
+          : `\n\nAdmin က မကြာခင် ဆက်သွယ်ပြီး ပို့ပေးပါမယ်။`;
+      } else if (camp.rewardType === 'product') {
+        tail = `\n\nAdmin က မကြာခင် ဆက်သွယ်ပြီး ပို့ပေးပါမယ်။`;
+      } else {
+        tail = `\n\nWallet ထဲ ထည့်ပြီးပါပြီ။`;
+      }
       await telegram.sendMessage(
         referrer.telegramId,
-        `🎁 Campaign ဆု ရပါပြီ!\n\n🎯 ${camp.title}\n🏆 ဆု: ${granted.join(', ')}` +
-          (camp.rewardType === 'product' ? `\n\nAdmin က မကြာခင် ဆက်သွယ်ပြီး ပို့ပေးပါမယ်။` : `\n\nWallet ထဲ ထည့်ပြီးပါပြီ။`)
+        `🎁 Campaign ဆု ရပါပြီ!\n\n🎯 ${camp.title}\n🏆 ဆု: ${granted.join(', ')}${tail}`
       );
     } else {
       const remain = Math.max(0, camp.requiredRefs - (entry?.countedRefs || 0));

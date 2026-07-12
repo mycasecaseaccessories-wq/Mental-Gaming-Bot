@@ -19,12 +19,18 @@ const refCampaignSchema = new mongoose.Schema(
 
     rewardType: {
       type: String,
-      enum: ['mc', 'ks', 'product'],
+      enum: ['mc', 'ks', 'product', 'product_free'],
       required: true,
-      comment: 'mc = Mental Coins, ks = wallet cash, product = manual delivery by admin',
+      comment: 'mc = Mental Coins, ks = wallet cash, product = manual delivery by admin, product_free = auto free-buy coupon for a bot Product',
     },
     rewardAmount: { type: Number, default: 0, comment: 'For mc/ks types' },
-    rewardLabel:  { type: String, default: '', comment: 'For product type — e.g. "ExpressVPN 1 Month"' },
+    rewardLabel:  { type: String, default: '', comment: 'For product/product_free — e.g. "ExpressVPN 1 Month" (product name)' },
+    rewardProductId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product',
+      default: null,
+      comment: 'For product_free — the bot Product the winner may buy once for free (via auto 100% coupon)',
+    },
 
     maxInvitesPerUser: {
       type: Number,
