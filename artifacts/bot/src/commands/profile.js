@@ -17,6 +17,13 @@ function tierBadge(tier) {
   return map[tier] || tier;
 }
 
+// Escape legacy-Markdown control chars so a username like @john_doe (underscores
+// are legal in Telegram usernames) can't open an unterminated entity and make
+// Telegram reject the whole message.
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[_*`[\]]/g, '\\$&');
+}
+
 Nav.register({
   id: 'profile_view',
   title: '👤 My Profile',
@@ -69,7 +76,7 @@ Nav.register({
     }
 
     const identityLines = [
-      `${theme.emoji.user} ${user.username ? `@${user.username}` : t(ctx, 'profile.no_username')}`,
+      `${theme.emoji.user} ${user.username ? `@${esc(user.username)}` : t(ctx, 'profile.no_username')}`,
       `🆔 ${t(ctx, 'profile.id')}: ${theme.format.code(String(user.telegramId))}`,
     ];
 

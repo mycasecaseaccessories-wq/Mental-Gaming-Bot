@@ -333,8 +333,8 @@ const GUIDE_SECTIONS = [
       `• \`3 100\` = ကျန် ၃ ရက် အောက်ဆို *အခမဲ့* (100% လျှော့)\n` +
       `• ပိတ်ချင်ရင် \`off\`\n` +
       `_Fresh stock ကို ဈေးအပြည့်၊ သက်တမ်းနီးလာတဲ့ stock ကို လျှော့ရောင်း — မကုန်ခင် လက်ကျန် ရှင်းထုတ်ဖို့။_\n\n` +
-      `🎁 *Free Giveaway* — account တစ်မျိုးကို *အခမဲ့* ဝေတဲ့စနစ် (တစ်ကြိမ် တစ်ခုပဲ ဖွင့်လို့ရ):\n` +
-      `Admin menu → *🎁 Giveaway* (သို့ \`/giveaway\`, သို့ *🔐 Accounts* panel → 🎁 Free Giveaway) → product ရွေး → ကန့်သတ်ချက်တွေ ဖွင့်-ပိတ်:\n` +
+      `🎁 *Free Giveaway* — account တွေကို *အခမဲ့* ဝေတဲ့စနစ် (*product တစ်ခုမက* တစ်ပြိုင်နက် ဖွင့်လို့ရ — product တစ်ခုကို giveaway တစ်ခု):\n` +
+      `Admin menu → *🎁 Giveaway* (သို့ \`/giveaway\`, သို့ *🔐 Accounts* panel → 🎁 Free Giveaway) → giveaway စာရင်း ပေါ်လာမယ် → *➕ အခမဲ့ အသစ် ထည့်မယ်* နဲ့ product ရွေးပြီး ထည့် / ရှိပြီးသား တစ်ခုကို နှိပ်ဝင်ပြီး ကန့်သတ်ချက်တွေ ဖွင့်-ပိတ်:\n` +
       `⚠️ *👤 Single account* တွေပဲ giveaway လုပ်လို့ရ — multi-device / invite link account တွေ မရပါ။\n` +
       `• 📦 *အရေအတွက်* — ပထမဆုံး N ယောက်ပဲ (0 = stock ကုန်သည်အထိ)\n` +
       `• ⏰ *ရက်သတ်မှတ်* — ဒီနေ့ကစ N ရက်အတွင်းပဲ (0 = မကန့်သတ်)\n` +
@@ -342,7 +342,7 @@ const GUIDE_SECTIONS = [
       `• 🛒 *ဝယ်ဖူးမှ* — order တစ်ခါ အောင်မြင်ဖူးမှ ရ (ON/OFF)\n` +
       `• 📣 *Channel join* — ရွေးထားတဲ့ channel join ထားမှ ရ (bot က channel admin ဖြစ်ရမယ်)\n` +
       `→ 🟢 *စတင်မယ်* နှိပ်မှ user တွေ မြင်ရ / ရယူနိုင်မယ်။ 📢 *ကြေညာမယ်* နဲ့ user အားလုံး + announce channel ကို ပို့နိုင်။\n` +
-      `_တစ်ယောက် တစ်ခါပဲ ရ။ quota ပြည့်/stock ကုန်ရင် အလိုအလျောက် ရပ်ပြီး owner ဆီ အကြောင်းကြားတယ်။ user ဘက်က /accounts ထဲ 🎁 ခလုတ် (သို့) /freebie နဲ့ ရယူနိုင်တယ်။_`,
+      `_giveaway တစ်ခုကို user တစ်ယောက် တစ်ခါပဲ ရ (giveaway အများ ရှိရင် တစ်ခုချင်း သီးခြား ရ)။ quota ပြည့်/stock ကုန်ရင် အလိုအလျောက် ရပ်ပြီး owner ဆီ အကြောင်းကြားတယ်။ user ဘက်က /accounts ထဲ 🎁 ခလုတ် (သို့) /freebie နဲ့ ရယူနိုင်တယ် — အခမဲ့ များစွာ ရှိရင် စာရင်းက ရွေးဝင်ရ။_`,
   },
   {
     key: 'refcampaign', label: '🎯 Ref Campaign',

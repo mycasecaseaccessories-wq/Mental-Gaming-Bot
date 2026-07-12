@@ -135,7 +135,8 @@ async function buildHub() {
   const products = await AccountProduct.getActive();
   const counts = await Promise.all(products.map((p) => freeUnits(p)));
   const prices = await Promise.all(products.map((p) => effPrice(p)));
-  const giveaway = await AccountGiveaway.getActive().catch(() => null);
+  const actives = await AccountGiveaway.getActives().catch(() => []);
+  const giveaway = actives.find((g) => g.productId) || null;
 
   let text = `🔐 *Premium Accounts*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
   if (giveaway?.productId) {

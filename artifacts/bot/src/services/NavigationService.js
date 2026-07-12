@@ -85,11 +85,20 @@ async function navigate(ctx, folderId, editMessage = false) {
   const { text, keyboard } = await folder.build(ctx, theme);
 
   const opts = { parse_mode: 'Markdown', ...keyboard };
+  const plainOpts = { ...keyboard }; // no parse_mode → survives stray Markdown
+
+  // If a Markdown send is rejected (e.g. an unescaped char in dynamic content),
+  // fall back to plain text so the user sees the menu instead of a generic error.
+  const reply = () =>
+    ctx.reply(text, opts).catch((e) => {
+      console.error('[Nav] Markdown reply failed, retrying as plain text:', e.message);
+      return ctx.reply(text, plainOpts);
+    });
 
   if (editMessage && ctx.callbackQuery?.message) {
-    return ctx.editMessageText(text, opts).catch(() => ctx.reply(text, opts));
+    return ctx.editMessageText(text, opts).catch(() => reply());
   }
-  return ctx.reply(text, opts);
+  return reply();
 }
 
 /**

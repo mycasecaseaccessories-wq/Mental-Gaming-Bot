@@ -5,4 +5,6 @@
 - [Gemini free-tier quota exhaustion](gemini-quota-degradation.md) — AI features silently stop on 429 "limit: 0"; check bot logs for Gemini 429 before debugging code.
 - [Telegraf text wizards](telegraf-text-wizards.md) — text wizard steps must match reply_to_message against the stored prompt id, or they swallow later-registered button/hears handlers.
 - [Bot token swap gotchas](bot-token-swap-gotchas.md) — stored file_ids, channel admin rights, and DM permission are all per-bot; re-verify after switching BOT_TOKEN.
-- [Premium Account slot types](premium-account-slot-types.md) — shared/invite seat-based accounts: two sale ledgers, per-slot pricing, post-debit rollback, giveaway is single-only.
+- [Premium Account slot types](premium-account-slot-types.md) — shared/invite seat-based accounts: two sale ledgers, per-slot pricing, post-debit rollback, giveaway is single-type-only.
+- [Mongoose stale indexes](mongoose-stale-indexes.md) — changing a schema index's options does NOT drop the old index; drop+recreate manually on the live DB (checked no dup data first).
+- [Telegram Markdown user data](telegram-markdown-user-data.md) — escape user-controlled text (usernames w/ `_`) in legacy-Markdown sends or the whole handler errors; keep a plain-text reply fallback.

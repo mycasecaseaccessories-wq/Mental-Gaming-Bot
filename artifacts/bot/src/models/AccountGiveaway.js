@@ -1,7 +1,7 @@
 /**
  * AccountGiveaway — free premium-account giveaway config.
- * Only ONE giveaway can be active at a time (partial unique index).
- * Every restriction is individually toggleable from the admin panel.
+ * MULTIPLE giveaways can run at once (one per product). Every restriction is
+ * individually toggleable from the admin panel.
  */
 const mongoose = require('mongoose');
 
@@ -60,12 +60,17 @@ const accountGiveawaySchema = new mongoose.Schema(
   { timestamps: true, versionKey: false }
 );
 
-// Only one active giveaway at a time
-accountGiveawaySchema.index(
-  { isActive: 1 },
-  { unique: true, partialFilterExpression: { isActive: true } }
-);
+// One giveaway per product (prevents two configs fighting over the same stock).
+accountGiveawaySchema.index({ productId: 1 }, { unique: true });
+// Fast lookup of the currently-running giveaways.
+accountGiveawaySchema.index({ isActive: 1 });
 
+// All currently-running giveaways (newest first).
+accountGiveawaySchema.statics.getActives = function () {
+  return this.find({ isActive: true }).populate('productId').sort({ updatedAt: -1 });
+};
+
+// Kept for callers that only need any one active giveaway.
 accountGiveawaySchema.statics.getActive = function () {
   return this.findOne({ isActive: true }).populate('productId');
 };

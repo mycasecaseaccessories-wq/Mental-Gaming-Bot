@@ -1,9 +1,10 @@
 /**
- * Account Giveaway — give one premium-account product away FREE to bot users,
+ * Account Giveaway — give premium-account products away FREE to bot users.
+ * MULTIPLE products can be given away at once (one giveaway per product), each
  * with individually toggleable restrictions:
  *   📦 max claims quota · ⏰ deadline · 📅 min account age ·
  *   🛒 must have purchased before · 📣 must join a channel
- * One giveaway active at a time; one claim per user (claim-record-first).
+ * One claim per user PER giveaway (claim-record-first). 👤 Single accounts only.
  */
 const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
@@ -107,10 +108,32 @@ async function channelJoinUrl(ctx, chatId) {
   return url;
 }
 
-// ── User: giveaway detail view ───────────────────────────────────────────────
+// ── User: entry point — list all active giveaways, or jump straight in if one ─
 
-async function buildUserView(ctx) {
-  const ga = await AccountGiveaway.getActive();
+async function buildUserEntry(ctx) {
+  const gas = (await AccountGiveaway.getActives()).filter((g) => g.productId);
+  if (!gas.length) return null;
+  if (gas.length === 1) return buildUserView(ctx, gas[0]);
+
+  let text =
+    `🎁 *အခမဲ့ Premium Accounts!*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+    `_အခု အခမဲ့ ဝေနေတဲ့ account တွေပါ — တစ်ခုချင်း ဝင်ကြည့်ပြီး ရယူပါ:_\n`;
+  const rows = [];
+  for (const g of gas) {
+    const p = g.productId;
+    const stock = await AccountCredential.countAvailable(p._id);
+    const quotaLeft = g.maxClaims > 0 ? Math.max(0, g.maxClaims - g.claimedCount) : null;
+    const left = quotaLeft !== null ? Math.min(quotaLeft, stock) : stock;
+    text += `\n${p.emoji} *${esc(p.serviceName)}* — ${esc(p.planLabel)}  (📦 ${left} ကျန်)`;
+    rows.push([Markup.button.callback(`🎁 ${p.serviceName} — ${p.planLabel}`, `accga_free:${g._id}`)]);
+  }
+  rows.push([Markup.button.callback('🔙 Premium Accounts', 'acc_hub')]);
+  return { text, keyboard: Markup.inlineKeyboard(rows) };
+}
+
+// ── User: single giveaway detail view ────────────────────────────────────────
+
+async function buildUserView(ctx, ga) {
   if (!ga || !ga.productId) return null;
   const p = ga.productId;
 
@@ -154,7 +177,7 @@ async function buildUserView(ctx) {
     text += `\n😢 _ကုန်သွားပါပြီ…_`;
   } else if (allOk) {
     text += `\n_👇 ခလုတ်နှိပ်ပြီး ချက်ချင်း ရယူလိုက်ပါ!_`;
-    rows.push([Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', 'accga_claim')]);
+    rows.push([Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', `accga_claim:${ga._id}`)]);
   } else {
     text += `\n_❌ ပြထားတဲ့ လိုအပ်ချက်တွေ ပြည့်မီရင် ရယူနိုင်ပါမယ်။_`;
     const chanCheck = checks.find((c) => !c.ok && c.channelId);
@@ -162,51 +185,93 @@ async function buildUserView(ctx) {
       const url = await channelJoinUrl(ctx, chanCheck.channelId);
       if (url) rows.push([Markup.button.url('📣 Channel Join မယ်', url)]);
     }
-    rows.push([Markup.button.callback('🔄 ပြန်စစ်မယ်', 'accga_free')]);
+    rows.push([Markup.button.callback('🔄 ပြန်စစ်မယ်', `accga_free:${ga._id}`)]);
   }
-  rows.push([Markup.button.callback('🔙 Premium Accounts', 'acc_hub')]);
+  rows.push([
+    Markup.button.callback('🎁 အခြားအခမဲ့', 'accga_free'),
+    Markup.button.callback('🔙 Premium Accounts', 'acc_hub'),
+  ]);
 
   return { text, keyboard: Markup.inlineKeyboard(rows) };
 }
 
-// ── Admin: giveaway panel ────────────────────────────────────────────────────
+// ── Admin: product picker (single-type only) ─────────────────────────────────
 
-/** Single authoritative selector — prefer the active giveaway, else newest. */
-async function getAdminGa({ populate = false } = {}) {
-  let q = AccountGiveaway.findOne({ isActive: true });
-  if (populate) q = q.populate('productId');
-  let ga = await q;
-  if (!ga) {
-    let q2 = AccountGiveaway.findOne().sort({ updatedAt: -1 });
-    if (populate) q2 = q2.populate('productId');
-    ga = await q2;
-  }
-  return ga;
+/** mode 'new' → create a giveaway; 'repick:<gaId>' → change an existing one. */
+async function buildProductPicker(mode) {
+  // Exclude products that already have a giveaway (one giveaway per product).
+  const taken = await AccountGiveaway.distinct('productId');
+  const filter = { accountType: { $nin: ['shared', 'invite'] } };
+  if (mode === 'new') filter._id = { $nin: taken };
+  const products = await AccountProduct.find(filter).sort({ displayOrder: 1, serviceName: 1 });
+
+  const isRepick = mode.startsWith('repick:');
+  const gaId = isRepick ? mode.split(':')[1] : null;
+
+  const rows = products.map((p) => [
+    Markup.button.callback(
+      `${p.emoji} ${p.serviceName} — ${p.planLabel}`,
+      isRepick ? `accga_setprod:${gaId}:${p._id}` : `accga_pick:${p._id}`
+    ),
+  ]);
+  rows.push([Markup.button.callback('🔙 Giveaways', 'accga_admin')]);
+
+  const text = isRepick
+    ? `♻️ *Product ပြောင်းရန်* — အခမဲ့ပေးမယ့် product အသစ် ရွေးပါ:\n_(👤 Single account တွေပဲ။)_`
+    : products.length
+      ? `➕ *အခမဲ့ အသစ် ထည့်ရန်* — ဝေမယ့် *account product* ကို ရွေးပါ:\n_(👤 Single account တွေပဲ။ Giveaway ရှိပြီးသား product တွေ မပြပါ။)_`
+      : `_ထည့်လို့ရတဲ့ 👤 Single account product မကျန်တော့ပါ (အားလုံး giveaway ရှိပြီးသား သို့ multi-type ဖြစ်နေ)။_`;
+
+  return { text, keyboard: Markup.inlineKeyboard(rows) };
 }
 
-async function buildAdminGaPanel() {
-  const ga = await getAdminGa({ populate: true });
+// ── Admin: giveaways list ────────────────────────────────────────────────────
 
-  if (!ga || !ga.productId) {
-    // Giveaway delivers a single login/password per claim → only single-type products.
-    const products = await AccountProduct.find({ accountType: { $nin: ['shared', 'invite'] } })
-      .sort({ displayOrder: 1, serviceName: 1 });
-    const rows = products.map((p) => [
-      Markup.button.callback(`${p.emoji} ${p.serviceName} — ${p.planLabel}`, `accga_pick:${p._id}`),
-    ]);
-    rows.push([Markup.button.callback('🔙 Accounts Panel', 'accad_panel')]);
+async function buildAdminList() {
+  const gas = await AccountGiveaway.find().populate('productId').sort({ isActive: -1, updatedAt: -1 });
+  const valid = gas.filter((g) => g.productId);
+
+  if (!valid.length) {
+    // Nothing configured yet → go straight to the "add" product picker.
+    const picker = await buildProductPicker('new');
     return {
-      text:
-        `🎁 *Free Giveaway — Admin*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-        (products.length
-          ? `Giveaway မရှိသေးပါ။ အခမဲ့ပေးမယ့် *account product* ကို ရွေးပါ:\n_(👤 Single account တွေပဲ giveaway လုပ်လို့ရပါတယ်။)_`
-          : `_Giveaway လုပ်လို့ရတဲ့ 👤 Single account product မရှိသေးပါ။ 🔐 Accounts panel မှာ အရင်ထည့်ပါ။_`),
-      keyboard: Markup.inlineKeyboard(rows),
+      text: `🎁 *Free Giveaways — Admin*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+        `Giveaway မရှိသေးပါ။\n\n${picker.text}`,
+      keyboard: picker.keyboard,
     };
   }
 
+  let text =
+    `🎁 *Free Giveaways — Admin*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+    `_Product တစ်ခုမက အခမဲ့ ဝေလို့ရပါတယ်။ တစ်ခုချင်း ဝင်စီမံပါ:_\n`;
+  const rows = [];
+  for (const g of valid) {
+    const p = g.productId;
+    const stock = await AccountCredential.countAvailable(p._id);
+    text +=
+      `\n${g.isActive ? '🟢' : '🔴'} ${p.emoji} *${esc(p.serviceName)}* — ${esc(p.planLabel)}` +
+      `  •  🎯 ${g.claimedCount}${g.maxClaims > 0 ? `/${g.maxClaims}` : ''}  •  📦 ${stock}`;
+    rows.push([
+      Markup.button.callback(
+        `${g.isActive ? '🟢' : '🔴'} ${p.emoji} ${p.serviceName} — ${p.planLabel}`,
+        `accga_view:${g._id}`
+      ),
+    ]);
+  }
+  rows.push([Markup.button.callback('➕ အခမဲ့ အသစ် ထည့်မယ်', 'accga_new')]);
+  rows.push([Markup.button.callback('🔙 Accounts Panel', 'accad_panel')]);
+  return { text, keyboard: Markup.inlineKeyboard(rows) };
+}
+
+// ── Admin: single giveaway detail panel ──────────────────────────────────────
+
+async function buildGaDetail(gaId) {
+  const ga = await AccountGiveaway.findById(gaId).populate('productId');
+  if (!ga || !ga.productId) return null;
+
   const p = ga.productId;
   const stock = await AccountCredential.countAvailable(p._id);
+  const id = ga._id;
 
   const text =
     `🎁 *Free Giveaway — Admin*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
@@ -221,22 +286,22 @@ async function buildAdminGaPanel() {
     `📣 Channel join: ${ga.requireChannelId ? `*${esc(ga.requireChannelTitle || String(ga.requireChannelId))}*` : '_မလို_'}\n`;
 
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback(ga.isActive ? '🔴 ရပ်မယ်' : '🟢 စတင်မယ်', 'accga_toggle')],
+    [Markup.button.callback(ga.isActive ? '🔴 ရပ်မယ်' : '🟢 စတင်မယ်', `accga_toggle:${id}`)],
     [
-      Markup.button.callback('📦 အရေအတွက်', 'accga_max'),
-      Markup.button.callback('⏰ ရက်သတ်မှတ်', 'accga_days'),
+      Markup.button.callback('📦 အရေအတွက်', `accga_max:${id}`),
+      Markup.button.callback('⏰ ရက်သတ်မှတ်', `accga_days:${id}`),
     ],
     [
-      Markup.button.callback('📅 Acc သက်တမ်း', 'accga_age'),
-      Markup.button.callback(`🛒 ဝယ်ဖူးမှ: ${ga.requirePurchase ? 'ON' : 'OFF'}`, 'accga_purch'),
+      Markup.button.callback('📅 Acc သက်တမ်း', `accga_age:${id}`),
+      Markup.button.callback(`🛒 ဝယ်ဖူးမှ: ${ga.requirePurchase ? 'ON' : 'OFF'}`, `accga_purch:${id}`),
     ],
-    [Markup.button.callback('📣 Channel join သတ်မှတ်', 'accga_chan')],
+    [Markup.button.callback('📣 Channel join သတ်မှတ်', `accga_chan:${id}`)],
     [
-      Markup.button.callback('♻️ Product ပြောင်း', 'accga_repick'),
-      Markup.button.callback('🗑 ဖျက်', 'accga_del'),
+      Markup.button.callback('♻️ Product ပြောင်း', `accga_repick:${id}`),
+      Markup.button.callback('🗑 ဖျက်', `accga_del:${id}`),
     ],
-    ...(ga.isActive ? [[Markup.button.callback('📢 User တွေဆီ ကြေညာမယ်', 'accga_announce')]] : []),
-    [Markup.button.callback('🔙 Accounts Panel', 'accad_panel')],
+    ...(ga.isActive ? [[Markup.button.callback('📢 User တွေဆီ ကြေညာမယ်', `accga_announce:${id}`)]] : []),
+    [Markup.button.callback('🔙 Giveaways', 'accga_admin')],
   ]);
 
   return { text, keyboard };
@@ -247,22 +312,36 @@ async function buildAdminGaPanel() {
 module.exports = function registerAccountGiveaway(bot) {
   // ══ USER SIDE ═══════════════════════════════════════════════════════════════
 
+  // Entry (list or single) — no id
   bot.action('accga_free', async (ctx) => {
     await ctx.answerCbQuery();
-    const view = await buildUserView(ctx);
+    const view = await buildUserEntry(ctx);
     if (!view) return editOrReply(ctx, '😢 _လက်ရှိ giveaway မရှိတော့ပါ။_');
     await editOrReply(ctx, view.text, view.keyboard);
   });
 
+  // A specific giveaway's detail — with id
+  bot.action(/^accga_free:([a-f0-9]{24})$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const ga = await AccountGiveaway.findById(ctx.match[1]).populate('productId');
+    if (!ga || !ga.isActive || !ga.productId) {
+      const view = await buildUserEntry(ctx);
+      if (!view) return editOrReply(ctx, '😢 _လက်ရှိ giveaway မရှိတော့ပါ။_');
+      return editOrReply(ctx, view.text, view.keyboard);
+    }
+    const view = await buildUserView(ctx, ga);
+    await editOrReply(ctx, view.text, view.keyboard);
+  });
+
   bot.command('freebie', async (ctx) => {
-    const view = await buildUserView(ctx);
+    const view = await buildUserEntry(ctx);
     if (!view) return ctx.reply('😢 လက်ရှိ အခမဲ့ giveaway မရှိသေးပါ။');
     await ctx.reply(view.text, { parse_mode: 'Markdown', ...view.keyboard });
   });
 
-  bot.action('accga_claim', async (ctx) => {
-    const ga = await AccountGiveaway.getActive();
-    if (!ga || !ga.productId) return ctx.answerCbQuery('😢 Giveaway ပြီးသွားပါပြီ', { show_alert: true });
+  bot.action(/^accga_claim:([a-f0-9]{24})$/, async (ctx) => {
+    const ga = await AccountGiveaway.findById(ctx.match[1]).populate('productId');
+    if (!ga || !ga.isActive || !ga.productId) return ctx.answerCbQuery('😢 Giveaway ပြီးသွားပါပြီ', { show_alert: true });
     const p = ga.productId;
 
     // Safety net: giveaway only supports single accounts (claimOne + login/pw
@@ -285,7 +364,7 @@ module.exports = function registerAccountGiveaway(bot) {
     const checks = await checkRequirements(ga, ctx);
     if (!checks.every((c) => c.ok)) {
       await ctx.answerCbQuery('❌ လိုအပ်ချက် မပြည့်မီသေးပါ', { show_alert: true });
-      const view = await buildUserView(ctx);
+      const view = await buildUserView(ctx, ga);
       if (view) await editOrReply(ctx, view.text, view.keyboard);
       return;
     }
@@ -408,54 +487,89 @@ module.exports = function registerAccountGiveaway(bot) {
 
   bot.action('accga_admin', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const { text, keyboard } = await buildAdminGaPanel();
+    const { text, keyboard } = await buildAdminList();
     await editOrReply(ctx, text, keyboard);
   });
 
   bot.hears('🎁 Giveaway', adminOnly(), async (ctx) => {
-    const { text, keyboard } = await buildAdminGaPanel();
+    const { text, keyboard } = await buildAdminList();
     await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   });
   bot.command('giveaway', adminOnly(), async (ctx) => {
-    const { text, keyboard } = await buildAdminGaPanel();
+    const { text, keyboard } = await buildAdminList();
     await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   });
 
-  bot.action(/^accga_pick:(.+)$/, adminOnly(), async (ctx) => {
+  // Open a single giveaway's detail panel
+  bot.action(/^accga_view:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const detail = await buildGaDetail(ctx.match[1]);
+    if (!detail) {
+      const { text, keyboard } = await buildAdminList();
+      return editOrReply(ctx, text, keyboard);
+    }
+    await editOrReply(ctx, detail.text, detail.keyboard);
+  });
+
+  // ➕ Add new giveaway — product picker
+  bot.action('accga_new', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const { text, keyboard } = await buildProductPicker('new');
+    await editOrReply(ctx, text, keyboard);
+  });
+
+  // Create a new giveaway for the chosen product
+  bot.action(/^accga_pick:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     const p = await AccountProduct.findById(ctx.match[1]);
     if (!p) return ctx.answerCbQuery('❌ Product မတွေ့ပါ', { show_alert: true });
     if (p.accountType === 'shared' || p.accountType === 'invite') {
       return ctx.answerCbQuery('❌ Multi-device / Invite link account ကို giveaway လုပ်လို့ မရပါ။ 👤 Single account ပဲ ရွေးပါ။', { show_alert: true });
     }
-    let ga = await getAdminGa();
-    if (ga) {
-      ga.productId = p._id;
-      await ga.save();
-    } else {
+    let ga = await AccountGiveaway.findOne({ productId: p._id });
+    if (!ga) {
       ga = await AccountGiveaway.create({ productId: p._id, createdBy: ctx.from.id });
+      await auditLog(ctx.from.id, 'CREATE_GIVEAWAY', ga._id.toString(), 'System', {
+        product: `${p.serviceName} ${p.planLabel}`,
+      });
+      await ctx.answerCbQuery('✅ Giveaway အသစ် ဖန်တီးပြီး');
+    } else {
+      await ctx.answerCbQuery('ℹ️ ဒီ product အတွက် giveaway ရှိပြီးသားပါ');
     }
-    await auditLog(ctx.from.id, 'SET_GIVEAWAY_PRODUCT', ga._id.toString(), 'System', {
-      product: `${p.serviceName} ${p.planLabel}`,
-    });
-    await ctx.answerCbQuery('✅ Product သတ်မှတ်ပြီး');
-    const { text, keyboard } = await buildAdminGaPanel();
+    const detail = await buildGaDetail(ga._id);
+    await editOrReply(ctx, detail.text, detail.keyboard);
+  });
+
+  // ♻️ Change product of an existing giveaway — picker
+  bot.action(/^accga_repick:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const { text, keyboard } = await buildProductPicker(`repick:${ctx.match[1]}`);
     await editOrReply(ctx, text, keyboard);
   });
 
-  bot.action('accga_repick', adminOnly(), async (ctx) => {
-    await ctx.answerCbQuery();
-    const products = await AccountProduct.find({ accountType: { $nin: ['shared', 'invite'] } })
-      .sort({ displayOrder: 1, serviceName: 1 });
-    if (!products.length) return ctx.reply('❌ Giveaway လုပ်လို့ရတဲ့ 👤 Single account product မရှိသေးပါ။');
-    const rows = products.map((p) => [
-      Markup.button.callback(`${p.emoji} ${p.serviceName} — ${p.planLabel}`, `accga_pick:${p._id}`),
-    ]);
-    rows.push([Markup.button.callback('🔙 Giveaway Panel', 'accga_admin')]);
-    await editOrReply(ctx, `♻️ *Product ပြောင်းရန်* — အခမဲ့ပေးမယ့် product ရွေးပါ:\n_(👤 Single account တွေပဲ။)_`, Markup.inlineKeyboard(rows));
+  bot.action(/^accga_setprod:([a-f0-9]{24}):([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    const [, gaId, prodId] = ctx.match;
+    const p = await AccountProduct.findById(prodId);
+    if (!p) return ctx.answerCbQuery('❌ Product မတွေ့ပါ', { show_alert: true });
+    if (p.accountType === 'shared' || p.accountType === 'invite') {
+      return ctx.answerCbQuery('❌ 👤 Single account ပဲ ရွေးပါ။', { show_alert: true });
+    }
+    // one giveaway per product — block if another giveaway already owns it
+    const clash = await AccountGiveaway.findOne({ productId: p._id, _id: { $ne: gaId } });
+    if (clash) return ctx.answerCbQuery('❌ ဒီ product အတွက် giveaway ရှိပြီးသားပါ', { show_alert: true });
+    const ga = await AccountGiveaway.findById(gaId);
+    if (!ga) return ctx.answerCbQuery('❌ Giveaway မတွေ့ပါ', { show_alert: true });
+    ga.productId = p._id;
+    await ga.save();
+    await auditLog(ctx.from.id, 'SET_GIVEAWAY_PRODUCT', ga._id.toString(), 'System', {
+      product: `${p.serviceName} ${p.planLabel}`,
+    });
+    await ctx.answerCbQuery('✅ Product ပြောင်းပြီး');
+    const detail = await buildGaDetail(ga._id);
+    await editOrReply(ctx, detail.text, detail.keyboard);
   });
 
-  bot.action('accga_toggle', adminOnly(), async (ctx) => {
-    const ga = await getAdminGa({ populate: true });
+  bot.action(/^accga_toggle:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    const ga = await AccountGiveaway.findById(ctx.match[1]).populate('productId');
     if (!ga || !ga.productId) return ctx.answerCbQuery('❌ Giveaway မရှိသေးပါ', { show_alert: true });
 
     if (!ga.isActive) {
@@ -467,8 +581,6 @@ module.exports = function registerAccountGiveaway(bot) {
       if (ga.endAt && ga.endAt.getTime() <= Date.now()) {
         return ctx.answerCbQuery('❌ နောက်ဆုံးရက် ကျော်နေပါပြီ — ⏰ ရက် ပြန်သတ်မှတ်ပါ', { show_alert: true });
       }
-      // deactivate any other active giveaway to satisfy the unique index
-      await AccountGiveaway.updateMany({ isActive: true }, { $set: { isActive: false } });
       ga.isActive = true;
     } else {
       ga.isActive = false;
@@ -476,43 +588,43 @@ module.exports = function registerAccountGiveaway(bot) {
     await ga.save();
     await auditLog(ctx.from.id, 'TOGGLE_GIVEAWAY', ga._id.toString(), 'System', { isActive: ga.isActive });
     await ctx.answerCbQuery(ga.isActive ? '🟢 စတင်ပြီး!' : '🔴 ရပ်လိုက်ပြီ');
-    const { text, keyboard } = await buildAdminGaPanel();
-    await editOrReply(ctx, text, keyboard);
+    const detail = await buildGaDetail(ga._id);
+    await editOrReply(ctx, detail.text, detail.keyboard);
   });
 
-  bot.action('accga_purch', adminOnly(), async (ctx) => {
-    const ga = await getAdminGa();
+  bot.action(/^accga_purch:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    const ga = await AccountGiveaway.findById(ctx.match[1]);
     if (!ga) return ctx.answerCbQuery('❌ Giveaway မရှိသေးပါ', { show_alert: true });
     ga.requirePurchase = !ga.requirePurchase;
     await ga.save();
     await ctx.answerCbQuery(ga.requirePurchase ? '🛒 ဝယ်ဖူးမှ ရမယ် — ON' : '🛒 OFF');
-    const { text, keyboard } = await buildAdminGaPanel();
-    await editOrReply(ctx, text, keyboard);
+    const detail = await buildGaDetail(ga._id);
+    await editOrReply(ctx, detail.text, detail.keyboard);
   });
 
   // ── Text-input settings (reply-targeted wizard) ────────────────────────────
 
-  async function promptGaValue(ctx, field, promptText) {
+  async function promptGaValue(ctx, gaId, field, promptText) {
     ctx.session.accAdmin = null; // isolate from the accounts.js admin wizard
     const prompt = await ctx.reply(promptText, { parse_mode: 'Markdown', ...Markup.forceReply() });
-    ctx.session.accGaWiz = { field, promptId: prompt.message_id };
+    ctx.session.accGaWiz = { gaId, field, promptId: prompt.message_id };
   }
 
-  bot.action('accga_max', adminOnly(), async (ctx) => {
+  bot.action(/^accga_max:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    await promptGaValue(ctx, 'max',
+    await promptGaValue(ctx, ctx.match[1], 'max',
       `📦 *ဘယ်နှစ်ယောက် ရနိုင်မလဲ?*\n\nကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ \`50\`)\n\`0\` = မကန့်သတ် (stock ကုန်သည်အထိ)`);
   });
 
-  bot.action('accga_days', adminOnly(), async (ctx) => {
+  bot.action(/^accga_days:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    await promptGaValue(ctx, 'days',
+    await promptGaValue(ctx, ctx.match[1], 'days',
       `⏰ *ဘယ်နှစ်ရက်ကြာ ဖွင့်ထားမလဲ?*\n\nဒီနေ့ကစပြီး ရက်အရေအတွက် ရိုက်ပါ (ဥပမာ \`7\`)\n\`0\` = အချိန် မကန့်သတ်`);
   });
 
-  bot.action('accga_age', adminOnly(), async (ctx) => {
+  bot.action(/^accga_age:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    await promptGaValue(ctx, 'age',
+    await promptGaValue(ctx, ctx.match[1], 'age',
       `📅 *Telegram account သက်တမ်း အနည်းဆုံး ဘယ်နှစ်ရက်လဲ?*\n\n(account အသစ်စက်စက်တွေ မရအောင် — ဥပမာ \`30\`)\n\`0\` = မစစ်`);
   });
 
@@ -533,7 +645,7 @@ module.exports = function registerAccountGiveaway(bot) {
     }
 
     ctx.session.accGaWiz = null;
-    const ga = await getAdminGa();
+    const ga = await AccountGiveaway.findById(wiz.gaId);
     if (!ga) return ctx.reply('❌ Giveaway မရှိတော့ပါ။');
 
     if (wiz.field === 'max') {
@@ -546,20 +658,21 @@ module.exports = function registerAccountGiveaway(bot) {
     await ga.save();
     await auditLog(ctx.from.id, 'SET_GIVEAWAY_RESTRICTION', ga._id.toString(), 'System', { field: wiz.field, value: n });
 
-    const { text, keyboard } = await buildAdminGaPanel();
-    return ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    const detail = await buildGaDetail(ga._id);
+    return ctx.reply(detail.text, { parse_mode: 'Markdown', ...detail.keyboard });
   });
 
   // ── Channel join requirement ────────────────────────────────────────────────
 
-  bot.action('accga_chan', adminOnly(), async (ctx) => {
+  bot.action(/^accga_chan:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
+    const gaId = ctx.match[1];
     const channels = await getKnownChannels();
     const rows = channels.slice(0, 15).map((c) => [
-      Markup.button.callback(`📣 ${c.title || c.chatId}`, `accga_chansel:${c.chatId}`),
+      Markup.button.callback(`📣 ${c.title || c.chatId}`, `accga_chansel:${gaId}:${c.chatId}`),
     ]);
-    rows.push([Markup.button.callback('🚫 Channel join မလိုတော့ဘူး', 'accga_chanoff')]);
-    rows.push([Markup.button.callback('🔙 Giveaway Panel', 'accga_admin')]);
+    rows.push([Markup.button.callback('🚫 Channel join မလိုတော့ဘူး', `accga_chanoff:${gaId}`)]);
+    rows.push([Markup.button.callback('🔙 Giveaway Panel', `accga_view:${gaId}`)]);
     await editOrReply(
       ctx,
       `📣 *Channel join လိုအပ်ချက်*\n\nJoin ထားမှရမယ့် channel ကို ရွေးပါ:\n_(Channel အသစ်ထည့်ချင်ရင် /channels မှာ အရင်ထည့်ပါ။ Bot က channel admin ဖြစ်ရပါမယ် — မဟုတ်ရင် member စစ်လို့မရပါ။)_`,
@@ -567,9 +680,10 @@ module.exports = function registerAccountGiveaway(bot) {
     );
   });
 
-  bot.action(/^accga_chansel:(-?\d+)$/, adminOnly(), async (ctx) => {
-    const chatId = Number(ctx.match[1]);
-    const ga = await getAdminGa();
+  bot.action(/^accga_chansel:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
+    const gaId = ctx.match[1];
+    const chatId = Number(ctx.match[2]);
+    const ga = await AccountGiveaway.findById(gaId);
     if (!ga) return ctx.answerCbQuery('❌ Giveaway မရှိသေးပါ', { show_alert: true });
 
     let title = String(chatId);
@@ -585,52 +699,53 @@ module.exports = function registerAccountGiveaway(bot) {
     await ga.save();
     await auditLog(ctx.from.id, 'SET_GIVEAWAY_CHANNEL', ga._id.toString(), 'System', { chatId, title });
     await ctx.answerCbQuery('📣 သတ်မှတ်ပြီး');
-    const { text, keyboard } = await buildAdminGaPanel();
-    await editOrReply(ctx, text, keyboard);
+    const detail = await buildGaDetail(ga._id);
+    await editOrReply(ctx, detail.text, detail.keyboard);
   });
 
-  bot.action('accga_chanoff', adminOnly(), async (ctx) => {
-    const ga = await getAdminGa();
+  bot.action(/^accga_chanoff:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    const ga = await AccountGiveaway.findById(ctx.match[1]);
     if (!ga) return ctx.answerCbQuery('❌ Giveaway မရှိသေးပါ', { show_alert: true });
     ga.requireChannelId = null;
     ga.requireChannelTitle = '';
     await ga.save();
     await ctx.answerCbQuery('🚫 Channel လိုအပ်ချက် ဖြုတ်ပြီး');
-    const { text, keyboard } = await buildAdminGaPanel();
-    await editOrReply(ctx, text, keyboard);
+    const detail = await buildGaDetail(ga._id);
+    await editOrReply(ctx, detail.text, detail.keyboard);
   });
 
   // ── Delete ──────────────────────────────────────────────────────────────────
 
-  bot.action('accga_del', adminOnly(), async (ctx) => {
+  bot.action(/^accga_del:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
+    const gaId = ctx.match[1];
     await ctx.reply(
       `🗑 *Giveaway ကို ဖျက်မှာ သေချာလား?*\n\n_ရယူပြီးသား user တွေရဲ့ account တွေကတော့ သူတို့ဆီမှာ ဆက်ရှိနေပါမယ်။_`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('✅ ဖျက်မယ်', 'accga_delyes')],
-          [Markup.button.callback('❌ မဖျက်တော့ဘူး', 'accga_admin')],
+          [Markup.button.callback('✅ ဖျက်မယ်', `accga_delyes:${gaId}`)],
+          [Markup.button.callback('❌ မဖျက်တော့ဘူး', `accga_view:${gaId}`)],
         ]),
       }
     );
   });
 
-  bot.action('accga_delyes', adminOnly(), async (ctx) => {
-    const ga = await getAdminGa();
+  bot.action(/^accga_delyes:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    const ga = await AccountGiveaway.findById(ctx.match[1]);
     if (!ga) return ctx.answerCbQuery('❌ မရှိတော့ပါ', { show_alert: true });
     await AccountGiveaway.deleteOne({ _id: ga._id });
     await auditLog(ctx.from.id, 'DELETE_GIVEAWAY', ga._id.toString(), 'System', {});
     await ctx.answerCbQuery('🗑 ဖျက်ပြီးပါပြီ');
-    const { text, keyboard } = await buildAdminGaPanel();
+    const { text, keyboard } = await buildAdminList();
     await editOrReply(ctx, text, keyboard);
   });
 
   // ── Announce to all users + announcement channel ────────────────────────────
 
-  bot.action('accga_announce', adminOnly(), async (ctx) => {
-    const ga = await AccountGiveaway.getActive();
-    if (!ga || !ga.productId) return ctx.answerCbQuery('❌ ဖွင့်ထားတဲ့ giveaway မရှိပါ', { show_alert: true });
+  bot.action(/^accga_announce:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    const ga = await AccountGiveaway.findById(ctx.match[1]).populate('productId');
+    if (!ga || !ga.isActive || !ga.productId) return ctx.answerCbQuery('❌ ဖွင့်ထားတဲ့ giveaway မရှိပါ', { show_alert: true });
     const p = ga.productId;
     await ctx.answerCbQuery();
 
@@ -643,9 +758,9 @@ module.exports = function registerAccountGiveaway(bot) {
       (ga.maxClaims > 0 ? `📦 *${ga.maxClaims} ယောက်ပဲ* ရမှာမို့ မြန်မြန်လာယူပါ!\n` : '') +
       (ga.endAt ? `⏰ ${fmtDate(ga.endAt)} နောက်ဆုံး!\n` : '');
 
-    // 1. All bot users — with claim button
+    // 1. All bot users — with claim button (targets this specific giveaway)
     const { sent, failed } = await broadcastToUsers(ctx.telegram, body, {
-      ...Markup.inlineKeyboard([[Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', 'accga_free')]]),
+      ...Markup.inlineKeyboard([[Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', `accga_free:${ga._id}`)]]),
     });
 
     // 2. Announcement channel — with bot deep link
