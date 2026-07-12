@@ -17,6 +17,25 @@ const { price } = require('../utils/ui');
 const { adminMenuKeyboard, mainMenuKeyboard } = require('../utils/keyboard');
 const os = require('os');
 
+// Split a long Markdown message into <=4096-char chunks on newline boundaries.
+// Each guide line keeps its Markdown entities balanced, so splitting between
+// lines never breaks the parse. Telegram's hard cap is 4096.
+function splitForTelegram(text, limit = 3900) {
+  if (!text || text.length <= limit) return [text];
+  const lines = String(text).split('\n');
+  const chunks = [];
+  let buf = '';
+  for (const line of lines) {
+    if (buf && buf.length + line.length + 1 > limit) {
+      chunks.push(buf);
+      buf = '';
+    }
+    buf += (buf ? '\n' : '') + line;
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
 // ── Admin Guide — interactive, one section per button ─────────────────────────
 const GUIDE_INTRO =
   `📖 *Admin Guide — Mental Gaming Store*\n` +
@@ -848,10 +867,17 @@ module.exports = function registerAdmin(bot) {
     if (!section) return;
 
     const kb = Markup.inlineKeyboard([[Markup.button.callback('🔙 Guide Menu', 'guide:menu')]]);
+    // Telegram caps a message at 4096 chars. Long guide sections must be split
+    // on line boundaries (each line keeps its Markdown entities balanced) so the
+    // parse never breaks — only the LAST chunk carries the 🔙 keyboard.
+    const chunks = splitForTelegram(section.body);
     try {
-      await ctx.editMessageText(section.body, { parse_mode: 'Markdown', ...kb });
+      await ctx.editMessageText(chunks[0], { parse_mode: 'Markdown', ...(chunks.length === 1 ? kb : {}) });
     } catch (_) {
-      await ctx.reply(section.body, { parse_mode: 'Markdown', ...kb });
+      await ctx.reply(chunks[0], { parse_mode: 'Markdown', ...(chunks.length === 1 ? kb : {}) });
+    }
+    for (let i = 1; i < chunks.length; i++) {
+      await ctx.reply(chunks[i], { parse_mode: 'Markdown', ...(i === chunks.length - 1 ? kb : {}) });
     }
   });
 

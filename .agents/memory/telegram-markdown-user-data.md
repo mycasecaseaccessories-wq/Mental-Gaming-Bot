@@ -1,7 +1,22 @@
 ---
 name: Telegram Markdown escaping of user data
-description: Any user-supplied text (esp. usernames) rendered in legacy Markdown must be escaped, or sendMessage/editMessageText throws and the whole handler "errors".
+description: Any user-supplied text (esp. usernames) rendered in legacy Markdown must be escaped, or sendMessage/editMessageText throws and the whole handler "errors". Also covers the 4096-char message cap.
 ---
+
+# Telegram message length cap (4096 chars)
+
+A single Telegram message is capped at 4096 chars — over that, send/edit throws
+and the handler surfaces a "crash" error. The in-bot Admin Guide sections
+(`GUIDE_SECTIONS` in `admin.js`) grow every time an admin feature is added, and
+one section silently crossed 4096 after an edit → clicking that guide button
+errored (the try/reply fallback also failed because the body was still too long).
+
+**How to apply:** render long bodies through a splitter that breaks on `\n`
+boundaries (each guide line keeps its Markdown entities balanced, so splitting
+between lines never corrupts the parse) into <=~3900-char chunks; only the last
+chunk carries the inline keyboard. When editing the guide, don't assume a single
+message will fit.
+
 
 # Escape user-controlled text before rendering in Telegram Markdown
 
