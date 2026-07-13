@@ -8,3 +8,4 @@
 - [Premium Account slot types](premium-account-slot-types.md) — shared/invite seat-based accounts: two sale ledgers, per-slot pricing, post-debit rollback, giveaway is single-type-only.
 - [Mongoose stale indexes](mongoose-stale-indexes.md) — changing a schema index's options does NOT drop the old index; drop+recreate manually on the live DB (checked no dup data first).
 - [Telegram Markdown user data](telegram-markdown-user-data.md) — escape user-controlled text (usernames w/ `_`) in legacy-Markdown sends or the whole handler errors; keep a plain-text reply fallback.
+- [Shop giveaway = coupon grant](shop-giveaway-coupon-grant.md) — free-shop-Product giveaways mint a 100%-off coupon (no claim-time stock reservation); stock consumed at /shop redemption.

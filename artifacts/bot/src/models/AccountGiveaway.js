@@ -7,10 +7,25 @@ const mongoose = require('mongoose');
 
 const accountGiveawaySchema = new mongoose.Schema(
   {
+    // What kind of item this giveaway hands out:
+    //   'account' → a premium AccountProduct (any type: single/shared/invite)
+    //   'shop'    → a regular shop Product, delivered as a 100%-off personal coupon
+    kind: {
+      type: String,
+      enum: ['account', 'shop'],
+      default: 'account',
+    },
+    // Set when kind = 'account'. (Left unset for shop giveaways.)
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AccountProduct',
-      required: true,
+      default: undefined,
+    },
+    // Set when kind = 'shop'. (Left unset for account giveaways.)
+    shopProductId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product',
+      default: undefined,
     },
     isActive: {
       type: Boolean,
@@ -61,18 +76,30 @@ const accountGiveawaySchema = new mongoose.Schema(
 );
 
 // One giveaway per product (prevents two configs fighting over the same stock).
-accountGiveawaySchema.index({ productId: 1 }, { unique: true });
+// Partial so shop-only docs (productId unset) and account-only docs
+// (shopProductId unset) don't collide on the "missing" value.
+accountGiveawaySchema.index(
+  { productId: 1 },
+  { unique: true, partialFilterExpression: { productId: { $type: 'objectId' } } }
+);
+accountGiveawaySchema.index(
+  { shopProductId: 1 },
+  { unique: true, partialFilterExpression: { shopProductId: { $type: 'objectId' } } }
+);
 // Fast lookup of the currently-running giveaways.
 accountGiveawaySchema.index({ isActive: 1 });
 
 // All currently-running giveaways (newest first).
 accountGiveawaySchema.statics.getActives = function () {
-  return this.find({ isActive: true }).populate('productId').sort({ updatedAt: -1 });
+  return this.find({ isActive: true })
+    .populate('productId')
+    .populate('shopProductId')
+    .sort({ updatedAt: -1 });
 };
 
 // Kept for callers that only need any one active giveaway.
 accountGiveawaySchema.statics.getActive = function () {
-  return this.findOne({ isActive: true }).populate('productId');
+  return this.findOne({ isActive: true }).populate('productId').populate('shopProductId');
 };
 
 module.exports = mongoose.model('AccountGiveaway', accountGiveawaySchema);

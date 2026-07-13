@@ -353,9 +353,9 @@ const GUIDE_SECTIONS = [
       `• \`3 100\` = ကျန် ၃ ရက် အောက်ဆို *အခမဲ့* (100% လျှော့)\n` +
       `• ပိတ်ချင်ရင် \`off\`\n` +
       `_Fresh stock ကို ဈေးအပြည့်၊ သက်တမ်းနီးလာတဲ့ stock ကို လျှော့ရောင်း — မကုန်ခင် လက်ကျန် ရှင်းထုတ်ဖို့။_\n\n` +
-      `🎁 *Free Giveaway* — account တွေကို *အခမဲ့* ဝေတဲ့စနစ် (*product တစ်ခုမက* တစ်ပြိုင်နက် ဖွင့်လို့ရ — product တစ်ခုကို giveaway တစ်ခု):\n` +
-      `Admin menu → *🎁 Giveaway* (သို့ \`/giveaway\`, သို့ *🔐 Accounts* panel → 🎁 Free Giveaway) → giveaway စာရင်း ပေါ်လာမယ် → *➕ အခမဲ့ အသစ် ထည့်မယ်* နဲ့ product ရွေးပြီး ထည့် / ရှိပြီးသား တစ်ခုကို နှိပ်ဝင်ပြီး ကန့်သတ်ချက်တွေ ဖွင့်-ပိတ်:\n` +
-      `⚠️ *👤 Single account* တွေပဲ giveaway လုပ်လို့ရ — multi-device / invite link account တွေ မရပါ။\n` +
+      `🎁 *Free Giveaway* — ပစ္စည်းတွေကို *အခမဲ့* ဝေတဲ့စနစ် (*product တစ်ခုမက* တစ်ပြိုင်နက် ဖွင့်လို့ရ — product တစ်ခုကို giveaway တစ်ခု):\n` +
+      `Admin menu → *🎁 Giveaway* (သို့ \`/giveaway\`, သို့ *🔐 Accounts* panel → 🎁 Free Giveaway) → giveaway စာရင်း ပေါ်လာမယ် → *➕ အခမဲ့ အသစ် ထည့်မယ်* → 🔐 *Premium Account* (single / multi-device / invite အားလုံး) သို့ 🛍 *Shop Product* ရွေး → product ရွေးပြီး ထည့် / ရှိပြီးသား တစ်ခုကို နှိပ်ဝင်ပြီး ကန့်သတ်ချက်တွေ ဖွင့်-ပိတ်:\n` +
+      `✅ Account အမျိုးအစား *အားလုံး* (single/multi-device/invite) ရော Shop product ရော giveaway လုပ်လို့ရ။ Shop product အတွက် user က 100% coupon ရပြီး \`/shop\` မှာ အခမဲ့ မှာယူ။\n` +
       `• 📦 *အရေအတွက်* — ပထမဆုံး N ယောက်ပဲ (0 = stock ကုန်သည်အထိ)\n` +
       `• ⏰ *ရက်သတ်မှတ်* — ဒီနေ့ကစ N ရက်အတွင်းပဲ (0 = မကန့်သတ်)\n` +
       `• 📅 *Acc သက်တမ်း* — Telegram account N ရက်ကျော်မှ ရ (fake account ကာကွယ်၊ 0 = မစစ်)\n` +

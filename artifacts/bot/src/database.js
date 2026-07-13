@@ -21,6 +21,17 @@ async function connectDB(attempt = 1) {
     isConnected = true;
     console.log('[DB] ✅ Connected to MongoDB successfully');
 
+    // Reconcile indexes that changed shape over time. AccountGiveaway's
+    // productId unique index became partial (to allow shop-product giveaways
+    // that leave productId unset) — syncIndexes drops the stale plain unique
+    // index and builds the new partial ones. Safe on this tiny collection.
+    try {
+      const AccountGiveaway = require('./models/AccountGiveaway');
+      await AccountGiveaway.syncIndexes();
+    } catch (e) {
+      console.error('[DB] AccountGiveaway index sync warning:', e.message);
+    }
+
     mongoose.connection.on('disconnected', () => {
       console.warn('[DB] MongoDB disconnected — retrying in 5s...');
       isConnected = false;

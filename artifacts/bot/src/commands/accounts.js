@@ -143,11 +143,12 @@ async function buildHub() {
   const counts = await Promise.all(products.map((p) => freeUnits(p)));
   const prices = await Promise.all(products.map((p) => effPrice(p)));
   const actives = await AccountGiveaway.getActives().catch(() => []);
-  const giveaway = actives.find((g) => g.productId) || null;
+  // A giveaway is live if it targets an account product OR a shop product.
+  const hasGiveaway = actives.some((g) => (g.kind === 'shop' ? g.shopProductId : g.productId));
 
   let text = `🔐 *Premium Accounts*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n`;
-  if (giveaway?.productId) {
-    text += `🎁 *အခမဲ့ Giveaway ဖွင့်ထားပါတယ်!* — ${giveaway.productId.emoji} ${esc(giveaway.productId.serviceName)} ကို အခမဲ့ ရယူနိုင်ပါပြီ 👇\n\n`;
+  if (hasGiveaway) {
+    text += `🎁 *အခမဲ့ Giveaway ဖွင့်ထားပါတယ်!* — အခမဲ့ လက်ဆောင်တွေ ရယူနိုင်ပါပြီ 👇\n\n`;
   }
   if (!products.length) {
     text += `_လက်ရှိ ရောင်းချနေတဲ့ account မရှိသေးပါ။ နောက်မှ ပြန်ကြည့်ပေးပါ။_`;
@@ -177,7 +178,7 @@ async function buildHub() {
   }
 
   const rows = [];
-  if (giveaway?.productId) {
+  if (hasGiveaway) {
     rows.push([Markup.button.callback('🎁 အခမဲ့ ရယူမယ် — FREE!', 'accga_free')]);
   }
   for (let i = 0; i < products.length; i++) {

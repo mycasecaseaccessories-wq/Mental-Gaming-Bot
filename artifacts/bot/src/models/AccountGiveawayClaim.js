@@ -21,6 +21,18 @@ const accountGiveawayClaimSchema = new mongoose.Schema(
       ref: 'AccountCredential',
       default: null,
     },
+    // Multi-slot (shared/invite) account claims record the per-buyer sale here.
+    slotId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AccountSlot',
+      default: null,
+    },
+    // Shop-product claims hand out a personal 100%-off coupon instead of stock.
+    couponId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Promo',
+      default: null,
+    },
   },
   { timestamps: true, versionKey: false }
 );
