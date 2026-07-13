@@ -1,11 +1,12 @@
-- [Bot run setup](bot-run-setup.md) — Node24+pnpm, CommonJS, needs BOT_TOKEN/MONGODB_URI/ADMIN_ID secrets; console workflow, no web port.
-- [Mongo atomic counters](mongo-atomic-counters.md) — reward/quota counters must use conditional findOneAndUpdate + $inc, never read-modify-save; partial unique index for single-active singletons.
-- [Bot promo cron & claims](bot-promo-claims.md) — daily-gift crons must claim atomically, then roll back the claim if credit fails; session-cached discounts must be revalidated at order commit.
-- [Telegram inline button payloads](telegram-inline-button-payloads.md) — callback_data needs stable IDs (not indices); atomic $pull/guarded $push for shared lists; clear rival wizard flags.
-- [Gemini free-tier quota exhaustion](gemini-quota-degradation.md) — AI features silently stop on 429 "limit: 0"; check bot logs for Gemini 429 before debugging code.
-- [Telegraf text wizards](telegraf-text-wizards.md) — text wizard steps must match reply_to_message against the stored prompt id, or they swallow later-registered button/hears handlers.
-- [Bot token swap gotchas](bot-token-swap-gotchas.md) — stored file_ids, channel admin rights, and DM permission are all per-bot; re-verify after switching BOT_TOKEN.
-- [Premium Account slot types](premium-account-slot-types.md) — shared/invite seat-based accounts: two sale ledgers, per-slot pricing, post-debit rollback, giveaway is single-type-only.
-- [Mongoose stale indexes](mongoose-stale-indexes.md) — changing a schema index's options does NOT drop the old index; drop+recreate manually on the live DB (checked no dup data first).
-- [Telegram Markdown user data](telegram-markdown-user-data.md) — escape user-controlled text (usernames w/ `_`) in legacy-Markdown sends or the whole handler errors; keep a plain-text reply fallback.
-- [Shop giveaway = coupon grant](shop-giveaway-coupon-grant.md) — free-shop-Product giveaways mint a 100%-off coupon (no claim-time stock reservation); stock consumed at /shop redemption.
+- [Mongoose sparse-unique + default:null trap](mongoose-sparse-unique-null.md) — unique+sparse index still indexes explicit nulls; with `default:null` the first doc blocks all new inserts (E11000). Use a partial index.
+- [Mongoose stale indexes](mongoose-stale-indexes.md) — changing index options does NOT drop the old index; run a migration or syncIndexes().
+- [Mongo atomic counters](mongo-atomic-counters.md) — reward/quota counters must use conditional findOneAndUpdate+$inc, never read-modify-save (races double-pay).
+- [Bot promo claims](bot-promo-claims.md) — once-per-period bonuses: claim marker atomically first, roll back on credit failure; session-cached discounts must revalidate.
+- [Shop giveaway coupon grant](shop-giveaway-coupon-grant.md) — free giveaways of shop Products mint a personal 100%-off coupon, they do NOT reserve stock at claim.
+- [Premium account slot types](premium-account-slot-types.md) — how shared/invite multi-device account types differ from single, and money/stock invariants.
+- [Telegraf text-wizards](telegraf-text-wizards.md) — write bot.on('text') wizard steps so they don't swallow admin menu button text or other flows.
+- [Telegram inline button payloads](telegram-inline-button-payloads.md) — callback_data must use stable IDs, not array indices, for shared-list mutations.
+- [Telegram Markdown escaping](telegram-markdown-user-data.md) — user-supplied text in legacy Markdown must be escaped or send/edit throws; 4096-char cap.
+- [Bot token swap gotchas](bot-token-swap-gotchas.md) — what silently breaks when BOT_TOKEN switches between test (Replit) and prod (VPS), same DB.
+- [Bot run setup](bot-run-setup.md) — how to boot the Telegram bot artifact in this workspace.
+- [Gemini quota degradation](gemini-quota-degradation.md) — AI features silently stop at free-tier 429 (limit:0); check logs before debugging code.

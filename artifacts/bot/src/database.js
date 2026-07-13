@@ -32,6 +32,17 @@ async function connectDB(attempt = 1) {
       console.error('[DB] AccountGiveaway index sync warning:', e.message);
     }
 
+    // User's referralCode index changed from `sparse` to `partial` — the old
+    // sparse unique index indexed explicit nulls, so once one user held the null
+    // slot every new signup failed with E11000 and was silently dropped.
+    // syncIndexes drops the stale sparse index and builds the partial one.
+    try {
+      const User = require('./models/User');
+      await User.syncIndexes();
+    } catch (e) {
+      console.error('[DB] User index sync warning:', e.message);
+    }
+
     mongoose.connection.on('disconnected', () => {
       console.warn('[DB] MongoDB disconnected — retrying in 5s...');
       isConnected = false;

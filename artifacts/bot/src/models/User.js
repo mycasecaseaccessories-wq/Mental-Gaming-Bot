@@ -83,7 +83,18 @@ const userSchema = new mongoose.Schema(
 );
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
-userSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
+// Partial (NOT sparse): a sparse unique index still indexes documents whose
+// referralCode is explicitly null. Because the schema applies `default: null`,
+// every new user is created with referralCode === null, so the FIRST such user
+// occupies the single allowed null slot and every subsequent signup fails with a
+// duplicate-key error (E11000) — findOrCreate then returns null and the user is
+// never saved (invisible to admin, uncounted, "press /start first" on buttons).
+// A partial index only enforces uniqueness when referralCode is an actual string,
+// so nulls/missing are never indexed.
+userSchema.index(
+  { referralCode: 1 },
+  { unique: true, partialFilterExpression: { referralCode: { $type: 'string' } } }
+);
 
 userSchema.methods.hasRight = function (right) {
   return !this.restrictedRights.includes(right);
