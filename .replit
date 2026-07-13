@@ -47,3 +47,7 @@ outputType = "console"
 [deployment]
 deploymentTarget = "vm"
 run = ["pnpm", "--filter", "@workspace/bot", "run", "start"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000
