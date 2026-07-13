@@ -261,7 +261,7 @@ async function processTopupCommission(userId, topupAmount, telegram) {
   if (referral.commissionHistory.length === 1) {
     try {
       const { onReferralCompleted } = require('./RefCampaignService');
-      await onReferralCompleted(referrer, telegram, referee);
+      await onReferralCompleted(referrer, telegram, referee, topupAmount);
     } catch (err) {
       console.error('[ReferralService] ⚠️ Campaign hook failed:', err.message);
     }

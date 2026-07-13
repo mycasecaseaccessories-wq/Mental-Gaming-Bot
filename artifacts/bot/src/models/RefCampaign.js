@@ -56,6 +56,13 @@ const refCampaignSchema = new mongoose.Schema(
       comment: 'Min estimated Telegram account age (days) of the INVITED user for the ref to count (0 = off). Anti-fraud.',
     },
 
+    minRefereeTopup: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'Min first top-up (KS) the INVITED user must make for the ref to count toward this campaign (0 = off). Normal referral commission is unaffected.',
+    },
+
     isActive:  { type: Boolean, default: true, index: true },
     endedAt:   { type: Date, default: null },
     endReason: { type: String, default: null, comment: 'quota_full | manual' },

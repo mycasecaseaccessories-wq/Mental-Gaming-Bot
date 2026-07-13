@@ -24,10 +24,26 @@ function rewardText(c) {
  * Called when a referral is completed for the first time (referee's first
  * qualifying top-up). Increments progress and grants rewards when due.
  */
-async function onReferralCompleted(referrer, telegram, referee = null) {
+async function onReferralCompleted(referrer, telegram, referee = null, topupAmount = 0) {
   try {
     const camp = await RefCampaign.getActive();
     if (!camp) return null;
+
+    // Anti-gaming: invited user's first top-up must meet the campaign minimum
+    if (camp.minRefereeTopup > 0 && topupAmount < camp.minRefereeTopup) {
+      try {
+        if (telegram) {
+          await telegram.sendMessage(
+            referrer.telegramId,
+            `🎯 Campaign "${camp.title}"\n\n⚠️ ဒီ ref ကို campaign မှာ မတွက်ပေးနိုင်ပါ — ဖိတ်ခံရသူက အနည်းဆုံး ${camp.minRefereeTopup.toLocaleString()} KS ငွေဖြည့်ရပါမယ် (ဒီတစ်ကြိမ် ${topupAmount.toLocaleString()} KS ပဲ ဖြည့်ထားလို့ပါ)။\n\n_ပုံမှန် referral commission ကတော့ ရရှိပြီးသားပါ။_`
+          );
+        }
+      } catch {}
+      await auditLog(referrer.telegramId, 'REF_CAMPAIGN_TOPUP_REJECT', camp._id.toString(), 'System', {
+        refereeId: referee ? referee.telegramId : null, topupAmount, minRequired: camp.minRefereeTopup,
+      });
+      return null;
+    }
 
     // Anti-fraud: invited user's estimated Telegram account age must meet minimum
     if (camp.minRefereeAgeDays > 0 && referee) {

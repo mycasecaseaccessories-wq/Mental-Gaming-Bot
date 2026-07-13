@@ -44,6 +44,7 @@ async function showUserCampaign(ctx) {
     (camp.maxRewardsPerUser > 0 ? `🎁 တစ်ယောက်လျှင် ဆု အများဆုံး: ${camp.maxRewardsPerUser} ခု\n` : '') +
     (quotaLeft !== null ? `⏳ ဆု လက်ကျန်: *${quotaLeft} ခု* (ကုန်ရင် campaign ပြီးမယ်)\n` : '') +
     (camp.minRefereeAgeDays > 0 ? `🛡 ဖိတ်ခံရသူရဲ့ Telegram account သက်တမ်း အနည်းဆုံး *${camp.minRefereeAgeDays} ရက်* ရှိရပါမယ်\n` : '') +
+    (camp.minRefereeTopup > 0 ? `💰 ဖိတ်ခံရသူ ပထမ ငွေဖြည့် အနည်းဆုံး *${camp.minRefereeTopup.toLocaleString()} KS* ရှိရပါမယ်\n` : '') +
     `\n_မိတ်ဆွေက သင့် link နဲ့ဝင်ပြီး ပထမဆုံး ငွေဖြည့်ရင် 1 ref အဖြစ် တွက်ပါတယ်။_\n` +
     `🔗 သင့် link ကို /referral မှာ ယူပါ။`;
 
@@ -68,6 +69,7 @@ async function buildAdminPanel() {
       `🎁 Max ဆု per user: ${camp.maxRewardsPerUser || '∞'}\n` +
       `📦 ဆုစုစုပေါင်း limit: ${camp.totalRewardLimit || '∞'} (ပေးပြီး ${camp.totalRewardsClaimed})\n` +
       `🛡 ဖိတ်ခံရသူ acc သက်တမ်း: ${camp.minRefereeAgeDays > 0 ? `≥ ${camp.minRefereeAgeDays} ရက် (ID ခန့်မှန်း)` : 'မစစ်ပါ'}\n` +
+      `💰 ဖိတ်ခံရသူ ပထမ topup: ${camp.minRefereeTopup > 0 ? `≥ ${camp.minRefereeTopup.toLocaleString()} KS` : 'မစစ်ပါ'}\n` +
       `🙋 ပါဝင်သူ: ${participants} ယောက်\n\n` +
       `_Campaign ပိတ်ရင် မပြည့်သေးတဲ့ progress တွေ ပျက်မယ် — နောက် campaign မှာ အသစ်ပြန်စမယ်။_`;
     rows.push([Markup.button.callback('⏹ Campaign ပိတ်မယ်', 'rc_end')]);
@@ -117,7 +119,7 @@ module.exports = function registerRefCampaign(bot) {
     if (existing) return ctx.reply('❌ Campaign တစ်ခု ဖွင့်ထားပြီးသားပါ။ အရင်ပိတ်ပြီးမှ အသစ်စပါ။');
     ctx.session.rcAdmin = { step: 'title' };
     await ctx.reply(
-      `➕ *Campaign အသစ်*\n\nStep 1/8: *Campaign နာမည်* ရိုက်ပါ:\n_(ဥပမာ "မိတ်ဆွေ ၅ ယောက်ခေါ် VPN အလကားရ")_`,
+      `➕ *Campaign အသစ်*\n\nStep 1/9: *Campaign နာမည်* ရိုက်ပါ:\n_(ဥပမာ "မိတ်ဆွေ ၅ ယောက်ခေါ် VPN အလကားရ")_`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
   });
@@ -165,7 +167,7 @@ module.exports = function registerRefCampaign(bot) {
     if (st.step === 'title') {
       st.title = input;
       st.step = 'refs';
-      return ctx.reply(`Step 2/8: ဆုတစ်ခုရဖို့ *ref ဘယ်နှစ်ယောက်* လိုမလဲ? (ဥပမာ 5)`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 2/9: ဆုတစ်ခုရဖို့ *ref ဘယ်နှစ်ယောက်* လိုမလဲ? (ဥပမာ 5)`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'refs') {
       const n = parseInt(input, 10);
@@ -173,7 +175,7 @@ module.exports = function registerRefCampaign(bot) {
       st.requiredRefs = n;
       st.step = 'rtype';
       return ctx.reply(
-        `Step 3/8: *ဆု အမျိုးအစား* ရွေးပါ:`,
+        `Step 3/9: *ဆု အမျိုးအစား* ရွေးပါ:`,
         Markup.inlineKeyboard([
           [Markup.button.callback('🪙 MC (Mental Coins)', 'rcw_type:mc')],
           [Markup.button.callback('💵 KS (Wallet ငွေ)', 'rcw_type:ks')],
@@ -187,26 +189,26 @@ module.exports = function registerRefCampaign(bot) {
       if (!n || n < 1) return ctx.reply('❌ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
       st.rewardAmount = n;
       st.step = 'maxinv';
-      return ctx.reply(`Step 5/8: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'rlabel') {
       st.rewardLabel = input;
       st.step = 'maxinv';
-      return ctx.reply(`Step 5/8: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'maxinv') {
       const n = parseInt(input, 10);
       if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
       st.maxInvitesPerUser = n;
       st.step = 'maxrew';
-      return ctx.reply(`Step 6/8: တစ်ယောက်လျှင် *ဆု အများဆုံး ဘယ်နှစ်ခု* လဲရမလဲ?\n_(0 = ကန့်သတ်မထား၊ များသောအားဖြင့် 1)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 6/9: တစ်ယောက်လျှင် *ဆု အများဆုံး ဘယ်နှစ်ခု* လဲရမလဲ?\n_(0 = ကန့်သတ်မထား၊ များသောအားဖြင့် 1)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'maxrew') {
       const n = parseInt(input, 10);
       if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
       st.maxRewardsPerUser = n;
       st.step = 'quota';
-      return ctx.reply(`Step 7/8: Campaign တစ်ခုလုံးမှာ *ဆု စုစုပေါင်း ဘယ်နှစ်ခု* ပေးမလဲ?\n_(ပြည့်တာနဲ့ campaign အလိုအလျောက် ပိတ်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 7/9: Campaign တစ်ခုလုံးမှာ *ဆု စုစုပေါင်း ဘယ်နှစ်ခု* ပေးမလဲ?\n_(ပြည့်တာနဲ့ campaign အလိုအလျောက် ပိတ်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'quota') {
       const n = parseInt(input, 10);
@@ -214,13 +216,23 @@ module.exports = function registerRefCampaign(bot) {
       st.totalRewardLimit = n;
       st.step = 'minage';
       return ctx.reply(
-        `Step 8/8: ဖိတ်ခံရသူရဲ့ *Telegram account သက်တမ်း အနည်းဆုံး ဘယ်နှစ်ရက်* ရှိရမလဲ?\n_(Account အသစ်စက်စက်နဲ့ လိမ်ခေါ်တာ ကာကွယ်ဖို့ — ID ကနေ ခန့်မှန်းတွက်ပါတယ်။ 0 = မစစ်ဘူး၊ ဥပမာ 90 = ၃ လ)_`,
+        `Step 8/9: ဖိတ်ခံရသူရဲ့ *Telegram account သက်တမ်း အနည်းဆုံး ဘယ်နှစ်ရက်* ရှိရမလဲ?\n_(Account အသစ်စက်စက်နဲ့ လိမ်ခေါ်တာ ကာကွယ်ဖို့ — ID ကနေ ခန့်မှန်းတွက်ပါတယ်။ 0 = မစစ်ဘူး၊ ဥပမာ 90 = ၃ လ)_`,
         { parse_mode: 'Markdown', ...Markup.forceReply() }
       );
     }
     if (st.step === 'minage') {
       const n = parseInt(input, 10);
       if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 90):', Markup.forceReply());
+      st.minRefereeAgeDays = n;
+      st.step = 'mintopup';
+      return ctx.reply(
+        `Step 9/9: ဖိတ်ခံရသူက campaign မှာ တွက်ဖို့ *ပထမ ငွေဖြည့် အနည်းဆုံး ဘယ်လောက်* (KS) ရှိရမလဲ?\n_(လိမ်ခေါ်တာ / အသေးစား topup နဲ့ ဆုလုတာ ကာကွယ်ဖို့ — 0 = မစစ်ဘူး၊ ဥပမာ 10000)_\n_ℹ️ ပုံမှန် referral commission ကတော့ ဒီစည်းနဲ့ မသက်ဆိုင်ပါ။_`,
+        { parse_mode: 'Markdown', ...Markup.forceReply() }
+      );
+    }
+    if (st.step === 'mintopup') {
+      const n = parseInt(input.replace(/[^\d]/g, ''), 10);
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 10000):', Markup.forceReply());
       ctx.session.rcAdmin = null;
       const camp = await RefCampaign.create({
         title: st.title,
@@ -232,11 +244,12 @@ module.exports = function registerRefCampaign(bot) {
         maxInvitesPerUser: st.maxInvitesPerUser,
         maxRewardsPerUser: st.maxRewardsPerUser,
         totalRewardLimit: st.totalRewardLimit,
-        minRefereeAgeDays: n,
+        minRefereeAgeDays: st.minRefereeAgeDays || 0,
+        minRefereeTopup: n,
       });
       await auditLog(ctx.from.id, 'CREATE_REF_CAMPAIGN', camp._id.toString(), 'System', { title: camp.title });
       return ctx.reply(
-        `✅ *Campaign စတင်ပြီးပါပြီ!*\n\n🎯 ${esc(camp.title)}\n🏆 ${esc(rewardText(camp))} / ref ${camp.requiredRefs} ယောက်\n👥 Max ref/user: ${camp.maxInvitesPerUser || '∞'}  •  🎁 Max ဆု/user: ${camp.maxRewardsPerUser || '∞'}\n📦 ဆုစုစုပေါင်း: ${camp.totalRewardLimit || '∞'}\n🛡 ဖိတ်ခံရသူ acc သက်တမ်း: ${camp.minRefereeAgeDays > 0 ? `≥ ${camp.minRefereeAgeDays} ရက်` : 'မစစ်ပါ'}\n\n_ဝယ်သူတွေကို /launchbroadcast နဲ့ ကြေညာပေးပါ — သူတို့က /campaign နဲ့ progress ကြည့်နိုင်ပါတယ်။_`,
+        `✅ *Campaign စတင်ပြီးပါပြီ!*\n\n🎯 ${esc(camp.title)}\n🏆 ${esc(rewardText(camp))} / ref ${camp.requiredRefs} ယောက်\n👥 Max ref/user: ${camp.maxInvitesPerUser || '∞'}  •  🎁 Max ဆု/user: ${camp.maxRewardsPerUser || '∞'}\n📦 ဆုစုစုပေါင်း: ${camp.totalRewardLimit || '∞'}\n🛡 ဖိတ်ခံရသူ acc သက်တမ်း: ${camp.minRefereeAgeDays > 0 ? `≥ ${camp.minRefereeAgeDays} ရက်` : 'မစစ်ပါ'}\n💰 ဖိတ်ခံရသူ ပထမ topup: ${camp.minRefereeTopup > 0 ? `≥ ${camp.minRefereeTopup.toLocaleString()} KS` : 'မစစ်ပါ'}\n\n_ဝယ်သူတွေကို /launchbroadcast နဲ့ ကြေညာပေးပါ — သူတို့က /campaign နဲ့ progress ကြည့်နိုင်ပါတယ်။_`,
         { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('🎯 Panel', 'rc_panel')]]) }
       );
     }
@@ -251,7 +264,7 @@ module.exports = function registerRefCampaign(bot) {
     st.rewardType = ctx.match[1];
     if (st.rewardType === 'product') {
       st.step = 'rlabel';
-      return ctx.reply(`Step 4/8: *ဆု product နာမည်* ရိုက်ပါ:\n_(ဥပမာ "ExpressVPN 1 Month" — ဆုရသူကို admin က ကိုယ်တိုင် ပို့ရပါမယ်)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 4/9: *ဆု product နာမည်* ရိုက်ပါ:\n_(ဥပမာ "ExpressVPN 1 Month" — ဆုရသူကို admin က ကိုယ်တိုင် ပို့ရပါမယ်)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.rewardType === 'product_free') {
       const prods = await Product.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).limit(30);
@@ -264,12 +277,12 @@ module.exports = function registerRefCampaign(bot) {
         Markup.button.callback(`${p.name} — ${p.finalPrice.toLocaleString()} KS`, `rcw_prod:${p._id}`),
       ]);
       return ctx.reply(
-        `Step 4/8: *ဆုအဖြစ်ပေးမယ့် Product* ရွေးပါ:\n_(ref ပြည့်တဲ့သူဟာ ဒီ product ကို ၁ ကြိမ် အခမဲ့ ဝယ်လို့ရမယ် — coupon အလိုအလျောက် ထုတ်ပေးပါမယ်)_`,
+        `Step 4/9: *ဆုအဖြစ်ပေးမယ့် Product* ရွေးပါ:\n_(ref ပြည့်တဲ့သူဟာ ဒီ product ကို ၁ ကြိမ် အခမဲ့ ဝယ်လို့ရမယ် — coupon အလိုအလျောက် ထုတ်ပေးပါမယ်)_`,
         { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
       );
     }
     st.step = 'ramount';
-    return ctx.reply(`Step 4/8: *ဆု ပမာဏ* ရိုက်ပါ (${st.rewardType === 'mc' ? 'MC' : 'KS'}):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+    return ctx.reply(`Step 4/9: *ဆု ပမာဏ* ရိုက်ပါ (${st.rewardType === 'mc' ? 'MC' : 'KS'}):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
   });
 
   // Product picker for product_free reward (wizard step 4→5)
@@ -283,7 +296,7 @@ module.exports = function registerRefCampaign(bot) {
     st.rewardLabel = p.name;
     st.step = 'maxinv';
     return ctx.reply(
-      `✅ ဆု Product: *${esc(p.name)}* (အခမဲ့)\n\nStep 5/8: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`,
+      `✅ ဆု Product: *${esc(p.name)}* (အခမဲ့)\n\nStep 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
   });
