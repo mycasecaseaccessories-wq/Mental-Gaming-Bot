@@ -225,9 +225,10 @@ module.exports = function registerDashboard(bot) {
     if (!orders.length) return ctx.reply('✅ No pending orders right now.');
 
     const theme = getTheme(ctx.user);
+    const esc = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
     const lines = orders.map((o, i) => {
-      const user = o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`;
-      const product = o.productId?.name || 'Unknown';
+      const user = o.userId?.username ? `@${esc(o.userId.username)}` : `ID:${o.userId?.telegramId}`;
+      const product = esc(o.productId?.name || 'Unknown');
       const ts = new Date(o.timestamp).toLocaleTimeString('en-GB', { timeZone: 'Asia/Rangoon' });
       return `${i + 1}\\. ${user} — *${product}* — \`${price(o.amount)}\` _(${ts})_`;
     });

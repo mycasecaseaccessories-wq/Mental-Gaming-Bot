@@ -1524,9 +1524,10 @@ module.exports = function registerAdmin(bot) {
     if (!orders.length) return ctx.reply('✅ No pending orders!', {
       ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'admin_orders_action')]]),
     });
+    const esc = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
     const lines = orders.map((o, i) => {
-      const user    = o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`;
-      const product = o.productId?.name || 'Unknown';
+      const user    = o.userId?.username ? `@${esc(o.userId.username)}` : `ID:${o.userId?.telegramId}`;
+      const product = esc(o.productId?.name || 'Unknown');
       return `${i + 1}\\. 🟡 ${user} — *${product}* — \`${price(o.amount)}\``;
     });
     await ctx.reply(`🟡 *Pending Orders (${orders.length})*\n\n${lines.join('\n')}`, {
@@ -1543,9 +1544,10 @@ module.exports = function registerAdmin(bot) {
       .sort({ timestamp: -1 })
       .limit(10);
     if (!orders.length) return ctx.reply('📦 No orders found.');
+    const esc = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
     const lines = orders.map((o, i) => {
-      const user    = o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`;
-      const product = o.productId?.name || 'Unknown';
+      const user    = o.userId?.username ? `@${esc(o.userId.username)}` : `ID:${o.userId?.telegramId}`;
+      const product = esc(o.productId?.name || 'Unknown');
       const icon    = o.status === 'Success' ? '✅' : o.status === 'Pending' ? '🟡' : o.status === 'Cancelled' ? '❌' : '🔵';
       return `${i + 1}\\. ${icon} ${user} — *${product}* — \`${price(o.amount)}\``;
     });
