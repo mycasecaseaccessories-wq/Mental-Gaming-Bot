@@ -109,6 +109,8 @@ async function notifyCustomer(ctx, telegramId, text, extra = {}) {
 }
 
 module.exports = function registerAdminOrders(bot) {
+  module.exports.orderSummaryText      = orderSummaryText;
+  module.exports.adminOrderActionKeyboard = adminOrderActionKeyboard;
 
   // ── 🔄 Mark Processing ────────────────────────────────────────────────────
   bot.action(/^admin_processing:(.+)$/, requireRole('STAFF'), async (ctx) => {

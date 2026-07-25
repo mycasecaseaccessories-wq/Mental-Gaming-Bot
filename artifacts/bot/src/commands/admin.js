@@ -1,4 +1,5 @@
 const { adminOnly, requireRole } = require('../middlewares/adminCheck');
+const adminOrders = require('./adminOrders');
 const { fetchLiveRates, getAllRates } = require('../services/currencyService');
 const { auditLog } = require('../services/logger');
 const { listUsers } = require('../services/UserManagementService');
@@ -1524,14 +1525,14 @@ module.exports = function registerAdmin(bot) {
     if (!orders.length) return ctx.reply('✅ No pending orders!', {
       ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'admin_orders_action')]]),
     });
-    const esc = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
-    const lines = orders.map((o, i) => {
-      const user    = o.userId?.username ? `@${esc(o.userId.username)}` : `ID:${o.userId?.telegramId}`;
-      const product = esc(o.productId?.name || 'Unknown');
-      return `${i + 1}\\. 🟡 ${user} — *${product}* — \`${price(o.amount)}\``;
-    });
-    await ctx.reply(`🟡 *Pending Orders (${orders.length})*\n\n${lines.join('\n')}`, {
-      parse_mode: 'Markdown',
+    await ctx.reply(`🟡 *Pending Orders (${orders.length})*`, { parse_mode: 'Markdown' });
+    for (const order of orders) {
+      await ctx.reply(`🟡 *Pending Order*\n\n${adminOrders.orderSummaryText(order)}`, {
+        parse_mode: 'Markdown',
+        ...adminOrders.adminOrderActionKeyboard(order._id.toString()),
+      });
+    }
+    await ctx.reply('⬆️ Pending orders above', {
       ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'admin_orders_action')]]),
     });
   });

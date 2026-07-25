@@ -1,4 +1,5 @@
 const { adminOnly } = require('../middlewares/adminCheck');
+const adminOrders = require('./adminOrders');
 const { getTheme } = require('../services/ThemeService');
 const { getAllRates } = require('../services/currencyService');
 const { buildMessage, stat, divider, price } = require('../utils/ui');
@@ -225,21 +226,16 @@ module.exports = function registerDashboard(bot) {
     if (!orders.length) return ctx.reply('✅ No pending orders right now.');
 
     const theme = getTheme(ctx.user);
-    const esc = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
-    const lines = orders.map((o, i) => {
-      const user = o.userId?.username ? `@${esc(o.userId.username)}` : `ID:${o.userId?.telegramId}`;
-      const product = esc(o.productId?.name || 'Unknown');
-      const ts = new Date(o.timestamp).toLocaleTimeString('en-GB', { timeZone: 'Asia/Rangoon' });
-      return `${i + 1}\\. ${user} — *${product}* — \`${price(o.amount)}\` _(${ts})_`;
-    });
-
-    await ctx.reply(
-      `📦 *Pending Orders (${orders.length})*\n\n${lines.join('\n')}`,
-      {
+    await ctx.reply(`📦 *Pending Orders (${orders.length})*`, { parse_mode: 'Markdown' });
+    for (const order of orders) {
+      await ctx.reply(`🟡 *Pending Order*\n\n${adminOrders.orderSummaryText(order)}`, {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Dashboard', 'dashboard_refresh')]]),
-      }
-    );
+        ...adminOrders.adminOrderActionKeyboard(order._id.toString()),
+      });
+    }
+    await ctx.reply('⬆️ Pending orders above', {
+      ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Dashboard', 'dashboard_refresh')]]),
+    });
   });
 
   // ── Mini App Button Admin Panel ─────────────────────────────────────────────
