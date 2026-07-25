@@ -53,21 +53,23 @@ function buildReceipt(order, deliveredData) {
   );
 }
 
+const esc = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
+
 function orderSummaryText(order) {
-  const product  = order.productId?.name || 'Unknown';
-  const user     = order.userId?.username ? `@${order.userId.username}` : `ID: ${order.userId?.telegramId}`;
+  const product  = esc(order.productId?.name || 'Unknown');
+  const user     = order.userId?.username ? `@${esc(order.userId.username)}` : `ID: ${order.userId?.telegramId}`;
   const typeIcon = order.productType === 'DigitalCode' ? '🎁' : '🎮';
   const tierLine = order.tierDiscount > 0 ? `\n🏷 Tier Discount (${order.tierDiscountPct}%): −${price(order.tierDiscount)}` : '';
-  const promoLine = order.promoCode ? `\n🎟 Promo ${order.promoCode}: −${price(order.promoDiscount || 0)}` : '';
+  const promoLine = order.promoCode ? `\n🎟 Promo ${esc(order.promoCode)}: −${price(order.promoDiscount || 0)}` : '';
 
   // Build delivery info — prefer checkoutData array (catalog fields), fall back to legacy gameId
   let deliveryLine = '';
   if (order.checkoutData && order.checkoutData.length > 0) {
     deliveryLine = order.checkoutData
-      .map((d) => `\n📋 ${d.label}: \`${d.value}\``)
+      .map((d) => `\n📋 ${esc(d.label)}: \`${esc(d.value)}\``)
       .join('');
   } else if (order.gameId) {
-    deliveryLine = `\n🎮 Game ID: \`${order.gameId}\`${order.zoneId ? ` (Zone: ${order.zoneId})` : ''}`;
+    deliveryLine = `\n🎮 Game ID: \`${esc(order.gameId)}\`${order.zoneId ? ` (Zone: \`${esc(order.zoneId)}\`)` : ''}`;
   }
 
   return (

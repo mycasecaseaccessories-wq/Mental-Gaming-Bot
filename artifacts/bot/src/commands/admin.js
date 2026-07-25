@@ -1399,22 +1399,93 @@ module.exports = function registerAdmin(bot) {
   });
 
   // ── Flash sale / digital codes — help cards with Back ─────────────────────
+  // ── Flash Sale product picker ────────────────────────────────────────────
+  const FS_PAGE = 8;
+
+  async function sendFlashProductList(ctx, page = 0, edit = false) {
+    const all = await Product.find({ isActive: true }).sort({ category: 1, name: 1 });
+    if (!all.length) {
+      const msg = '⚡ *Flash Sale*\n\n_Active product မရှိသေးဘူး။_';
+      const kb  = Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'admin_products_action')]]);
+      return edit
+        ? ctx.editMessageText(msg, { parse_mode: 'Markdown', ...kb }).catch(() => ctx.reply(msg, { parse_mode: 'Markdown', ...kb }))
+        : ctx.reply(msg, { parse_mode: 'Markdown', ...kb });
+    }
+
+    const totalPages = Math.ceil(all.length / FS_PAGE);
+    page = Math.max(0, Math.min(page, totalPages - 1));
+    const slice = all.slice(page * FS_PAGE, page * FS_PAGE + FS_PAGE);
+
+    // Product buttons — 1 per row (name + price)
+    const rows = slice.map((p) => [
+      Markup.button.callback(
+        `${p.flashSalePrice > 0 ? '⚡' : '📦'} ${p.name}  (${(p.finalPrice || 0).toLocaleString()} KS)`,
+        `fs_pick:${p._id}`
+      ),
+    ]);
+
+    // Pagination row
+    const nav = [];
+    if (page > 0)              nav.push(Markup.button.callback('◀️ Prev', `fs_list:${page - 1}`));
+    if (page < totalPages - 1) nav.push(Markup.button.callback('▶️ Next', `fs_list:${page + 1}`));
+    if (nav.length) rows.push(nav);
+    rows.push([Markup.button.callback('🔙 Back', 'admin_products_action')]);
+
+    const header =
+      `⚡ *Flash Sale — Product ရွေးပါ*\n` +
+      `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
+      `📦 Active products: *${all.length}*   (Page ${page + 1}/${totalPages})\n\n` +
+      `_Product တစ်ခုနှိပ်ပြီး flash sale price + duration ထည့်ပါ_`;
+
+    const extra = { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) };
+    return edit
+      ? ctx.editMessageText(header, extra).catch(() => ctx.reply(header, extra))
+      : ctx.reply(header, extra);
+  }
+
   bot.action('pm_flashsale_help', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const active = await Product.find({ isActive: true }).sort({ category: 1 }).limit(8);
-    const list = active.map((p) =>
-      `• \`${p._id}\` — ${p.name} (${p.finalPrice?.toLocaleString() || '?'} KS)`
-    ).join('\n') || '_No active products yet._';
+    await sendFlashProductList(ctx, 0, false);
+  });
+
+  bot.action(/^fs_list:(\d+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    await sendFlashProductList(ctx, parseInt(ctx.match[1], 10), true);
+  });
+
+  bot.action(/^fs_pick:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const productId = ctx.match[1];
+    const p = await Product.findById(productId);
+    if (!p) return ctx.reply('❌ Product မတွေ့ဘူး။');
+
+    ctx.session.flashSaleWiz = { productId, step: 'price' };
+
+    const flashLine = p.flashSalePrice > 0
+      ? `⚡ ယခု flash sale price: *${p.flashSalePrice.toLocaleString()} KS*\n`
+      : '';
     await ctx.reply(
-      `⚡ *Flash Sale Setup*\n\n` +
-      `Format:\n\`/flashsale <productId> <salePrice> <durationHours>\`\n\n` +
-      `Example:\n\`/flashsale abc123 2500 4\`\n\n` +
-      `*Active products:*\n${list}`,
+      `⚡ *Flash Sale Setup*\n` +
+      `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
+      `📦 *${p.name}*\n` +
+      `💰 ပုံမှန် price: *${(p.finalPrice || 0).toLocaleString()} KS*\n` +
+      flashLine +
+      `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+      `💸 *Flash sale price (KS) ထည့်ပါ:*\n` +
+      `_/cancel နှိပ်ရင် ဖျက်မယ်_`,
       {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'admin_products_action')]]),
+        ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'fs_cancel')]]),
       }
     );
+  });
+
+  bot.action('fs_cancel', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.flashSaleWiz = null;
+    await ctx.reply('❌ Flash sale setup ဖျက်လိုက်တယ်။', {
+      ...Markup.inlineKeyboard([[Markup.button.callback('⚡ Flash Sale', 'pm_flashsale_help')]]),
+    });
   });
 
   bot.action('pm_addcodes_help', adminOnly(), async (ctx) => {
@@ -1580,8 +1651,58 @@ module.exports = function registerAdmin(bot) {
 
     // Cancel any pending session
     if (text === '/cancel') {
+      if (ctx.session?.flashSaleWiz)     { ctx.session.flashSaleWiz = null; return ctx.reply('❌ Flash sale setup ဖျက်လိုက်တယ်။'); }
       if (ctx.session?.photoProductId)   { ctx.session.photoProductId = null; return ctx.reply('❌ Photo upload cancelled.'); }
       if (ctx.session?.editProductField) { ctx.session.editProductField = null; return ctx.reply('❌ Edit cancelled.'); }
+    }
+
+    // ── Flash Sale wizard ───────────────────────────────────────────────────
+    if (ctx.session?.flashSaleWiz && text) {
+      const wiz = ctx.session.flashSaleWiz;
+
+      if (wiz.step === 'price') {
+        const salePrice = parseInt(text.replace(/,/g, ''), 10);
+        if (isNaN(salePrice) || salePrice <= 0) return ctx.reply('❌ ဂဏန်းမှန်မှန် ထည့်ပါ (ဥပမာ: 2500)');
+        wiz.salePrice = salePrice;
+        wiz.step = 'duration';
+        return ctx.reply(
+          `✅ Sale price: *${salePrice.toLocaleString()} KS*\n\n` +
+          `⏳ *Duration (နာရီ) ထည့်ပါ:*\n_ဥပမာ: 4 (= 4 နာရီ), 0.5 (= 30 မိနစ်)_\n\n_/cancel နှိပ်ရင် ဖျက်မယ်_`,
+          {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'fs_cancel')]]),
+          }
+        );
+      }
+
+      if (wiz.step === 'duration') {
+        const durationH = parseFloat(text.replace(/,/g, ''));
+        if (isNaN(durationH) || durationH <= 0) return ctx.reply('❌ နာရီ မှန်မှန် ထည့်ပါ (ဥပမာ: 4)');
+        ctx.session.flashSaleWiz = null;
+
+        const start = new Date();
+        const end   = new Date(start.getTime() + durationH * 60 * 60 * 1000);
+        try {
+          const { activateFlashSale } = require('../services/FlashSaleService');
+          const product = await activateFlashSale(wiz.productId, wiz.salePrice, start, end);
+          const { auditLog: _audit } = require('../services/logger');
+          await _audit(ctx.from.id, 'FLASH_SALE_ACTIVATED', wiz.productId, 'Product', { salePrice: wiz.salePrice, durationH });
+          return ctx.reply(
+            `🔥 *Flash Sale စတင်ပြီ!*\n` +
+            `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
+            `📦 *${product.name}*\n` +
+            `💰 Sale Price: *${wiz.salePrice.toLocaleString()} KS*\n` +
+            `⏳ Duration: *${durationH}h*\n` +
+            `📅 Ends: ${end.toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT`,
+            {
+              parse_mode: 'Markdown',
+              ...Markup.inlineKeyboard([[Markup.button.callback('⚡ Flash Sale နောက်တစ်ခု', 'pm_flashsale_help')]]),
+            }
+          );
+        } catch (err) {
+          return ctx.reply(`❌ ${err.message}`);
+        }
+      }
     }
 
     // ── Product field editor ────────────────────────────────────────────────
