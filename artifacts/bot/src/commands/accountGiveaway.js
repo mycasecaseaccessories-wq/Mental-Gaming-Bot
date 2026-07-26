@@ -587,6 +587,13 @@ module.exports = function registerAccountGiveaway(bot) {
         }
       }
 
+      // Live feed notification (shop giveaway)
+      require('../services/LiveFeedService').postGiveaway(ctx.telegram, {
+        user: { username: ctx.from.username, firstName: ctx.from.first_name },
+        productName: p.name,
+        productEmoji: '🛍',
+      }).catch(() => {});
+
       await autoEndAndNotify(ctx, ga, updated, meta);
       return;
     }
@@ -678,6 +685,13 @@ module.exports = function registerAccountGiveaway(bot) {
         }
       }
 
+      // Live feed notification (multi-slot giveaway)
+      require('../services/LiveFeedService').postGiveaway(ctx.telegram, {
+        user: { username: ctx.from.username, firstName: ctx.from.first_name },
+        productName: `${p.serviceName} ${p.planLabel}`,
+        productEmoji: p.emoji || '🎁',
+      }).catch(() => {});
+
       await autoEndAndNotify(ctx, ga, updated, meta);
       return;
     }
@@ -746,6 +760,13 @@ module.exports = function registerAccountGiveaway(bot) {
         console.error('[Giveaway] delivery failed completely:', err2.message);
       }
     }
+
+    // Live feed notification (single account giveaway)
+    require('../services/LiveFeedService').postGiveaway(ctx.telegram, {
+      user: { username: ctx.from.username, firstName: ctx.from.first_name },
+      productName: `${p.serviceName} ${p.planLabel}`,
+      productEmoji: p.emoji || '🎁',
+    }).catch(() => {});
 
     await autoEndAndNotify(ctx, ga, updated, meta);
   });

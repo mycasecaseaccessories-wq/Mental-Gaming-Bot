@@ -16,6 +16,7 @@ const SOURCE_LABELS = {
   review: '⭐ Review',
   game: '🎮 Game Update',
   faq: '📖 FAQ',
+  livefeed: '📡 Live Feed',
 };
 
 /**
@@ -45,6 +46,7 @@ async function getKnownChannels() {
   if (st.feedbackChannelId) add(st.feedbackChannelId, 'Review Channel', 'review');
   if (st.gameNewsChannelId) add(st.gameNewsChannelId, 'Game Update Channel', 'game');
   if (st.faqChannelId) add(st.faqChannelId, 'FAQ Channel', 'faq');
+  if (st.liveFeedChannelId) add(st.liveFeedChannelId, 'Live Feed Channel', 'livefeed');
 
   const [posts, rewards] = await Promise.all([
     ChannelAutoPost.find({}, 'channelId title').lean().catch(() => []),

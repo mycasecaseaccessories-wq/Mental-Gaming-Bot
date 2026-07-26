@@ -72,7 +72,7 @@ module.exports = (bot) => {
   });
 
   // Purpose picker — decide what the freshly validated channel is for
-  bot.action(/^chmgr_purpose:(autopost|joinbonus|announce|backup|review|game|faq|saved|cancel)$/, adminOnly(), async (ctx) => {
+  bot.action(/^chmgr_purpose:(autopost|joinbonus|announce|backup|review|game|faq|livefeed|saved|cancel)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const purpose = ctx.match[1];
     const state = ctx.session?.adminChannelMgr;
@@ -164,6 +164,21 @@ module.exports = (bot) => {
         `✅ *${escMd(chat.title)}* ကို 📖 *FAQ channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
           `ဒီ channel မှာ တင်တဲ့ FAQ post တိုင်းကို bot က မှတ်ထားပြီး — customer က မေးခွန်းမေးလာရင် *post ထဲက စာကို တိုက်ရိုက် ဖြေပေးပြီး မူရင်း post link ကို 🔗 reference ခလုတ်နဲ့ တွဲပေးပါမယ်*။\n\n` +
           `📌 FAQ post တွေက သက်တမ်းမကုန်ပါဘူး (game update လို ၃ လအကန့်အသတ် မရှိပါ)။ ပုံပါ post ဆိုရင် caption မှာ စာရေးပေးပါ။ \`/gamenews\` နဲ့ သိမ်းထားတာတွေ စစ်လို့ရပါတယ်။`,
+        { parse_mode: 'Markdown' }
+      );
+      return showPanel(ctx);
+    }
+
+    if (purpose === 'livefeed') {
+      const st = await SystemStatus.get();
+      await SystemStatus.updateOne(
+        { _id: st._id },
+        { $set: { liveFeedChannelId: chat.id, liveFeedEnabled: true, updatedBy: ctx.from.id } }
+      );
+      await ctx.reply(
+        `✅ *${escMd(chat.title)}* ကို 📡 *Live Feed channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
+          `Customer တွေ product ဝယ်တာ၊ ပိုက်ဆံ ထည့်တာ၊ giveaway ယူတာတွေကို ဒီ channel မှာ ကြေညာပါမယ်။\n\n` +
+          `_/setlivefeed နဲ့ toggle on/off လုပ်နိုင်ပါတယ်။_`,
         { parse_mode: 'Markdown' }
       );
       return showPanel(ctx);
@@ -268,6 +283,7 @@ module.exports = (bot) => {
             [Markup.button.callback('⭐ Review channel (⭐4-5 review တင်)', 'chmgr_purpose:review')],
             [Markup.button.callback('🎮 Game Update channel (မေးရင် ဖြေဖို့)', 'chmgr_purpose:game')],
             [Markup.button.callback('📖 FAQ channel (အမြဲတမ်း မေးခွန်းတွေ)', 'chmgr_purpose:faq')],
+            [Markup.button.callback('📡 Live Feed (ဝယ်တာ/ထည့်တာ/ရယူတာ ကြေညာ)', 'chmgr_purpose:livefeed')],
             [Markup.button.callback('💾 ရိုးရိုး စာရင်းထဲ သိမ်းမယ်', 'chmgr_purpose:saved')],
             [Markup.button.callback('❌ မလုပ်တော့ပါ', 'chmgr_purpose:cancel')],
           ]),

@@ -183,6 +183,14 @@ async function completeOrder(orderId, adminId, deliveredData, telegram) {
       // MC cashback (if enabled)
       const PromoPerksService = require('./PromoPerksService');
       await PromoPerksService.giveCashback(order, telegram);
+      // Live feed notification
+      if (telegram) {
+        const LiveFeedService = require('./LiveFeedService');
+        await LiveFeedService.postPurchase(telegram, {
+          user:        order.userId,
+          productName: order.productId?.name || 'Unknown',
+        }).catch(() => {});
+      }
     } catch (e) {
       console.error('[OrderService] post-complete hooks error:', e.message);
     }

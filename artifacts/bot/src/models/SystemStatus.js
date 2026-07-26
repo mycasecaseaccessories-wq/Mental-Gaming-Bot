@@ -78,6 +78,18 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Optional message shown alongside gateway status (e.g. "KPay slow due to bank maintenance")',
     },
 
+    // ── Live Activity Feed Channel ─────────────────────────────────────────────
+    liveFeedChannelId: {
+      type:    String,
+      default: null,
+      comment: 'Channel to receive live activity posts (purchases, top-ups, giveaway claims)',
+    },
+    liveFeedEnabled: {
+      type:    Boolean,
+      default: false,
+      comment: 'Master switch for live activity feed notifications',
+    },
+
     // ── Product Announcement Channel ──────────────────────────────────────────
     announcementChannelId: {
       type:    String,

@@ -310,4 +310,24 @@ module.exports = function registerDashboard(bot) {
     await SystemStatus.set({ miniAppButtonUrl: null }, ctx.from.id);
     return ctx.reply('✅ Mini App URL override cleared — bot will use env var (MINI_APP_URL / REPLIT_DEV_DOMAIN).', { parse_mode: 'Markdown' });
   });
+
+  // ── /setlivefeed — toggle live activity feed on/off ──────────────────────
+  bot.command('setlivefeed', adminOnly(), async (ctx) => {
+    const st = await SystemStatus.get();
+    if (!st.liveFeedChannelId) {
+      return ctx.reply(
+        `📡 *Live Feed Channel မသတ်မှတ်ရသေးပါ*\n\n` +
+        `/channels → ➕ Channel ထည့်မယ် → *📡 Live Feed* ကိုရွေးပြီး channel သတ်မှတ်ပါ။`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+    const newState = !st.liveFeedEnabled;
+    await SystemStatus.set({ liveFeedEnabled: newState }, ctx.from.id);
+    return ctx.reply(
+      newState
+        ? `✅ *Live Feed ဖွင့်လိုက်ပါပြီ!*\n\nProduct ဝယ်တာ၊ ပိုက်ဆံ ထည့်တာ၊ giveaway ရယူတာတွေကို channel ထဲ ကြေညာပါမယ်။`
+        : `🔕 *Live Feed ပိတ်လိုက်ပါပြီ။*\n\n/setlivefeed နဲ့ ပြန်ဖွင့်နိုင်ပါတယ်။`,
+      { parse_mode: 'Markdown' }
+    );
+  });
 };
