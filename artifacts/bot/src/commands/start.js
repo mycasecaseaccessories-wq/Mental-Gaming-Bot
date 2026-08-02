@@ -206,7 +206,7 @@ module.exports = function registerStart(bot) {
 
     return ctx.reply(panel, {
       parse_mode: 'Markdown',
-      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx, buildWebAppConfig(sysStatus))),
+      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx, buildWebAppConfig(sysStatus), sysStatus?.outlineBotUsername || null)),
     });
   });
 };

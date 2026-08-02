@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const { t } = require('./i18n');
 
-function mainMenuKeyboard(ctxOrLang, webAppConfig = null) {
+function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = null) {
   const L = (k) => t(ctxOrLang, k);
   const rows = [];
   if (webAppConfig?.enabled && webAppConfig?.url) {
@@ -15,8 +15,11 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null) {
     [L('menu.referral'), L('menu.gameids')],
     [L('menu.faq'),      L('menu.support')],
     [L('menu.accounts'), L('menu.settings')],
-    [L('menu.outline_vpn')],
   );
+  // VPN button only shown when admin has configured the outline bot username
+  if (outlineBotUsername) {
+    rows.push([L('menu.outline_vpn')]);
+  }
   return Markup.keyboard(rows).resize();
 }
 

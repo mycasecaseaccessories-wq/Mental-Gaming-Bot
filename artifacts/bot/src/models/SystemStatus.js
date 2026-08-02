@@ -312,6 +312,13 @@ const systemStatusSchema = new mongoose.Schema(
     topupCouponScopeCategories: { type: [String], default: () => [] },
     topupCouponScopeProducts: { type: [mongoose.Schema.Types.ObjectId], default: () => [] },
 
+    // ── Outline VPN Bot ───────────────────────────────────────────────────────
+    outlineBotUsername: {
+      type:    String,
+      default: null,
+      comment: '@username of the separate Outline VPN bot (without @). Set to show VPN button in user menu.',
+    },
+
     // ── Meta ───────────────────────────────────────────────────────────────────
     updatedBy: { type: Number, default: null },
   },
