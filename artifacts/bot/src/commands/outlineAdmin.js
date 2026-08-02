@@ -390,7 +390,10 @@ module.exports = function register(bot) {
   //  TEXT WIZARD HANDLER  (must be before ambient.js)
   // ════════════════════════════════════════════════════════════════════════════
 
-  bot.on('text', adminOnly(), async (ctx, next) => {
+  // NOTE: No adminOnly() here — this handler must pass non-admin users through to outlineUser.js.
+  // Wizard state can only be set by admin-guarded callback actions, so checking the wizard
+  // object is sufficient to ensure only admins reach the wizard logic.
+  bot.on('text', async (ctx, next) => {
     const wizard = getWizard(ctx);
     if (!wizard) return next();
 
