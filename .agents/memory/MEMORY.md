@@ -10,3 +10,4 @@
 - [Bot token swap gotchas](bot-token-swap-gotchas.md) — what silently breaks when BOT_TOKEN switches between test (Replit) and prod (VPS), same DB.
 - [Bot run setup](bot-run-setup.md) — how to boot the Telegram bot artifact in this workspace.
 - [Gemini quota degradation](gemini-quota-degradation.md) — AI features silently stop at free-tier 429 (limit:0); check logs before debugging code.
+- [Outline VPN feature](outline-vpn-feature.md) — models/service/commands added; session-based wizard; expiry cron not yet wired.

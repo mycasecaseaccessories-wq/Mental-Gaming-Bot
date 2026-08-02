@@ -15,6 +15,7 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null) {
     [L('menu.referral'), L('menu.gameids')],
     [L('menu.faq'),      L('menu.support')],
     [L('menu.accounts'), L('menu.settings')],
+    [L('menu.outline_vpn')],
   );
   return Markup.keyboard(rows).resize();
 }
@@ -33,6 +34,7 @@ function adminMenuKeyboard() {
     ['🎁 Promo Perks',     '🎟 Coupons'],
     ['📣 Announce',        '🎮 Game News'],
     ['🎁 Giveaway',        '📡 Channels'],
+    ['🔑 Outline VPN'],
     ['📖 Admin Guide'],
     ['🔙 Back to Main'],
   ]).resize();

@@ -99,6 +99,8 @@ function loadCommands(bot) {
     'joinReward.js',        // ← Channel join bonus (user + admin wizard)
     'channelManager.js',    // ← /channels registry panel (owner) — text wizard must precede ambient
     'gameNews.js',          // ← Game update channel capture + /gamenews (owner)
+    'outlineAdmin.js',      // ← Outline VPN admin panel — text wizard must precede ambient
+    'outlineUser.js',       // ← Outline VPN user commands
     'admin.js',
     'help.js',
     'ambient.js',           // ← LAST: catch-all ambient AI text handler
