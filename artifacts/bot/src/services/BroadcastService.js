@@ -148,6 +148,61 @@ async function broadcastToUsers(telegram, text, extra = {}) {
   return { sent, failed };
 }
 
+// ── Account product announcement formatter ────────────────────────────────────
+
+function formatAccountAnnouncement(p, stock) {
+  const fp = Math.max(0, Math.round(p.price * (1 - (p.discountPercent || 0) / 100)));
+  const perUnit = p.accountType === 'shared' ? ' / device'
+    : p.accountType === 'invite' ? ' / member' : '';
+  const priceStr = p.discountPercent > 0
+    ? `~~${p.price.toLocaleString()} KS~~ → *${fp.toLocaleString()} KS*  🏷 _-${p.discountPercent}% လျှော့စျေး!_`
+    : `*${fp.toLocaleString()} KS*`;
+  const stockLine = p.accountType === 'shared'
+    ? `📦 Stock: *device ${stock} ခုစာ* ကျန်ပါသည်`
+    : p.accountType === 'invite'
+      ? `📦 Stock: *member ${stock} ယောက်စာ* ကျန်ပါသည်`
+      : `📦 Stock: *${stock}* ကျန်ပါသည်`;
+  const typeNote = p.accountType === 'shared'
+    ? `\n_📱 Account တစ်ခုကို device ${p.slotsPerUnit} ခုအထိ သုံးလို့ရပါသည်_`
+    : p.accountType === 'invite'
+      ? `\n_🔗 Link တစ်ခုကို member ${p.slotsPerUnit} ယောက်အထိ ဝင်လို့ရပါသည်_`
+      : '';
+
+  return (
+    `${p.emoji || '🔐'} *${mdEsc(p.serviceName)} — ${mdEsc(p.planLabel)}*\n` +
+    `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+    `💵 စျေးနှုန်း: ${priceStr}${perUnit}\n` +
+    `⏳ သက်တမ်း: *${p.durationDays} ရက်*\n` +
+    `${stockLine}\n` +
+    (p.description ? `\n📝 _${mdEsc(p.description)}_\n` : '') +
+    typeNote +
+    `\n\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
+    `🛒 Bot မှာ *🔐 Premium Accounts* ကိုနှိပ်ပြီး ဝယ်ယူနိုင်ပါသည်!\n` +
+    `🏪 Mental Gaming Store`
+  );
+}
+
+/**
+ * Announce an AccountProduct to the announcement channel + all bot users.
+ */
+async function announceAccountProductEverywhere(accountProduct, telegram) {
+  const AccountCredential = require('../models/AccountCredential');
+  const isMulti = accountProduct.accountType === 'shared' || accountProduct.accountType === 'invite';
+  const stock = isMulti
+    ? await AccountCredential.countAvailableSlots(accountProduct._id)
+    : await AccountCredential.countAvailable(accountProduct._id);
+
+  const text = formatAccountAnnouncement(accountProduct, stock);
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.url(`🔐 ${mdEsc(accountProduct.serviceName)} ဝယ်မယ်`, `https://t.me/${BOT_USERNAME}`)],
+  ]);
+
+  const channelMsg = await sendToChannel(telegram, text, null, { ...keyboard });
+  const { sent, failed } = await broadcastToUsers(telegram, text, { ...keyboard });
+
+  return { channelOk: !!channelMsg, sent, failed };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 async function announceNewProduct(product, telegram) {
@@ -226,6 +281,7 @@ module.exports = {
   announcePriceUpdate,
   announceFlashSale,
   announceProductEverywhere,
+  announceAccountProductEverywhere,
   broadcastToUsers,
   customAnnounce,
   sendStockAlert,

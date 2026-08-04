@@ -25,12 +25,14 @@ const {
 }                  = require('../services/ExternalApiService');
 const {
   announceProductEverywhere,
+  announceAccountProductEverywhere,
   mdEsc,
 }                  = require('../services/BroadcastService');
-const { auditLog } = require('../services/logger');
-const Product      = require('../models/Product');
-const WebhookEvent = require('../models/WebhookEvent');
-const SystemStatus = require('../models/SystemStatus');
+const { auditLog }     = require('../services/logger');
+const Product          = require('../models/Product');
+const AccountProduct   = require('../models/AccountProduct');
+const WebhookEvent     = require('../models/WebhookEvent');
+const SystemStatus     = require('../models/SystemStatus');
 
 const PROVIDER_LABELS = {
   smileone:  '🎮 SmileOne (MLBB / Genshin / FF)',
@@ -240,22 +242,50 @@ module.exports = function registerApiManagement(bot) {
   }
 
   async function showAnnouncePicker(ctx) {
-    const products = await Product.find({ isActive: true })
-      .sort({ updatedAt: -1 })
-      .limit(15)
-      .select('name finalPrice')
-      .lean();
-
-    if (!products.length) return ctx.reply('❌ Active product မရှိသေးပါ။');
-
-    const rows = products.map((p) => [
-      Markup.button.callback(`${p.name} — ${p.finalPrice.toLocaleString()} KS`, `ann_pick:${p._id}`),
+    const [products, accountProducts] = await Promise.all([
+      Product.find({ isActive: true }).sort({ updatedAt: -1 }).limit(12).select('name finalPrice').lean(),
+      AccountProduct.find({ isActive: true }).sort({ displayOrder: 1, serviceName: 1 }).limit(12).select('serviceName planLabel price discountPercent emoji').lean(),
     ]);
+
+    if (!products.length && !accountProducts.length) return ctx.reply('❌ Active product မရှိသေးပါ။');
+
+    const rows = [];
+
+    if (products.length) {
+      rows.push([Markup.button.callback('─── 🛒 Shop Products ───', 'ann_noop')]);
+      products.forEach((p) => {
+        rows.push([Markup.button.callback(`${p.name} — ${p.finalPrice.toLocaleString()} KS`, `ann_pick:${p._id}`)]);
+      });
+    }
+
+    if (accountProducts.length) {
+      rows.push([Markup.button.callback('─── 🔐 Premium Accounts ───', 'ann_noop')]);
+      accountProducts.forEach((p) => {
+        const fp = Math.max(0, Math.round(p.price * (1 - (p.discountPercent || 0) / 100)));
+        rows.push([Markup.button.callback(`${p.emoji || '🔐'} ${p.serviceName} — ${p.planLabel} (${fp.toLocaleString()} KS)`, `ann_pick_acc:${p._id}`)]);
+      });
+    }
+
     rows.push([Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')]);
 
     await ctx.reply(
       `📣 *Product ကြေညာချက်*\n\nဘယ် product ကို ကြေညာမလဲ ရွေးပါ:\n_(bot user အားလုံး + channel နှစ်ခုလုံး ပို့ပါမယ်)_`,
       { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+    );
+  }
+
+  async function showAnnounceStylesAccount(ctx, accountProduct) {
+    await ctx.reply(
+      `📣 *${mdEsc(accountProduct.serviceName)} — ${mdEsc(accountProduct.planLabel)}* ကို ကြေညာမယ်\n\n` +
+      `Bot user အားလုံး + ကြေညာချက် channel နှစ်ခုလုံးကို ပို့ပါမယ်။\n` +
+      `ဆက်လုပ်မလား?`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('📢 ကြေညာမယ်', `ann_send_acc:${accountProduct._id}`)],
+          [Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')],
+        ]),
+      }
     );
   }
 
@@ -279,6 +309,36 @@ module.exports = function registerApiManagement(bot) {
     if (!product) return ctx.reply('❌ Product ရှာမတွေ့ပါ။');
     try { await ctx.deleteMessage(); } catch {}
     await showAnnounceStyles(ctx, product);
+  });
+
+  bot.action('ann_noop', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+  });
+
+  bot.action(/^ann_pick_acc:(.+)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const p = await AccountProduct.findById(ctx.match[1]).catch(() => null);
+    if (!p || !p.isActive) return ctx.reply('❌ Account product ရှာမတွေ့ပါ (သို့) ပိတ်ထားပြီးပါပြီ။');
+    try { await ctx.deleteMessage(); } catch {}
+    await showAnnounceStylesAccount(ctx, p);
+  });
+
+  bot.action(/^ann_send_acc:(.+)$/, requireRole('MANAGER'), async (ctx) => {
+    const p = await AccountProduct.findById(ctx.match[1]).catch(() => null);
+    if (!p) return ctx.answerCbQuery('❌ Account product ရှာမတွေ့ပါ', { show_alert: true });
+
+    await ctx.answerCbQuery('📤 ပို့နေပါပြီ...');
+    try { await ctx.editMessageText(`📤 *${mdEsc(p.serviceName)} — ${mdEsc(p.planLabel)}* ကြေညာချက် ပို့နေပါတယ်... ခဏစောင့်ပါ။`, { parse_mode: 'Markdown' }); } catch {}
+
+    const { channelOk, sent, failed } = await announceAccountProductEverywhere(p, ctx.telegram);
+    await auditLog(ctx.from.id, 'ACCOUNT_PRODUCT_ANNOUNCED', p._id.toString(), 'System', { channelOk, sent, failed });
+
+    await ctx.reply(
+      `✅ *ကြေညာပြီးပါပြီ!*\n\n` +
+      `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : '⚠️ မတင်နိုင်ပါ (channel မသတ်မှတ်ရသေး / bot admin မဟုတ်)'}\n` +
+      `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
+      { parse_mode: 'Markdown' }
+    );
   });
 
   bot.action('ann_cancel', requireRole('MANAGER'), async (ctx) => {
