@@ -321,6 +321,12 @@ module.exports = function registerAccounts(bot) {
   bot.hears(['🔐 Premium Accounts', '🔐 အကောင့်များ'], showHub);
   bot.command('accounts', showHub);
 
+  // Store hub → Premium Accounts entry
+  bot.action('store_accounts', async (ctx) => {
+    await ctx.answerCbQuery();
+    await showHub(ctx);
+  });
+
   bot.action('acc_hub', async (ctx) => {
     await ctx.answerCbQuery();
     const { text, keyboard } = await buildHub();

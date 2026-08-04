@@ -179,6 +179,12 @@ Nav.registerDynamic({
 });
 
 module.exports = function registerShop(bot) {
+  // Store hub → Shop entry
+  bot.action('store_shop', async (ctx) => {
+    await ctx.answerCbQuery();
+    await Nav.navigate(ctx, 'shop');
+  });
+
   bot.command('shop', async (ctx) => {
     Nav.clearHistory(ctx);
     await Nav.navigate(ctx, 'shop');

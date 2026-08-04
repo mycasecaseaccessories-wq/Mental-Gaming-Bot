@@ -59,6 +59,12 @@ module.exports = function registerSupport(bot) {
     await ctx.scene.enter('support_scene');
   });
 
+  // Help hub → Support entry
+  bot.action('help_support', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('support_scene');
+  });
+
   bot.action('support_ai_start', async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.scene.enter('support_scene');

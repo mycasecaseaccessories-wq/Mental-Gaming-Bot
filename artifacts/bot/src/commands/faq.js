@@ -97,6 +97,12 @@ module.exports = function registerFAQ(bot) {
 
   bot.hears(['❓ FAQ', '❓ မေးခွန်းများ'], faqMenuHandler);
 
+  // Help hub → FAQ entry
+  bot.action('help_faq', async (ctx) => {
+    await ctx.answerCbQuery();
+    await faqMenuHandler(ctx);
+  });
+
   // ── Category browse ───────────────────────────────────────────────────────────
 
   bot.action(/^faq_cat:(\w+)$/, async (ctx) => {

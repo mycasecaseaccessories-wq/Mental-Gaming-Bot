@@ -95,6 +95,12 @@ module.exports = function registerCheckIn(bot) {
     await handleCheckIn(ctx);
   });
 
+  // Rewards hub → Check In entry
+  bot.action('rh_checkin', checkRestrictions('checkin'), async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleCheckIn(ctx);
+  });
+
   async function handleCheckIn(ctx) {
     const status = await getCheckInStatus(ctx.from.id);
     if (!status) return ctx.reply(t(ctx, 'common.user_not_found'));

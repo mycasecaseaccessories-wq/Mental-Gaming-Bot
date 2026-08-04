@@ -54,6 +54,12 @@ module.exports = function registerAddressBook(bot) {
   bot.command('myids', myIdsHandler);
   bot.hears(['📖 My Game IDs', '📖 ဂိမ်း ID များ'], myIdsHandler);
 
+  // Profile hub → My Game IDs entry
+  bot.action('profile_gameids', async (ctx) => {
+    await ctx.answerCbQuery();
+    await myIdsHandler(ctx);
+  });
+
   // ── /saveid <Game> <GameID> [ZoneID] ["Nickname"] ──────────────────────────
   bot.command('saveid', async (ctx) => {
     const { t } = require('../utils/i18n');

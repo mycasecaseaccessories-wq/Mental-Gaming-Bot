@@ -115,6 +115,7 @@ Nav.register({
         Markup.button.callback(t(ctx, 'wallet.btn_history'), 'wallet_history'),
         Markup.button.callback(t(ctx, 'profile.btn_progress'), 'profile_progress'),
       ],
+      [Markup.button.callback(t(ctx, 'menu.gameids'), 'profile_gameids')],
       [Markup.button.callback(t(ctx, 'profile.btn_settings'), 'nav:go:settings_view')],
     ]);
 
@@ -175,9 +176,10 @@ module.exports = function registerProfile(bot) {
     await Nav.navigate(ctx, 'profile_view');
   });
 
-  bot.hears(['👤 My Profile', '👤 ပရိုဖိုင်'], async (ctx) => {
+  bot.hears(['👤 Profile', '👤 My Profile', '👤 ပရိုဖိုင်'], async (ctx) => {
     await Nav.navigate(ctx, 'profile_view');
   });
+
 
   bot.command('progress', async (ctx) => {
     await sendProgressView(ctx);

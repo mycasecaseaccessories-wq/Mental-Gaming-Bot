@@ -8,14 +8,11 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
     rows.push([{ text: webAppConfig.text || '🛍️ Mental Gaming Store', web_app: { url: webAppConfig.url } }]);
   }
   rows.push(
-    [L('menu.shop'),     L('menu.profile')],
-    [L('menu.wallet'),   L('menu.orders')],
-    [L('menu.checkin'),  L('menu.spin')],
-    [L('menu.rewards'),  L('menu.promo')],
-    [L('menu.referral'), L('menu.gameids')],
-    [L('menu.faq'),      L('menu.support')],
-    [L('menu.accounts'), L('menu.settings')],
-    [L('menu.outline_vpn')],
+    [L('menu.store'),    L('menu.wallet')],
+    [L('menu.rewards'),  L('menu.orders')],
+    [L('menu.referral'), L('menu.profile')],
+    [L('menu.promo'),    L('menu.help')],
+    [L('menu.settings')],
   );
   return Markup.keyboard(rows).resize();
 }

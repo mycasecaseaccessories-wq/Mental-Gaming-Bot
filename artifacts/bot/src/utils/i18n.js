@@ -9,21 +9,23 @@
 
 const STRINGS = {
   // ── Main menu buttons ────────────────────────────────────────────────────
+  'menu.store':      { en: '🛍 Store',          mm: '🛍 ဈေးဆိုင်' },
   'menu.shop':       { en: '🛒 Shop',           mm: '🛒 ဈေးဝယ်' },
   'menu.orders':     { en: '📦 My Orders',      mm: '📦 အော်ဒါများ' },
   'menu.wallet':     { en: '💰 Wallet',         mm: '💰 ပိုက်ဆံအိတ်' },
-  'menu.profile':    { en: '👤 My Profile',     mm: '👤 ပရိုဖိုင်' },
+  'menu.profile':    { en: '👤 Profile',        mm: '👤 ပရိုဖိုင်' },
   'menu.checkin':    { en: '🗓 Check In',       mm: '🗓 နေ့စဉ်ဝင်' },
   'menu.spin':       { en: '🎰 Spin Wheel',     mm: '🎰 ဘီးလှည့်' },
   'menu.promo':      { en: '🎟 Promo',          mm: '🎟 ပရိုမို' },
-  'menu.rewards':    { en: '🎁 Coin Rewards',   mm: '🎁 ကွိုင်ဆုများ' },
+  'menu.rewards':    { en: '🎁 Rewards',        mm: '🎁 ဆုများ' },
   'menu.referral':   { en: '👥 Referral',       mm: '👥 မိတ်ဆက်' },
   'menu.gameids':    { en: '📖 My Game IDs',    mm: '📖 ဂိမ်း ID များ' },
   'menu.faq':        { en: '❓ FAQ',            mm: '❓ မေးခွန်းများ' },
   'menu.support':    { en: '💬 Support',        mm: '💬 အကူအညီ' },
+  'menu.help':       { en: '💬 Help',           mm: '💬 အကူအညီ' },
   'menu.settings':   { en: '⚙️ Settings',       mm: '⚙️ ဆက်တင်' },
   'menu.accounts':   { en: '🔐 Premium Accounts', mm: '🔐 အကောင့်များ' },
-  'menu.outline_vpn': { en: '🌐 Outline VPN', mm: '🌐 Outline VPN' },
+  'menu.outline_vpn': { en: '🌐 Outline VPN',  mm: '🌐 Outline VPN' },
 
   // ── Welcome / common ─────────────────────────────────────────────────────
   'welcome.title':       { en: '👋 Welcome to *Mental Gaming Store*!', mm: '👋 *Mental Gaming Store* မှ ကြိုဆိုပါတယ်!' },

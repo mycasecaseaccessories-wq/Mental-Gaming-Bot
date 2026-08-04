@@ -15,6 +15,12 @@ module.exports = function registerSpin(bot) {
     await ctx.scene.enter('spin_wheel_scene');
   });
 
+  // Rewards hub → Spin Wheel entry
+  bot.action('rh_spin', checkRestrictions('spin'), async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('spin_wheel_scene');
+  });
+
   // Inline button handler for main menu spin button
   bot.action('spin_wheel_start', checkRestrictions('spin'), async (ctx) => {
     await ctx.answerCbQuery();

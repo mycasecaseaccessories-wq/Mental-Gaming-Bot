@@ -91,6 +91,8 @@ function loadCommands(bot) {
     'featureGate.js',       // ← Feature gate control panel (Owner/Manager)
     'mcConfig.js',          // ← Mental Coin exchange & review reward config (Owner)
     'adminRewards.js',      // ← Coin Rewards + Redeem Codes admin (Owner)
+    'storeHub.js',          // ← Store hub ("🛍 Store" button) — must precede ambient
+    'helpHub.js',           // ← Help hub ("💬 Help" button) — must precede ambient
     'rewards.js',           // ← Coin Rewards + Redeem Codes (user) — text handler must precede ambient
     'accounts.js',          // ← Premium Accounts (user + admin) — text wizard must precede ambient
     'accountGiveaway.js',   // ← Free account giveaway (user claim + admin panel) — text wizard must precede ambient

@@ -23,18 +23,20 @@ function couponSummary(doc) {
 
 async function hubKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback('🪙 Coin Rewards', 'rw_items')],
-    [Markup.button.callback('🎟 Redeem a Code', 'rw_code')],
+    [Markup.button.callback('🗓 Check In',       'rh_checkin')],
+    [Markup.button.callback('🎰 Spin Wheel',     'rh_spin')],
+    [Markup.button.callback('🪙 Coin Rewards',   'rw_items')],
+    [Markup.button.callback('🎟 Redeem a Code',  'rw_code')],
   ]);
 }
 
 async function showHub(ctx) {
   const coins = ctx.user?.balanceCoin || 0;
   await ctx.reply(
-    `🎁 *Coin Rewards*\n` +
+    `🎁 *Rewards*\n` +
     `━━━━━━━━━━━━━━━━━━━\n` +
-    `🪙 Your Coins: *${coins.toLocaleString()} MC*\n\n` +
-    `Spend Mental Coins on rewards, or enter a redeem code to claim a gift.`,
+    `🪙 Coins: *${coins.toLocaleString()} MC*\n\n` +
+    `Coin ရှာဖို့ Check In လုပ်ပါ၊ Spin ဖြစ်ပါ၊ ဒါမဟုတ် Coin Rewards မှာ ဆုလဲပါ။`,
     { parse_mode: 'Markdown', ...(await hubKeyboard()) }
   );
 }
@@ -100,7 +102,7 @@ async function deliverCoupon(ctx, promo) {
 
 module.exports = function registerRewards(bot) {
 
-  bot.hears(['🎁 Coin Rewards', '🎁 ကွိုင်ဆုများ'], showHub);
+  bot.hears(['🎁 Rewards', '🎁 ဆုများ', '🎁 Coin Rewards', '🎁 ကွိုင်ဆုများ'], showHub);
   bot.command('rewards', showHub);
 
   bot.action('rw_hub', async (ctx) => { await ctx.answerCbQuery(); return showHub(ctx); });
