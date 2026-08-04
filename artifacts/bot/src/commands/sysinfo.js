@@ -279,6 +279,23 @@ module.exports = function registerSysInfo(bot) {
     }
   });
 
+  // ── /runmonthlyreport — manual trigger for monthly revenue report ────────────
+
+  bot.command('runmonthlyreport', adminOnly(), async (ctx) => {
+    const wait = await ctx.reply('📊 _Monthly report ထုတ်နေသည်…_', { parse_mode: 'Markdown' });
+    try {
+      const CronService = require('../services/CronService');
+      await CronService.manualMonthlyReport(ctx.telegram);
+      await ctx.telegram.deleteMessage(wait.chat.id, wait.message_id).catch(() => {});
+      await ctx.reply('✅ Monthly revenue report ပြင်ပြီး admin ဆီ ပို့ပြီးပါပြီ။');
+    } catch (err) {
+      await ctx.telegram.editMessageText(
+        wait.chat.id, wait.message_id, undefined,
+        `❌ Report generation failed: ${err.message}`
+      ).catch(() => ctx.reply(`❌ ${err.message}`));
+    }
+  });
+
   // ── /flushcache ───────────────────────────────────────────────────────────────
 
   bot.command('flushcache', requireRole('MANAGER'), async (ctx) => {

@@ -354,6 +354,76 @@ async function notifyExpiringAccounts(telegram) {
   }
 }
 
+// ── Monthly Revenue Auto-Report ───────────────────────────────────────────────
+
+async function sendMonthlyRevenueReport(telegram) {
+  const label = 'Monthly Revenue Report';
+  console.log(`[CronService] 📊 ${label} starting…`);
+  try {
+    const AnalyticsService = require('./AnalyticsService');
+
+    // Compute previous calendar month boundaries in MMT (UTC+6:30)
+    const MMT_OFFSET_MS = 6.5 * 3_600_000;
+    const now    = new Date();
+    const mmtNow = new Date(now.getTime() + MMT_OFFSET_MS);
+    const y      = mmtNow.getUTCFullYear();
+    const m      = mmtNow.getUTCMonth(); // 0-based current month; prev = m-1
+
+    // 00:00 MMT on the 1st of the previous month → UTC
+    const prevStart = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0) - MMT_OFFSET_MS);
+    // 23:59:59.999 MMT on the last day of the previous month → UTC
+    const prevEnd   = new Date(Date.UTC(y, m,     1, 0, 0, 0) - MMT_OFFSET_MS - 1);
+
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const prevIdx   = (m - 1 + 12) % 12;
+    const prevYear  = m === 0 ? y - 1 : y;
+    const monthLabel = `${MONTHS[prevIdx]} ${prevYear}`;
+
+    const report = await AnalyticsService.getFullReport('custom', prevStart, prevEnd);
+    const { revenue, products, cancellation, users } = report;
+
+    const fmt = (n) => Math.round(n || 0).toLocaleString();
+    const top = products[0];
+    const topLine = top
+      ? `🏆 *Best Seller:* ${top.name.slice(0, 30)} (${top.count} orders — ${fmt(top.revenue)} KS)\n\n`
+      : '';
+
+    const text =
+      `📊 *Monthly Revenue Report*\n` +
+      `📅 _${monthLabel}_\n` +
+      `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+
+      `💰 *Revenue*\n` +
+      `  Gross:   *${fmt(revenue.grossRevenue)} KS*\n` +
+      `  Refunds: −${fmt(revenue.refunds.total)} KS (${revenue.refunds.count}×)\n` +
+      `  Net:     *${fmt(revenue.netRevenue)} KS*\n` +
+      `  Profit:  *~${fmt(revenue.netProfit)} KS* (${revenue.estimatedMarginPct}%)\n\n` +
+
+      `📦 *Orders*\n` +
+      `  ✅ Completed: *${revenue.orderCount}*\n` +
+      `  ❌ Cancelled: ${cancellation.cancelled} (${cancellation.rate}% rate)\n` +
+      `  💳 Top-ups:   ${revenue.topups.count}× — ${fmt(revenue.topups.total)} KS\n\n` +
+
+      topLine +
+
+      `👥 *Users*\n` +
+      `  New:    *+${users.newUsers}*\n` +
+      `  Active: *${users.activeUsers}*\n` +
+      `  Total:  ${users.totalUsers}\n\n` +
+
+      `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
+      `_🤖 /analytics month — ပြည့်စုံတဲ့ dashboard ကြည့်ရန်_`;
+
+    await safeSend(telegram, text);
+    console.log(`[CronService] ✅ ${label} sent`);
+    return { monthLabel, revenue, users };
+  } catch (err) {
+    console.error(`[CronService] ❌ ${label}:`, err.message);
+    await safeSend(telegram, `❌ Monthly report generation failed: ${err.message}`);
+    throw err;
+  }
+}
+
 // ── Cron scheduler ────────────────────────────────────────────────────────────
 
 let scheduledJobs = [];
@@ -414,7 +484,12 @@ function startCronJobs(telegram) {
     cron.schedule('0 3 1 * *', () => PromoPerksService.awardMonthlyPrizes(telegram).catch((e) => console.error('[Cron] leaderboard:', e.message)), { timezone: 'UTC' })
   );
 
-  console.log('[CronService] ✅ 10 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/AccountExpiry/Birthday/Winback/Leaderboard)');
+  // 09:20 MMT on the 1st = 02:50 UTC — monthly revenue auto-report to admin
+  scheduledJobs.push(
+    cron.schedule('50 2 1 * *', () => sendMonthlyRevenueReport(telegram), { timezone: 'UTC' })
+  );
+
+  console.log('[CronService] ✅ 11 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/AccountExpiry/Birthday/Winback/Leaderboard/MonthlyReport)');
 }
 
 function stopCronJobs() {
@@ -434,10 +509,11 @@ module.exports = {
   stopCronJobs,
   getJobCount,
   // Manual triggers exposed for admin commands
-  manualArchive:  archiveOldOrders,
-  manualPromo:    purgeExpiredPromos,
-  manualScreens:  logStaleScreenshots,
-  manualCache:    flushCache,
-  manualBackup:   triggerBackup,
-  manualChannelPosts: tickChannelAutoPosts,
+  manualArchive:         archiveOldOrders,
+  manualPromo:           purgeExpiredPromos,
+  manualScreens:         logStaleScreenshots,
+  manualCache:           flushCache,
+  manualBackup:          triggerBackup,
+  manualChannelPosts:    tickChannelAutoPosts,
+  manualMonthlyReport:   sendMonthlyRevenueReport,
 };

@@ -70,11 +70,17 @@ const GUIDE_SECTIONS = [
       `လုပ်ငန်း အခြေအနေ တိုက်ရိုက် ကြည့်ရန်:\n` +
       `• Pending / Processing order အရေအတွက်\n` +
       `• Active product, စုစုပေါင်း user\n` +
-      `• Payment gateway အခြေအနေ panel\n\n` +
-      `🎬 *ဥပမာ — ဒီနေ့ အခြေအနေ စစ်နည်း:*\n` +
-      `1️⃣ \`/dashboard\` ရိုက် (သို့ menu → *📊 Dashboard*)\n` +
-      `2️⃣ → "Pending: 3 | Processing: 1 | Users: 250" စတဲ့ live card ပေါ်မယ်\n` +
-      `3️⃣ Pending အရေအတွက် ရှိရင် → *📦 Manage Orders* သွားပြီး ဆက်ကိုင်\n\n` +
+      `• Payment gateway အခြေအနေ panel\n` +
+      `• 🚫 *Banned Users* — ban ထားသော user စာရင်း + unban ခလုတ်\n` +
+      `• 📋 *Global History* — order / topup history ကို user ဝင်ကြည့်ဖို့ မလိုဘဲ တစ်ချက်တည်း ကြည့်\n\n` +
+      `🎬 *ဥပမာ — ban list စစ်နည်း:*\n` +
+      `1️⃣ \`/dashboard\` → *🚫 Banned Users* ခလုတ် (သို့ \`/bannedusers\`)\n` +
+      `2️⃣ → ban ထားသော user list + ⚠️ warning count ပေါ်မယ်\n` +
+      `3️⃣ user နာမည် နှိပ်ရင် user card ပွင့်မယ် — *🔓 Unban* နှိပ်ရင် ချက်ချင်း unban + user ဆီ notify\n\n` +
+      `🎬 *ဥပမာ — global history ကြည့်နည်း:*\n` +
+      `1️⃣ \`/dashboard\` → *📋 Global History* (သို့ \`/globalhistory\`)\n` +
+      `2️⃣ *📦 All Orders* (သို့) *💰 All Topups* ရွေး\n` +
+      `3️⃣ Filter ခလုတ် (All / Pending / Success…) နဲ့ စစ် — page ‹ › ခလုတ်နဲ့ page ပြောင်း\n\n` +
       `_နေ့စဉ် ပထမဆုံး ဝင်ကြည့်သင့်တဲ့ နေရာ။_`,
   },
   {
@@ -513,6 +519,7 @@ const GUIDE_SECTIONS = [
       `• \`/sysinfo\` — memory, CPU, DB, cache\n` +
       `• \`/runbackup\` — AES-256 backup လက်ဖြင့်\n` +
       `• \`/runcron\` — maintenance job လက်ဖြင့်\n` +
+      `• \`/runmonthlyreport\` — လပိုင်း revenue report ချက်ချင်း ထုတ် (auto = လ ၁ ရက် 9:20AM MMT)\n` +
       `• \`/flushcache\` — cache ရှင်း\n` +
       `• \`/systemhealth\` — gateway + system\n` +
       `• \`/setgateway <method> <Online|Busy|Offline>\`\n` +
