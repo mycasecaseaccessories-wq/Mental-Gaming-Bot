@@ -158,7 +158,7 @@ module.exports = function registerAdminRewards(bot) {
 
   // ════════════════════════ REWARDS PANEL (button-driven) ════════════════════════
 
-  bot.hears('🎁 Rewards', adminOnly(), async (ctx) => {
+  bot.hears(['🎁 Rewards Admin', '🎁 Manage Rewards'], adminOnly(), async (ctx) => {
     await sendRewardsPanel(ctx);
   });
 
