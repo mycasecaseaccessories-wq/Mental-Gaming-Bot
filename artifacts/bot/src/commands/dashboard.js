@@ -117,6 +117,10 @@ module.exports = function registerDashboard(bot) {
           [Markup.button.callback('📦 View Pending', 'admin_pending_orders')],
           [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
           [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
+          [
+            Markup.button.callback('🚫 Banned Users',   'banned_users_panel'),
+            Markup.button.callback('📋 Global History', 'global_history_panel'),
+          ],
           [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
           [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
         ]),
@@ -137,6 +141,10 @@ module.exports = function registerDashboard(bot) {
           [Markup.button.callback('📦 View Pending', 'admin_pending_orders')],
           [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
           [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
+          [
+            Markup.button.callback('🚫 Banned Users',   'banned_users_panel'),
+            Markup.button.callback('📋 Global History', 'global_history_panel'),
+          ],
           [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
           [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
         ]),
@@ -158,6 +166,10 @@ module.exports = function registerDashboard(bot) {
           [Markup.button.callback('📦 View Pending', 'admin_pending_orders')],
           [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
           [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
+          [
+            Markup.button.callback('🚫 Banned Users',   'banned_users_panel'),
+            Markup.button.callback('📋 Global History', 'global_history_panel'),
+          ],
           [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
           [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
         ]),

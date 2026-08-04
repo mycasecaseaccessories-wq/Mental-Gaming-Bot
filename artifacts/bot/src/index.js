@@ -74,6 +74,7 @@ function loadCommands(bot) {
     'dashboard.js',
     'adminOrders.js',
     'userManagement.js',
+    'globalHistory.js',     // ← Global order/topup history + banned users panel
     'systemManagement.js',  // ← RBAC + maintenance + templates + pulse
     'financialExport.js',   // ← CSV/financial reports (OWNER only)
     'faq.js',               // ← FAQ library + video tutorials

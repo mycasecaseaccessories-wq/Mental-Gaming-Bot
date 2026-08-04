@@ -93,6 +93,18 @@ async function unbanUser(targetIdentifier, adminId) {
   return user;
 }
 
+// ── List banned users (paginated) ────────────────────────────────────────────
+async function listBannedUsers({ page = 1, limit = 10 } = {}) {
+  const skip = (page - 1) * limit;
+  const total = await User.countDocuments({ isBlocked: true });
+  const users = await User.find({ isBlocked: true })
+    .sort({ updatedAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .select('telegramId username first_name balanceKS warningsCount joinDate');
+  return { users, total, totalPages: Math.ceil(total / limit) || 1 };
+}
+
 // ── Restrict (block specific rights) ─────────────────────────────────────────
 async function restrictUser(targetIdentifier, adminId, rights = []) {
   const user = await resolveUser(targetIdentifier);
@@ -196,6 +208,7 @@ module.exports = {
   unrestrictUser,
   getUserInfo,
   listUsers,
+  listBannedUsers,
   searchUsers,
   adjustBalance,
   ALL_RIGHTS,

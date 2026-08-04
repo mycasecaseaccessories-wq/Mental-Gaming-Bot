@@ -13,7 +13,7 @@ const { adminOnly } = require('../middlewares/adminCheck');
 const {
   warnUser, unwarnUser, banUser, unbanUser,
   restrictUser, unrestrictUser,
-  getUserInfo, listUsers, searchUsers,
+  getUserInfo, listUsers, listBannedUsers, searchUsers,
   adjustBalance, resolveUser, ALL_RIGHTS,
 } = require('../services/UserManagementService');
 const { issueWarning, getUserLog } = require('../services/PenaltyService');
@@ -580,6 +580,71 @@ module.exports = function registerUserManagement(bot) {
   });
 
   // ── /block and /unblock — explicit aliases for ban/unban ──────────────────
+  // ── /bannedusers — paginated list of all banned users ────────────────────
+  async function sendBannedList(ctx, page, edit = false) {
+    const { users, total, totalPages } = await listBannedUsers({ page, limit: 8 });
+
+    if (!total) {
+      const msg = '✅ Banned user မရှိပါ။ အားလုံး active ဖြစ်နေပါသည်။';
+      return edit ? ctx.editMessageText(msg).catch(() => ctx.reply(msg)) : ctx.reply(msg);
+    }
+
+    const rows = users.map((u) => {
+      const name = u.username ? `@${u.username}` : (u.first_name || `ID:${u.telegramId}`);
+      const label = `🚫 ${name.slice(0, 22)} — ⚠️${u.warningsCount || 0}`;
+      return [
+        Markup.button.callback(label, `um_view:${u.telegramId}`),
+        Markup.button.callback('🔓 Unban', `bans_unban:${u.telegramId}`),
+      ];
+    });
+
+    const navBtns = [];
+    if (page > 1) navBtns.push(Markup.button.callback(`‹ ${page - 1}`, `bans_page:${page - 1}`));
+    navBtns.push(Markup.button.callback(`${page}/${totalPages}`, 'bans_noop'));
+    if (page < totalPages) navBtns.push(Markup.button.callback(`${page + 1} ›`, `bans_page:${page + 1}`));
+
+    const keyboard = Markup.inlineKeyboard([...rows, navBtns]);
+    const header = `🚫 *Banned Users (${total} ဦး)* — Page ${page}/${totalPages}\n\n_ကြည့်ရန် နာမည်နှိပ်၊ ဖြုတ်ရန် 🔓 နှိပ်ပါ_`;
+
+    if (edit) {
+      return ctx.editMessageText(header, { parse_mode: 'Markdown', ...keyboard }).catch(() => {});
+    }
+    return ctx.reply(header, { parse_mode: 'Markdown', ...keyboard })
+      .catch(() => ctx.reply(`Banned Users (${total}) — page ${page}/${totalPages}`, keyboard));
+  }
+
+  bot.command('bannedusers', adminOnly(), async (ctx) => {
+    await sendBannedList(ctx, 1, false);
+  });
+
+  bot.action(/^bans_page:(\d+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const page = Math.max(1, parseInt(ctx.match[1], 10) || 1);
+    await sendBannedList(ctx, page, true);
+  });
+
+  bot.action('bans_noop', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+  });
+
+  bot.action(/^bans_unban:(\d+)$/, adminOnly(), async (ctx) => {
+    const uid = ctx.match[1];
+    await ctx.answerCbQuery('Unbanning...');
+    try {
+      const user = await unbanUser(uid, ctx.from.id);
+      const tag = user.username ? `@${user.username}` : `\`${user.telegramId}\``;
+      await ctx.reply(`✅ *${tag} ကို unban လုပ်ပြီးပါပြီ။*`, { parse_mode: 'Markdown' });
+      await ctx.telegram.sendMessage(user.telegramId,
+        `✅ *Your ban has been lifted.*\nYou can now use Mental Gaming Store again. Welcome back! 🎮`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+      // Refresh the banned list (edit original message)
+      await sendBannedList(ctx, 1, true);
+    } catch (err) {
+      await ctx.reply(`❌ ${err.message}`);
+    }
+  });
+
   bot.command('block', adminOnly(), async (ctx) => {
     const target = parseTarget(ctx);
     if (!target) return ctx.reply('Usage: /block @username reason');
