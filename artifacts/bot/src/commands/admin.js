@@ -800,8 +800,11 @@ module.exports = function registerAdmin(bot) {
             Markup.button.callback('🗓 Month',  'analytics:month'),
           ],
           [
+            Markup.button.callback('📋 Global History', 'global_history_panel'),
+            Markup.button.callback('📥 Export',         'analytics_export_menu'),
+          ],
+          [
             Markup.button.callback('🤖 AI Report', 'analyticsai_run:today'),
-            Markup.button.callback('📥 Export',    'analytics_export_menu'),
           ],
         ]),
       });
@@ -878,6 +881,9 @@ module.exports = function registerAdmin(bot) {
           [
             Markup.button.callback('🗄 Run Backup',   'sysinfo_backup'),
             Markup.button.callback('🔧 Run Cron',     'sysinfo_cron'),
+          ],
+          [
+            Markup.button.callback('📊 Monthly Report', 'sysinfo_monthly_report'),
           ],
         ]),
       });
@@ -1578,15 +1584,27 @@ module.exports = function registerAdmin(bot) {
   // ── User management actions ────────────────────────────────────────────────
   bot.action('users_banned', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const { users, total } = await listUsers({ filter: { isBlocked: true }, limit: 10 });
-    if (!total) return ctx.reply('✅ No banned users.');
-    const btns = users.map((u) => {
-      const name = u.first_name || (u.username ? `@${u.username}` : `ID:${u.telegramId}`);
-      return [Markup.button.callback(`🚫 ${name}`.slice(0, 50), `um_view:${u.telegramId}`)];
+    const { listBannedUsers } = require('../services/UserManagementService');
+    const { users, total, totalPages } = await listBannedUsers({ page: 1, limit: 8 });
+    if (!total) return ctx.reply('✅ Banned user မရှိပါ။ အားလုံး active ဖြစ်နေပါသည်။');
+    const rows = users.map((u) => {
+      const name  = u.username ? `@${u.username}` : (u.first_name || `ID:${u.telegramId}`);
+      const label = `🚫 ${name.slice(0, 22)} — ⚠️${u.warningsCount || 0}`;
+      return [
+        Markup.button.callback(label, `um_view:${u.telegramId}`),
+        Markup.button.callback('🔓 Unban', `bans_unban:${u.telegramId}`),
+      ];
     });
-    await ctx.reply(`🚫 *Banned Users (${total})*\n\n_User ကို နှိပ်ပြီး အသေးစိတ် ကြည့်ပါ_ 👇`, {
-      parse_mode: 'Markdown', ...Markup.inlineKeyboard(btns),
-    }).catch(() => ctx.reply(`Banned Users (${total}) — user ကို နှိပ်ပါ 👇`, Markup.inlineKeyboard(btns)));
+    const navBtns = [];
+    navBtns.push(Markup.button.callback(`1/${totalPages}`, 'bans_noop'));
+    if (totalPages > 1) navBtns.push(Markup.button.callback('2 ›', 'bans_page:2'));
+    await ctx.reply(
+      `🚫 *Banned Users (${total} ဦး)* — Page 1/${totalPages}\n\n_ကြည့်ရန် နာမည်နှိပ်၊ ဖြုတ်ရန် 🔓 နှိပ်ပါ_`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([...rows, navBtns]) }
+    ).catch(() => ctx.reply(
+      `Banned Users (${total}) — နာမည်နှိပ်ကြည့်၊ 🔓 နှိပ်ပြီး unban`,
+      Markup.inlineKeyboard([...rows, navBtns])
+    ));
   });
 
   bot.action('users_warned', adminOnly(), async (ctx) => {

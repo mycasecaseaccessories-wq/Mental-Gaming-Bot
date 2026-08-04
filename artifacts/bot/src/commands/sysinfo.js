@@ -162,6 +162,9 @@ module.exports = function registerSysInfo(bot) {
             Markup.button.callback('🗄 Run Backup',   'sysinfo_backup'),
             Markup.button.callback('🔧 Run Cron',     'sysinfo_cron'),
           ],
+          [
+            Markup.button.callback('📊 Monthly Report', 'sysinfo_monthly_report'),
+          ],
         ]),
       });
     } catch (err) {
@@ -183,6 +186,9 @@ module.exports = function registerSysInfo(bot) {
           [
             Markup.button.callback('🗄 Run Backup',   'sysinfo_backup'),
             Markup.button.callback('🔧 Run Cron',     'sysinfo_cron'),
+          ],
+          [
+            Markup.button.callback('📊 Monthly Report', 'sysinfo_monthly_report'),
           ],
         ]),
       });
@@ -208,6 +214,22 @@ module.exports = function registerSysInfo(bot) {
       await ctx.reply(`✅ Backup complete: *${filename}* (${sizeMB} MB, ${totalDocs.toLocaleString()} docs)`, { parse_mode: 'Markdown' });
     } catch (err) {
       await ctx.telegram.editMessageText(wait.chat.id, wait.message_id, undefined, `❌ Backup failed: ${err.message}`);
+    }
+  });
+
+  bot.action('sysinfo_monthly_report', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Generating report…');
+    const wait = await ctx.reply('📊 _Monthly report ထုတ်နေသည်…_', { parse_mode: 'Markdown' });
+    try {
+      const CronService = require('../services/CronService');
+      await CronService.manualMonthlyReport(ctx.telegram);
+      await ctx.telegram.deleteMessage(wait.chat.id, wait.message_id).catch(() => {});
+      await ctx.reply('✅ Monthly revenue report admin ဆီ ပို့ပြီးပါပြီ။');
+    } catch (err) {
+      await ctx.telegram.editMessageText(
+        wait.chat.id, wait.message_id, undefined,
+        `❌ Report failed: ${err.message}`
+      ).catch(() => ctx.reply(`❌ ${err.message}`));
     }
   });
 
