@@ -298,6 +298,7 @@ async function buildAdminProductView(p) {
       Markup.button.callback('💵 စျေးပြင်', `accad_price:${p._id}`),
       Markup.button.callback('🗑 ဖျက်', `accad_del:${p._id}`),
     ],
+    [Markup.button.callback('📢 Channel မှာ ကြေညာမယ်', `accad_announce:${p._id}`)],
     [Markup.button.callback('🔙 Accounts Panel', 'accad_panel')],
   ]);
   return { text, keyboard };
@@ -968,6 +969,145 @@ module.exports = function registerAccounts(bot) {
     await ctx.answerCbQuery('🗑 ဖျက်ပြီးပါပြီ');
     const { text, keyboard } = await buildAdminPanel();
     await editOrReply(ctx, text, keyboard);
+  });
+
+  // ── Announce an account product to a channel (Owner) ──────────────────────
+
+  function buildAccountAnnounce(p, stock) {
+    const fp = p.finalPrice();
+    const perUnit = p.accountType === 'shared' ? ' / device'
+      : p.accountType === 'invite' ? ' / member' : '';
+    const priceStr = p.discountPercent > 0
+      ? `~${p.price.toLocaleString()} KS~  →  *${ks(fp)}*  🏷 _-${p.discountPercent}% လျှော့စျေး!_`
+      : `*${ks(fp)}*`;
+    const stockLine = p.accountType === 'shared'
+      ? `📦 Stock: *device ${stock} ခုစာ* ကျန်ပါသည်`
+      : p.accountType === 'invite'
+        ? `📦 Stock: *member ${stock} ယောက်စာ* ကျန်ပါသည်`
+        : `📦 Stock: *${stock}* ကျန်ပါသည်`;
+    const typeNote = p.accountType === 'shared'
+      ? `\n_📱 Account တစ်ခုကို device ${p.slotsPerUnit} ခုအထိ သုံးလို့ရပါသည်_`
+      : p.accountType === 'invite'
+        ? `\n_🔗 Link တစ်ခုကို member ${p.slotsPerUnit} ယောက်အထိ ဝင်လို့ရပါသည်_`
+        : '';
+
+    return (
+      `${p.emoji} *${esc(p.serviceName)} — ${esc(p.planLabel)}*\n\n` +
+      `💵 စျေးနှုန်း: ${priceStr}${perUnit}\n` +
+      `⏳ သက်တမ်း: *${p.durationDays} ရက်*\n` +
+      `${stockLine}\n` +
+      (p.description ? `\n📝 ${esc(p.description)}\n` : '') +
+      typeNote +
+      `\n\n🛒 Bot မှာ *🔐 Premium Accounts* ကိုနှိပ်ပြီး ဝယ်ယူနိုင်ပါသည်!`
+    );
+  }
+
+  async function showAccAnnounceChannelPicker(ctx, productId) {
+    const { getKnownChannels } = require('../services/ChannelRegistryService');
+    const channels = await getKnownChannels();
+    const rows = channels
+      .filter((c) => `aca_send:${productId}:${c.chatId}`.length <= 64)
+      .map((c) => [Markup.button.callback(`📢 ${c.title || c.chatId}`, `aca_send:${productId}:${c.chatId}`)]);
+    rows.push([Markup.button.callback('➕ Channel အသစ်ထည့်ရန်', `aca_add:${productId}`)]);
+    await ctx.reply(
+      `📢 *Channel မှာ ကြေညာမယ်*\n\n` +
+        (channels.length
+          ? `Bot ထဲမှာ ရှိပြီးသား channel တွေ အကုန်ပြထားပါတယ် — နှိပ်ရုံနဲ့ ကြေညာစာ ချက်ချင်း ပို့ပါမယ် 👇`
+          : `Channel မရှိသေးပါဘူး — *➕ Channel အသစ်ထည့်ရန်* ကို နှိပ်ပြီး add ထားပါ။`),
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+    );
+  }
+
+  bot.action(/^accad_announce:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    await showAccAnnounceChannelPicker(ctx, ctx.match[1]);
+  });
+
+  // One-tap send to a known channel
+  bot.action(/^aca_send:([a-f0-9]{24}):(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const [, productId, chatId] = ctx.match;
+    const { getKnownChannels } = require('../services/ChannelRegistryService');
+    const channels = await getKnownChannels();
+    const chan = channels.find((c) => String(c.chatId) === chatId);
+    if (!chan) return ctx.reply('❌ ဒီ channel က စာရင်းထဲမှာ မရှိတော့ပါဘူး — 📢 ခလုတ်ကို ပြန်နှိပ်ပြီး အသစ်ရွေးပါ။');
+
+    const p = await AccountProduct.findById(productId);
+    if (!p) return ctx.reply('❌ Product မတွေ့ပါ။');
+    const stock = await freeUnits(p);
+    try {
+      await ctx.telegram.sendMessage(chan.chatId, buildAccountAnnounce(p, stock), { parse_mode: 'Markdown' });
+      return ctx.reply(`✅ *${esc(chan.title || chan.chatId)}* channel မှာ ကြေညာပြီးပါပြီ! 📢`, { parse_mode: 'Markdown' });
+    } catch (e) {
+      console.error('[Accounts] announce error:', e.message);
+      return ctx.reply(
+        `❌ ပို့လို့မရပါ — ${esc(e.message)}\n\n_Bot ကို channel မှာ admin အနေနဲ့ ရှိနေသေးလား စစ်ကြည့်ပါ။_`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+  });
+
+  // Add new channel & send
+  bot.action(/^aca_add:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.accAdmin = null; // clear any other wizard
+    ctx.session.accAnnounce = { productId: ctx.match[1], step: 'awaiting_channel' };
+    await ctx.reply(
+      `➕ *Channel ထည့်ပြီး ကြေညာမယ်*\n\n` +
+        `Channel ရဲ့ \`@username\` (သို့) channel ID (ဥပမာ \`-1001234567890\`) ကို ရိုက်ပါ:\n` +
+        `_(Bot ကို အဲဒီ channel မှာ admin အရင်ထည့်ထားရပါမယ်။ မလုပ်တော့ရင် \`cancel\` ရိုက်ပါ)_`,
+      { parse_mode: 'Markdown', ...Markup.forceReply() }
+    );
+  });
+
+  // ── Announce channel text wizard ────────────────────────────────────────────
+  bot.on('text', async (ctx, next) => {
+    const state = ctx.session?.accAnnounce;
+    if (!state || ctx.from.id !== config.bot.adminId) return next();
+    const input = ctx.message.text.trim();
+
+    if (/^(\/cancel|cancel|ပယ်ဖျက်|မလုပ်တော့)$/i.test(input)) {
+      ctx.session.accAnnounce = null;
+      return ctx.reply('❌ ပယ်ဖျက်လိုက်ပါပြီ။');
+    }
+
+    if (state.step === 'awaiting_channel') {
+      const p = await AccountProduct.findById(state.productId);
+      if (!p) {
+        ctx.session.accAnnounce = null;
+        return ctx.reply('❌ Product မတွေ့ပါ။');
+      }
+      try {
+        const chat = await ctx.telegram.getChat(input);
+        if (chat.type !== 'channel') {
+          return ctx.reply(
+            `❌ ဒါက channel မဟုတ်ပါဘူး (${chat.type})။ Channel ရဲ့ @username (သို့) ID ကိုပဲ ရိုက်ပါ (သို့) \`cancel\` ရိုက်ပါ:`,
+            { parse_mode: 'Markdown' }
+          );
+        }
+        const stock = await freeUnits(p);
+        await ctx.telegram.sendMessage(chat.id, buildAccountAnnounce(p, stock), { parse_mode: 'Markdown' });
+        ctx.session.accAnnounce = null;
+
+        // Save channel to shared registry for one-tap reuse
+        const { saveChannel } = require('../services/ChannelRegistryService');
+        await saveChannel({ id: String(chat.id), title: chat.title || input }, ctx.from.id).catch(() => {});
+
+        return ctx.reply(
+          `✅ *${esc(chat.title || input)}* channel မှာ ကြေညာပြီးပါပြီ! 📢\n\n` +
+            `💾 Channel ကို စာရင်းထဲ သိမ်းထားပေးပြီးပါပြီ — နောက်တစ်ခါ ခလုတ်နဲ့ တစ်ချက်နှိပ်ရုံ ပို့လို့ရပါပြီ။`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (e) {
+        console.error('[Accounts] announce add-channel error:', e.message);
+        return ctx.reply(
+          `❌ မထည့်လို့ရပါ — ${esc(e.message)}\n\nစစ်ရန်: ① channel ID/@username မှန်လား ② bot ကို channel မှာ admin ထည့်ထားလား\nထပ်ရိုက်ကြည့်ပါ (သို့) \`cancel\` ရိုက်ပါ:`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+    }
+
+    return next();
   });
 
   // ── Admin text-input steps (wizard) ─────────────────────────────────────────
