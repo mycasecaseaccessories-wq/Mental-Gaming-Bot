@@ -443,6 +443,28 @@ const GUIDE_SECTIONS = [
       `_ရိုးရိုး code ကိုယ်တိုင်သတ်မှတ်ချင်ရင် \`/createpromo\` ကို ဆက်သုံးနိုင်ပါတယ်။_`,
   },
   {
+    key: 'txhistory', label: '📜 Transaction History',
+    body:
+      `📜 *Transaction & Order History* _(User Feature)_\n\n` +
+      `ဝယ်သူတွေ ကိုယ်ပိုင် မှတ်တမ်းတွေကို bot ထဲကနေ တိုက်ရိုက် ကြည့်နိုင်ပါတယ် — admin ဘာမှ လုပ်ပေးစရာ မလို။\n\n` +
+      `💵 *KS Wallet History* — \`/history\` (သို့ Wallet → 📋 KS History ခလုတ်)\n` +
+      `• KS ငွေလှုပ်ရှားမှု အားလုံး: 💳 Topup / 🛍️ Purchase / ↩️ Refund / ⬆️ Credit / ⬇️ Debit\n` +
+      `• Topup ဆိုရင် payment method (KPay/WavePay/…) ပါဝင်\n` +
+      `• Status: 🟢 Completed / 🟡 Pending / 🔴 Rejected\n` +
+      `• 10 ခု/page — ⬅️ Prev / Next ➡️ ခလုတ်နဲ့ page လှည့်နိုင်\n\n` +
+      `💳 *Topup-Only History* — Wallet → 💳 Topup History ခလုတ်\n` +
+      `• Topup transaction တွေပဲ filter ထုတ်ပြ — status + method + note ပါ\n` +
+      `• ငွေဖြည့်မှတ်တမ်း ရှာဖွေဖို့ အသုံးဝင်\n\n` +
+      `🎁 *Coin (MC) History* — \`/coinhistory\` (သို့ Wallet → 🎁 Coin History)\n` +
+      `• MC လှုပ်ရှားမှု: 🏆 Reward / 💸 Cashback / 🤝 Referral / 🎁 Bonus / 📤 Debit\n` +
+      `• Note (ရင်းမြစ်) ပါပြ — paginated\n\n` +
+      `📦 *Order History* — \`/orders\` (သို့ menu → 📦 My Orders)\n` +
+      `• Filter: All / Pending / Done\n` +
+      `• Order detail, code copy, reorder, self-cancel (Pending ဆို)\n` +
+      `• 🔙 Main Menu back ခလုတ်ပါ\n\n` +
+      `_Admin ဘက်က user တစ်ယောက်ရဲ့ transaction ကြည့်ချင်ရင် — Admin menu → 👥 Users → user ရှာ → Transaction/Balance detail ကြည့်နိုင်ပါတယ်။_`,
+  },
+  {
     key: 'livefeed', label: '📡 Live Feed',
     body:
       `📡 *Live Feed — Channel Auto-Announce* _(Owner)_\n\n` +
