@@ -592,7 +592,7 @@ module.exports = function registerAccounts(bot) {
       }
     }
 
-    // 5. Notify admin
+    // 5. Notify admin + live feed
     try {
       const uname = ctx.from.username ? `@${ctx.from.username}` : `ID:${ctx.from.id}`;
       await ctx.telegram.sendMessage(
@@ -600,7 +600,17 @@ module.exports = function registerAccounts(bot) {
         `🔐 *Account ရောင်းရပြီ!*\n\n${p.emoji} ${esc(p.serviceName)} — ${esc(p.planLabel)}\n👤 ${esc(uname)}\n💵 ${ks(fp)}\n📧 \`${cleanCred(cred.loginId)}\``,
         { parse_mode: 'Markdown' }
       );
-    } catch {}
+    } catch (err) {
+      console.error('[Accounts] Admin notify failed (single):', err.message);
+    }
+
+    // Live feed — "User X just bought Account 🔐" (non-blocking)
+    require('../services/LiveFeedService').postPurchase(ctx.telegram, {
+      user: ctx.from,
+      productName: `${p.serviceName} — ${p.planLabel}`,
+      qty: 1,
+      productEmoji: p.emoji || '🔐',
+    }).catch(() => {});
   });
 
   // ── Multi-slot execute (shared/invite) ──────────────────────────────────────
@@ -772,7 +782,7 @@ module.exports = function registerAccounts(bot) {
       }
     }
 
-    // 6. Notify admin
+    // 6. Notify admin + live feed
     try {
       const uname = ctx.from.username ? `@${ctx.from.username}` : `ID:${ctx.from.id}`;
       const credLabel = isLink ? `🔗 \`${esc(cred.link)}\`` : `📧 \`${cleanCred(cred.loginId)}\``;
@@ -781,7 +791,17 @@ module.exports = function registerAccounts(bot) {
         `🔐 *Account ရောင်းရပြီ!*\n\n${p.emoji} ${esc(p.serviceName)} — ${esc(p.planLabel)}\n👤 ${esc(uname)}\n🔢 ${qty} ${word}\n💵 ${ks(total)}\n${credLabel}\n📊 slot ${cred.usedSlots}/${cred.capacity}`,
         { parse_mode: 'Markdown' }
       );
-    } catch {}
+    } catch (err) {
+      console.error('[Accounts] Admin notify failed (multi):', err.message);
+    }
+
+    // Live feed — "User X just bought Account 🔐" (non-blocking)
+    require('../services/LiveFeedService').postPurchase(ctx.telegram, {
+      user: ctx.from,
+      productName: `${p.serviceName} — ${p.planLabel}`,
+      qty,
+      productEmoji: p.emoji || '🔐',
+    }).catch(() => {});
   });
 
   bot.action('acc_mine', async (ctx) => {

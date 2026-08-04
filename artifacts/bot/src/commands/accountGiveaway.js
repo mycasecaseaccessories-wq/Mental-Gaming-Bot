@@ -439,7 +439,9 @@ async function autoEndAndNotify(ctx, ga, updated, meta) {
         (quotaFull || stockLeft === 0 ? `\n\n🔴 *Giveaway အလိုအလျောက် ရပ်လိုက်ပါပြီ* (${quotaFull ? 'quota ပြည့်' : 'stock ကုန်'})` : ''),
       { parse_mode: 'Markdown' }
     );
-  } catch {}
+  } catch (err) {
+    console.error('[Giveaway] Admin notify failed:', err.message);
+  }
 }
 
 // ── Module ───────────────────────────────────────────────────────────────────
