@@ -367,11 +367,18 @@ async function getBalance(telegramId) {
 /**
  * Get transaction history for a user.
  */
-async function getHistory(userId, { limit = 10, wallet = null, type = null } = {}) {
+async function getHistory(userId, { limit = 10, skip = 0, wallet = null, type = null } = {}) {
   const query = { userId };
   if (wallet) query.wallet = wallet;
   if (type) query.type = type;
-  return Transaction.find(query).sort({ timestamp: -1 }).limit(limit);
+  return Transaction.find(query).sort({ timestamp: -1 }).skip(skip).limit(limit);
+}
+
+async function countHistory(userId, { wallet = null, type = null } = {}) {
+  const query = { userId };
+  if (wallet) query.wallet = wallet;
+  if (type) query.type = type;
+  return Transaction.countDocuments(query);
 }
 
 module.exports = {
@@ -387,6 +394,7 @@ module.exports = {
   rejectTopup,
   getBalance,
   getHistory,
+  countHistory,
   generateTxId,
   COIN_BONUS_RATE,
 };

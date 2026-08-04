@@ -443,6 +443,48 @@ const GUIDE_SECTIONS = [
       `_ရိုးရိုး code ကိုယ်တိုင်သတ်မှတ်ချင်ရင် \`/createpromo\` ကို ဆက်သုံးနိုင်ပါတယ်။_`,
   },
   {
+    key: 'livefeed', label: '📡 Live Feed',
+    body:
+      `📡 *Live Feed — Channel Auto-Announce* _(Owner)_\n\n` +
+      `ဝယ်သူ တစ်ယောက်ယောက် ဝယ်ယူတိုင်း / ငွေဖြည့်တိုင်း / giveaway ရယူတိုင်း Telegram channel တစ်ခုသို့ အလိုအလျောက် ကြေညာ (anonymized):\n\n` +
+      `🛍 _"User L***** just bought 1× Weekly Pass 🎮"_\n` +
+      `💰 _"User L***** just topped up 5,000 KS 💰"_\n` +
+      `🎁 _"User L***** just claimed Weekly Pass (FREE 🎁)"_\n\n` +
+      `*ဖွင့်နည်း — ၃ ဆင့်ပဲ:*\n` +
+      `1️⃣ Bot ကို Live Feed channel မှာ *admin* ထည့်ပါ (post permission ရှိဖို့)\n` +
+      `2️⃣ Admin menu → *📡 Channels* → ➕ Add → channel ID/username ထည့် → purpose *📡 Live Feed* ရွေး → ✅ Save\n` +
+      `   _(channel ID မသိရင်: channel မှာ test message ပို့ပြီး \`/sysinfo\` ထဲ မှတ်ထားတဲ့ ID ကို ကြည့် သို့ @userinfobot တွေး)_\n` +
+      `3️⃣ Admin menu → *📡 Live Feed* (သို့ \`/livefeed\`) → 🟢 Enable\n\n` +
+      `*ဘာတွေ ပေါ်မလဲ:*\n` +
+      `• 🛍 Order ပြီးမြောက်တိုင်း (admin ✅ Complete နှိပ်မှ — manual order)\n` +
+      `• ⚡ Account ချက်ချင်း delivery ဖြစ်တိုင်း (instant)\n` +
+      `• 💰 Topup approve ဖြစ်တိုင်း\n` +
+      `• 🎁 Giveaway claim ဖြစ်တိုင်း\n\n` +
+      `_Channel မသတ်မှတ်ထားရင် / bot admin မဟုတ်ရင် Live Feed enable လုပ်ထားပေမဲ့ ဘာမှ မတင်ဘဲ error log ကြည့်မယ်။_`,
+  },
+  {
+    key: 'outline', label: '🔐 Outline VPN',
+    body:
+      `🔐 *Outline VPN Integration* _(Owner)_\n\n` +
+      `Bot ကနေ Outline VPN access key များ ရောင်းချ/ထုတ်ပေးနိုင်သည့် feature — shop product နဲ့ တွဲမသုံးဘဲ သီးခြား VPN key management ပြုလုပ်ပေးပါတယ်။\n\n` +
+      `*Admin Setup — \`/outlineadmin\` (Admin menu → 🔐 Outline VPN):*\n` +
+      `• ✏️ *Set Server URL* — Outline Management API URL (\`https://...\` format, port ပါ)\n` +
+      `• 🔑 *Create Key* — Outline server ပေါ်မှာ key အသစ်ထုတ်ပြီး user ဆီ access link ပို့\n` +
+      `• 📋 *List Keys* — ထုတ်ထားသော key အားလုံး ကြည့်/ဖျက်\n` +
+      `• 🗑 *Delete Key* — key ID ဖြင့် ဖျက်\n\n` +
+      `*User ဘက်မြင်ကွင်း — \`/outline\` (သို့ \`/vpn\`):*\n` +
+      `• ကိုယ်ပိုင် VPN key ကြည့် / ရယူနည်း\n` +
+      `• Access link copy / Outline app download link\n\n` +
+      `*ကြိုတင်လိုအပ်ချက်:*\n` +
+      `• Outline server (DO Droplet, VPS) ဖွင့်ထားပြီး Management API port ဖွင့်ထားဖို့\n` +
+      `• Bot server ကနေ Outline Management API ဆီ network reach ရှိဖို့\n\n` +
+      `🎬 *ဥပမာ — key တစ်ခု ထုတ်ပေးနည်း:*\n` +
+      `1️⃣ \`/outlineadmin\` → ✏️ Set Server URL → \`https://1.2.3.4:12345/xxxxxxxx\`\n` +
+      `2️⃣ 🔑 Create Key → user ဆီ access link အလိုအလျောက်ရောက်\n` +
+      `3️⃣ User က Outline app ဒေါင်းပြီး key import လုပ်ရုံ\n\n` +
+      `_Key expiry auto-cron အတွက် \`/runcron\` schedule ချိတ်ဖို့ pending ရှိသေးသည်။_`,
+  },
+  {
     key: 'system', label: '🔧 System',
     body:
       `🔧 *System* _(Owner)_\n\n` +
