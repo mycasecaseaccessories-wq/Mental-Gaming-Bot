@@ -1,0 +1,167 @@
+Button 16 ခုဆိုတာထက် Feature 16 ခု လိုစဉ်းစားရင် UX ပိုကောင်းပါတယ်။ အခု Screenshot အရ Menu တွေက အနည်းငယ် ထပ်နေတဲ့ Function တွေရှိတယ်။
+
+အခုရှိတာက
+
+1. 💰 Wallet
+2. 📦 My Orders
+3. 📅 Check In
+4. 🎰 Spin Wheel
+5. 🎁 Coin Rewards
+6. 🎟 Promo
+7. 👥 Referral
+8. 📖 My Game IDs
+9. ❓ FAQ
+10. 💬 Support
+11. 🔐 Premium Accounts
+12. ⚙️ Settings
+13. 🌐 Outline VPN
+14. Top Up Wallet
+15. KS History
+16. Tier Progress
+
+⸻
+
+ပေါင်းလို့ရတဲ့ Menu
+
+Option 1 (အကြံပြုဆုံး)
+
+💰 Wallet
+
+* Wallet Balance
+* Top Up Wallet
+* Transaction History
+
+➡️ “Top Up Wallet” ကို သီးသန့်မထားတော့ဘူး။
+
+⸻
+
+🎁 Rewards
+
+* Check In
+* Spin Wheel
+* Coin Rewards
+
+➡️ Reward Hub တစ်ခုတည်း။
+
+⸻
+
+📈 Progress
+
+* Tier Progress
+* KS History
+
+➡️ Progress ထဲထည့်။
+
+⸻
+
+📞 Help
+
+* FAQ
+* Support
+
+➡️ Support Center တစ်ခုတည်း။
+
+⸻
+
+အဲ့လိုဆိုရင်
+
+1. Wallet
+2. Orders
+3. Rewards
+4. Promo
+5. Referral
+6. My Game IDs
+7. Help
+8. Premium
+9. Outline VPN
+10. Progress
+11. Settings
+
+16 → 11 Buttons
+
+⸻
+
+Option 2 (Store Style)
+
+🏪 Store
+
+* Premium Accounts
+* Outline VPN
+* Digital Products
+* Game Topups
+
+➡️ Store ထဲကို အကုန်ထည့်။
+
+အဲ့ဒါဆို
+
+1. Store
+2. Wallet
+3. Orders
+4. Rewards
+5. Referral
+6. My IDs
+7. Progress
+8. Promo
+9. Help
+10. Settings
+
+16 → 10 Buttons
+
+⸻
+
+Option 3 (Super Clean UI)
+
+Home Menu မှာ
+
+* 🛍 Store
+* 💰 Wallet
+* 📦 Orders
+* 🎁 Rewards
+* 👥 Referral
+* 👤 Profile
+* ⚙️ Settings
+* 💬 Support
+
+8 Buttons ပဲရှိမယ်။
+
+Store ထဲဝင်မှ
+
+* Premium Accounts
+* Outline VPN
+* Netflix
+* Spotify
+* Discord Nitro
+* Game Topups
+
+လိုမျိုးထပ်ပြမယ်။
+
+⸻
+
+Mental Gaming Store အတွက် အကြံပြု Architecture
+
+🏠 Home
+🛍 Store
+ ├ Premium Accounts
+ ├ Outline VPN
+ ├ Game Topups
+💰 Wallet
+ ├ Balance
+ ├ Top Up
+ ├ History
+🎁 Rewards
+ ├ Daily Check-In
+ ├ Spin Wheel
+ ├ Coin Rewards
+📦 Orders
+👥 Referral
+👤 Profile
+ ├ My Game IDs
+ ├ Tier
+ ├ KS History
+🎟 Promo
+💬 Help
+ ├ FAQ
+ ├ Support
+⚙ Settings
+
+ဒီလိုဆို Main Menu မှာ ၉ ခုလောက်ပဲကျန်ပြီး အသုံးပြုသူအတွက်ရှင်းလင်းသွားမယ်။ နောက်ပိုင်း Feature အသစ် (Gift Card, Lucky Box, Membership, Event, Tournament) တွေထပ်ထည့်ရင်လည်း Menu မရှုပ်တော့ဘဲ သက်ဆိုင်ရာ Hub ထဲကိုပဲ ထည့်နိုင်ပါတယ်။
