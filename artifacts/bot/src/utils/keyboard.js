@@ -15,11 +15,8 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
     [L('menu.referral'), L('menu.gameids')],
     [L('menu.faq'),      L('menu.support')],
     [L('menu.accounts'), L('menu.settings')],
+    [L('menu.outline_vpn')],
   );
-  // VPN button only shown when admin has configured the outline bot username
-  if (outlineBotUsername) {
-    rows.push([L('menu.outline_vpn')]);
-  }
   return Markup.keyboard(rows).resize();
 }
 
