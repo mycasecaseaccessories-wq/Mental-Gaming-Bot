@@ -11,6 +11,7 @@
 
 const { Scenes, Markup } = require('telegraf');
 const { config } = require('../../config/settings');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const RewardItem = require('../models/RewardItem');
@@ -122,6 +123,7 @@ rewardScene.action('reward_cancel', async (ctx) => {
   await ctx.answerCbQuery('Cancelled');
   try { await ctx.editMessageText('❌ Redemption cancelled.'); } catch {}
   ctx.session.rewardSession = null;
+  await ctx.reply('🏠 Returned to main menu.', mainMenuKeyboard(ctx));
   return ctx.scene.leave();
 });
 

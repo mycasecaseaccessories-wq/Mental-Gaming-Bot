@@ -19,6 +19,7 @@
  */
 
 const { Scenes, Markup } = require('telegraf');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const { AI_ENABLED, answerSupportQuery, analyzeSentiment } = require('../services/aiService');
 const { findPosts, sendPostsAsAnswers } = require('../services/GameNewsService');
 const { config } = require('../../config/settings');
@@ -368,6 +369,7 @@ supportScene.action('sup_cancel', async (ctx) => {
   await ctx.answerCbQuery('Cancelled');
   await ctx.editMessageText('❌ Support session cancelled. Use /support anytime.');
   clearSupportSession(ctx);
+  await ctx.reply('🏠 Returned to main menu.', mainMenuKeyboard(ctx));
   return ctx.scene.leave();
 });
 

@@ -8,6 +8,7 @@
  */
 
 const { Scenes, Markup } = require('telegraf');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const { spin, canFreeSpinToday, nextFreeSpinIn, getEffectivePrizePool, getSpinCost, WHEEL_FRAMES } = require('../services/GameService');
 const { formatCountdown } = require('../services/FlashSaleService');
 const { price } = require('../utils/ui');
@@ -162,12 +163,14 @@ spinWheelScene.action('spin_again', async (ctx) => {
 spinWheelScene.action('spin_done', async (ctx) => {
   await ctx.answerCbQuery();
   await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+  await ctx.reply('🏠 Returned to main menu.', mainMenuKeyboard(ctx));
   return ctx.scene.leave();
 });
 
 spinWheelScene.action('spin_cancel', async (ctx) => {
   await ctx.answerCbQuery('Cancelled');
   await ctx.editMessageText('❌ Spin cancelled.');
+  await ctx.reply('🏠 Returned to main menu.', mainMenuKeyboard(ctx));
   return ctx.scene.leave();
 });
 

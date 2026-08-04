@@ -10,6 +10,7 @@
 
 const { Scenes, Markup } = require('telegraf');
 const { config } = require('../../config/settings');
+const { adminMenuKeyboard } = require('../utils/keyboard');
 const { updateRate, getAllRates } = require('../services/currencyService');
 const { approveAllSuggestions, approveSingleProduct, setManualPrice } = require('../services/PriceCalculator');
 const { auditLog } = require('../services/logger');
@@ -257,6 +258,7 @@ rateManagerScene.action('rm_cancel', async (ctx) => {
   ctx.session.rm_currency = null;
   await ctx.answerCbQuery('Cancelled');
   await ctx.editMessageText('❌ Rate update cancelled. Old prices retained.');
+  await ctx.reply('🔙 Back to admin panel.', adminMenuKeyboard());
   ctx.scene.leave();
 });
 

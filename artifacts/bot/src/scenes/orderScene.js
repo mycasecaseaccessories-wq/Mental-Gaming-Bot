@@ -12,6 +12,7 @@
 
 const { Scenes, Markup } = require('telegraf');
 const { config } = require('../../config/settings');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const { getTheme } = require('../services/ThemeService');
 const { createOrder } = require('../services/OrderService');
 const OrderTrackingService = require('../services/OrderTrackingService');
@@ -890,6 +891,7 @@ orderScene.action('order_cancel_scene', async (ctx) => {
   ctx.session.orderProductId = null;
   ctx.session._addressBookShown = false;
   ctx.session._collectingFieldIndex = null;
+  await ctx.reply('🏠 Returned to main menu.', mainMenuKeyboard(ctx));
   return ctx.scene.leave();
 });
 

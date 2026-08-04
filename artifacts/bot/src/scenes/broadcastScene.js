@@ -10,6 +10,7 @@ const { Scenes, Markup } = require('telegraf');
 const User = require('../models/User');
 const { auditLog } = require('../services/logger');
 const { config } = require('../../config/settings');
+const { adminMenuKeyboard } = require('../utils/keyboard');
 
 const BATCH_SIZE  = 25;
 const BATCH_DELAY = 1100;
@@ -184,6 +185,7 @@ broadcastScene.action('broadcast_cancel', async (ctx) => {
   await ctx.answerCbQuery('Cancelled');
   await ctx.editMessageText('❌ Broadcast cancelled.');
   ctx.session.broadcastData = null;
+  await ctx.reply('🔙 Back to admin panel.', adminMenuKeyboard());
   return ctx.scene.leave();
 });
 

@@ -10,6 +10,7 @@
 const { Scenes, Markup } = require('telegraf');
 const { config } = require('../../config/settings');
 const { getTheme } = require('../services/ThemeService');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const { createPendingTopup, calcCoinBonus, COIN_BONUS_RATE } = require('../services/WalletService');
 const { checklist, loadingMessage } = require('../utils/animations');
 const { buildMessage, price } = require('../utils/ui');
@@ -299,6 +300,7 @@ topupScene.action('topup_cancel', async (ctx) => {
   await ctx.editMessageText('❌ Top-up cancelled.');
   ctx.session.topupSelectedMethod = null;
   ctx.session.topupAmount = null;
+  await ctx.reply('🏠 Returned to main menu.', mainMenuKeyboard(ctx));
   return ctx.scene.leave();
 });
 
