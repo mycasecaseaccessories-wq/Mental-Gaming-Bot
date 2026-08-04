@@ -12,8 +12,14 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
     [L('menu.rewards'),  L('menu.wallet')],
     [L('menu.orders'),   L('menu.referral')],
     [L('menu.promo'),    L('menu.help')],
-    [L('menu.settings'),  L('menu.outline_vpn')],
   );
+  // Show Outline VPN as a standalone shortcut only when the VPN bot is configured.
+  // It is always accessible via 🛍 Store → Outline VPN regardless.
+  if (outlineBotUsername) {
+    rows.push([L('menu.settings'), L('menu.outline_vpn')]);
+  } else {
+    rows.push([L('menu.settings')]);
+  }
   return Markup.keyboard(rows).resize();
 }
 

@@ -255,8 +255,9 @@ onboardingScene.action('ob_skip', async (ctx) => {
   await ctx.scene.leave();
 });
 
-// Navigation shortcuts from completion screen
-onboardingScene.action('onboard_goto_shop',   async (ctx) => { await ctx.answerCbQuery(); await ctx.scene.leave(); });
-onboardingScene.action('onboard_goto_wallet', async (ctx) => { await ctx.answerCbQuery(); await ctx.scene.leave(); });
+// NOTE: onboard_goto_shop / onboard_goto_wallet are intentionally NOT handled here.
+// ob_finish calls ctx.scene.leave() before these buttons are visible to the user,
+// so the scene is already exited by the time they are tapped.
+// Global handlers are registered in shop.js (onboard_goto_shop) and wallet.js (onboard_goto_wallet).
 
 module.exports = onboardingScene;

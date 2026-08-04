@@ -163,6 +163,12 @@ async function sendCoinHistory(ctx) {
 module.exports = function registerWallet(bot) {
   bot.command('wallet', async (ctx) => { await Nav.navigate(ctx, 'wallet_view'); });
 
+  // Onboarding completion → "View Wallet" button (global: scene is already left)
+  bot.action('onboard_goto_wallet', async (ctx) => {
+    await ctx.answerCbQuery();
+    await Nav.navigate(ctx, 'wallet_view');
+  });
+
   bot.hears(['💰 Wallet', '💰 ပိုက်ဆံအိတ်'], async (ctx) => {
     await Nav.navigate(ctx, 'wallet_view');
   });

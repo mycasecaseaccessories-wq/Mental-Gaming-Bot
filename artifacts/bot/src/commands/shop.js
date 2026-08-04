@@ -185,6 +185,13 @@ module.exports = function registerShop(bot) {
     await Nav.navigate(ctx, 'shop');
   });
 
+  // Onboarding completion → "Open Shop" button (global: scene is already left)
+  bot.action('onboard_goto_shop', async (ctx) => {
+    await ctx.answerCbQuery();
+    Nav.clearHistory(ctx);
+    await Nav.navigate(ctx, 'shop');
+  });
+
   bot.command('shop', async (ctx) => {
     Nav.clearHistory(ctx);
     await Nav.navigate(ctx, 'shop');
