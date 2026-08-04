@@ -8,9 +8,9 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
     rows.push([{ text: webAppConfig.text || '🛍️ Mental Gaming Store', web_app: { url: webAppConfig.url } }]);
   }
   rows.push(
-    [L('menu.store'),    L('menu.wallet')],
-    [L('menu.rewards'),  L('menu.orders')],
-    [L('menu.referral'), L('menu.profile')],
+    [L('menu.profile'),  L('menu.store')],
+    [L('menu.rewards'),  L('menu.wallet')],
+    [L('menu.orders'),   L('menu.referral')],
     [L('menu.promo'),    L('menu.help')],
     [L('menu.settings')],
   );
