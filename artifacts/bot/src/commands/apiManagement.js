@@ -330,13 +330,15 @@ module.exports = function registerApiManagement(bot) {
     await ctx.answerCbQuery('📤 ပို့နေပါပြီ...');
     try { await ctx.editMessageText(`📤 *${mdEsc(p.serviceName)} — ${mdEsc(p.planLabel)}* ကြေညာချက် ပို့နေပါတယ်... ခဏစောင့်ပါ။`, { parse_mode: 'Markdown' }); } catch {}
 
-    const { channelOk, sent, failed } = await announceAccountProductEverywhere(p, ctx.telegram);
-    await auditLog(ctx.from.id, 'ACCOUNT_PRODUCT_ANNOUNCED', p._id.toString(), 'System', { channelOk, sent, failed });
+    const { channelOk, sent, blocked, failed } = await announceAccountProductEverywhere(p, ctx.telegram);
+    await auditLog(ctx.from.id, 'ACCOUNT_PRODUCT_ANNOUNCED', p._id.toString(), 'System', { channelOk, sent, blocked, failed });
 
     await ctx.reply(
       `✅ *ကြေညာပြီးပါပြီ!*\n\n` +
       `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : '⚠️ မတင်နိုင်ပါ (channel မသတ်မှတ်ရသေး / bot admin မဟုတ်)'}\n` +
-      `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
+      `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး` +
+      `${blocked ? ` / 🚫 ${blocked} ယောက် (bot block လုပ်ထား — DB မှာ မှတ်ပြီး)` : ''}` +
+      `${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
       { parse_mode: 'Markdown' }
     );
   });
@@ -357,13 +359,15 @@ module.exports = function registerApiManagement(bot) {
     await ctx.answerCbQuery('📤 ပို့နေပါပြီ...');
     try { await ctx.editMessageText(`📤 *${mdEsc(product.name)}* ကြေညာချက် ပို့နေပါတယ်... ခဏစောင့်ပါ။`, { parse_mode: 'Markdown' }); } catch {}
 
-    const { channelOk, sent, failed } = await announceProductEverywhere(product, style, ctx.telegram);
-    await auditLog(ctx.from.id, 'PRODUCT_ANNOUNCED', product._id.toString(), 'System', { style, channelOk, sent, failed });
+    const { channelOk, sent, blocked, failed } = await announceProductEverywhere(product, style, ctx.telegram);
+    await auditLog(ctx.from.id, 'PRODUCT_ANNOUNCED', product._id.toString(), 'System', { style, channelOk, sent, blocked, failed });
 
     await ctx.reply(
       `✅ *ကြေညာပြီးပါပြီ!*\n\n` +
       `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : '⚠️ မတင်နိုင်ပါ (channel မသတ်မှတ်ရသေး / bot admin မဟုတ်)'}\n` +
-      `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
+      `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး` +
+      `${blocked ? ` / 🚫 ${blocked} ယောက် (bot block လုပ်ထား — DB မှာ မှတ်ပြီး)` : ''}` +
+      `${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
       { parse_mode: 'Markdown' }
     );
   });

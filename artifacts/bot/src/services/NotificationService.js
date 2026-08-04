@@ -102,7 +102,7 @@ async function broadcastAnnouncement(title, body, { batchSize = 100 } = {}) {
     let page = 0;
     let total = 0;
     while (true) {
-      const users = await User.find({ isBlocked: false })
+      const users = await User.find({ isBlocked: { $ne: true } })
         .skip(page * batchSize)
         .limit(batchSize)
         .select('_id telegramId');

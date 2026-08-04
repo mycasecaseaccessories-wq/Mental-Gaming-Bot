@@ -122,30 +122,93 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
 // ── Broadcast to all bot users ───────────────────────────────────────────────
 
 const USER_BATCH_SIZE  = 25;
-const USER_BATCH_DELAY = 1100; // ms — keeps under Telegram's ~30 msg/sec limit
+const USER_BATCH_DELAY = 1100; // ms — keeps under Telegram's ~30 msg/sec global limit
+const PAGE_SIZE        = 500;  // MongoDB cursor page size — avoids loading all users at once
 
 /**
- * Send a message to every non-blocked bot user (batched, rate-limit safe).
- * @returns {Promise<{sent:number, failed:number}>}
+ * Send one message, honouring Telegram's retry_after on 429.
+ * Marks the user isBlocked=true in DB on 403 (bot was blocked by user).
+ * @returns {'sent'|'blocked'|'failed'}
+ */
+async function _sendOne(telegram, User, telegramId, text, extra) {
+  try {
+    await telegram.sendMessage(telegramId, text, { parse_mode: 'Markdown', ...extra });
+    return 'sent';
+  } catch (err) {
+    const code    = err.response?.error_code ?? err.code;
+    const retryIn = err.response?.parameters?.retry_after;
+
+    // 429 Too Many Requests — wait retry_after seconds then retry once
+    if (code === 429 && retryIn) {
+      await new Promise((r) => setTimeout(r, (retryIn + 1) * 1000));
+      try {
+        await telegram.sendMessage(telegramId, text, { parse_mode: 'Markdown', ...extra });
+        return 'sent';
+      } catch {
+        return 'failed';
+      }
+    }
+
+    // 403 Forbidden — user blocked the bot; mark so future broadcasts skip them
+    if (code === 403) {
+      User.updateOne({ telegramId }, { $set: { isBlocked: true } }).catch(() => {});
+      return 'blocked';
+    }
+
+    // 400 Bad Request with "chat not found" — stale record; mark blocked too
+    if (code === 400) {
+      const desc = String(err.response?.description || '').toLowerCase();
+      if (desc.includes('chat not found') || desc.includes('user not found')) {
+        User.updateOne({ telegramId }, { $set: { isBlocked: true } }).catch(() => {});
+        return 'blocked';
+      }
+    }
+
+    return 'failed';
+  }
+}
+
+/**
+ * Send a message to every non-blocked bot user (cursor-paginated, rate-limit safe).
+ * @returns {Promise<{sent:number, blocked:number, failed:number}>}
  */
 async function broadcastToUsers(telegram, text, extra = {}) {
-  const User  = require('../models/User');
-  const users = await User.find({ isBlocked: { $ne: true } }).select('telegramId').lean();
+  const User = require('../models/User');
+  let sent = 0, blocked = 0, failed = 0;
+  let lastId = null;
 
-  let sent = 0, failed = 0;
-  for (let i = 0; i < users.length; i += USER_BATCH_SIZE) {
-    const batch = users.slice(i, i + USER_BATCH_SIZE);
-    await Promise.all(batch.map(async (u) => {
-      try {
-        await telegram.sendMessage(u.telegramId, text, { parse_mode: 'Markdown', ...extra });
-        sent++;
-      } catch { failed++; }
-    }));
-    if (i + USER_BATCH_SIZE < users.length) {
-      await new Promise((r) => setTimeout(r, USER_BATCH_DELAY));
+  // Cursor-based pagination: never loads the full user list into RAM
+  while (true) {
+    const query = { isBlocked: { $ne: true } };
+    if (lastId) query._id = { $gt: lastId };
+
+    const page = await User.find(query)
+      .sort({ _id: 1 })
+      .limit(PAGE_SIZE)
+      .select('_id telegramId')
+      .lean();
+
+    if (!page.length) break;
+    lastId = page[page.length - 1]._id;
+
+    // Process PAGE in USER_BATCH_SIZE chunks with inter-batch delay
+    for (let i = 0; i < page.length; i += USER_BATCH_SIZE) {
+      const batch = page.slice(i, i + USER_BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map((u) => _sendOne(telegram, User, u.telegramId, text, extra))
+      );
+      for (const r of results) {
+        if (r === 'sent')    sent++;
+        else if (r === 'blocked') blocked++;
+        else                 failed++;
+      }
+      if (i + USER_BATCH_SIZE < page.length) {
+        await new Promise((r) => setTimeout(r, USER_BATCH_DELAY));
+      }
     }
   }
-  return { sent, failed };
+
+  return { sent, blocked, failed };
 }
 
 // ── Account product announcement formatter ────────────────────────────────────
