@@ -184,6 +184,10 @@ module.exports = function registerGlobalHistory(bot) {
     await sendMenu(ctx, false);
   });
 
+  bot.hears('📜 Global History', adminOnly(), async (ctx) => {
+    await sendMenu(ctx, false);
+  });
+
   bot.action('gh_menu', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     await sendMenu(ctx, true);

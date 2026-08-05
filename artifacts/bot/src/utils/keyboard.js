@@ -31,6 +31,7 @@ function adminMenuKeyboard() {
     ['🎟 Promotions',      '🎫 Support Tickets'],
     ['📈 Analytics',       '🤖 AI Insights'],
     ['🔧 System',          '📋 Audit Logs'],
+    ['📜 Global History'],
     ['🪙 Coins & Tiers',   '🎁 Rewards Admin'],
     ['💳 Payment Gateways', '🔐 Accounts'],
     ['🎯 Ref Campaign',     '📣 Join Bonus Admin'],
