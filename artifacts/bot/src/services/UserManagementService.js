@@ -136,25 +136,37 @@ async function getUserInfo(identifier) {
   const user = await resolveUser(identifier);
   if (!user) return null;
 
-  const Order  = require('../models/Order');
+  const Order       = require('../models/Order');
   const Transaction = require('../models/Transaction');
 
-  const [orderCount, pendingOrders, totalSpent, pendingTopup] = await Promise.all([
-    Order.countDocuments({ userId: user._id }),
-    Order.countDocuments({ userId: user._id, status: 'Pending' }),
-    Order.aggregate([
-      { $match: { userId: user._id, status: 'Success' } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]),
-    Transaction.findOne({ userId: user._id, type: 'Topup', status: 'Pending' }),
-  ]);
+  const [orderCount, pendingOrders, totalSpentAgg, pendingTopup, recentOrders, recentTopups] =
+    await Promise.all([
+      Order.countDocuments({ userId: user._id }),
+      Order.countDocuments({ userId: user._id, status: { $in: ['Pending', 'Processing'] } }),
+      Order.aggregate([
+        { $match: { userId: user._id, status: 'Success' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      Transaction.findOne({ userId: user._id, type: 'Topup', status: 'Pending' }),
+      Order.find({ userId: user._id })
+        .sort({ timestamp: -1, createdAt: -1 })
+        .limit(3)
+        .populate('productId', 'name')
+        .lean(),
+      Transaction.find({ userId: user._id, type: 'Topup' })
+        .sort({ timestamp: -1, createdAt: -1 })
+        .limit(3)
+        .lean(),
+    ]);
 
   return {
     user,
     orderCount,
     pendingOrders,
-    totalSpent: totalSpent[0]?.total || 0,
+    totalSpent: totalSpentAgg[0]?.total || 0,
     hasPendingTopup: !!pendingTopup,
+    recentOrders,
+    recentTopups,
   };
 }
 

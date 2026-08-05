@@ -44,12 +44,32 @@ function parseTarget(ctx) {
   return { identifier: args[0].replace(/^@/, ''), display: args[0], args: args.slice(1) };
 }
 
+// ── Compact activity snapshot lines ──────────────────────────────────────────
+function recentOrderLines(orders) {
+  if (!orders || !orders.length) return '_ဝယ်ထားသည့် ရာဇဝင် မရှိသေးပါ_';
+  return orders.map((o) => {
+    const icon = o.status === 'Success' ? '✅' : o.status === 'Pending' ? '🟡'
+      : o.status === 'Processing' ? '🔵' : o.status === 'Cancelled' ? '❌' : '↩️';
+    const prod = (o.productId?.name || 'Product').slice(0, 20);
+    return `${icon} \`#${o.orderId || '?'}\` ${esc(prod)} — *${price(o.amount || 0)}*`;
+  }).join('\n');
+}
+
+function recentTopupLines(txs) {
+  if (!txs || !txs.length) return '_Topup ရာဇဝင် မရှိသေးပါ_';
+  return txs.map((t) => {
+    const icon = t.status === 'Completed' ? '✅' : t.status === 'Pending' ? '⏳' : '❌';
+    const by = t.processedBy ? ` _(by ${esc(String(t.processedBy))})_` : '';
+    return `${icon} *+${price(t.amount || 0)}* ${esc(t.paymentMethod || '')}${by} — ${formatDate(t.timestamp || t.createdAt)}`;
+  }).join('\n');
+}
+
 // ── Build user info card ──────────────────────────────────────────────────────
 async function buildUserCard(ctx, identifier) {
   const info = await getUserInfo(identifier);
   if (!info) return null;
 
-  const { user, orderCount, pendingOrders, totalSpent, hasPendingTopup } = info;
+  const { user, orderCount, pendingOrders, totalSpent, hasPendingTopup, recentOrders, recentTopups } = info;
   const statusIcon = user.isBlocked ? '🚫 Banned' : '🟢 Active';
   const tag = user.username ? `@${user.username}` : `_(no username)_`;
 
@@ -59,7 +79,7 @@ async function buildUserCard(ctx, identifier) {
     `🆔 ID: \`${user.telegramId}\`\n` +
     `${tag}\n` +
     `──────────────────\n` +
-    `⭐ Tier: *${user.membershipTier}*\n` +
+    `⭐ Tier: *${user.membershipTier || 'Standard'}*\n` +
     `💰 KS Balance: *${price(user.balanceKS || 0)}*\n` +
     `🪙 Coins: *${(user.balanceCoin || 0).toLocaleString()} MC*\n` +
     `💼 Total Deposited: *${price(user.totalDeposited || 0)}*\n` +
@@ -68,11 +88,15 @@ async function buildUserCard(ctx, identifier) {
     `💸 Total Spent: *${price(totalSpent)}*\n` +
     `💳 Pending Topup: ${hasPendingTopup ? '⏳ Yes' : 'None'}\n` +
     `──────────────────\n` +
-    `⚠️ Warnings: *${user.warningsCount}/3*\n` +
-    `🔒 Restrictions: ${user.restrictedRights.length ? user.restrictedRights.join(', ') : 'None'}\n` +
+    `⚠️ Warnings: *${user.warningsCount || 0}/3*\n` +
+    `🔒 Restrictions: ${user.restrictedRights?.length ? user.restrictedRights.join(', ') : 'None'}\n` +
     `📊 Status: ${statusIcon}\n` +
-    `📅 Joined: ${formatDate(user.joinDate)}\n` +
-    `🕐 Last Active: ${formatDate(user.lastActive)}`;
+    `📅 Joined: ${formatDate(user.joinDate || user.createdAt)}\n` +
+    `🕐 Last Active: ${formatDate(user.lastActive)}\n` +
+    `──────────────────\n` +
+    `📦 *Recent Orders*\n${recentOrderLines(recentOrders)}\n` +
+    `──────────────────\n` +
+    `💳 *Recent Topups*\n${recentTopupLines(recentTopups)}`;
 
   const uid = user.telegramId;
   const keyboard = Markup.inlineKeyboard([
@@ -94,8 +118,8 @@ async function buildUserCard(ctx, identifier) {
       Markup.button.callback('💳 Adjust Balance', `um_adjust:${uid}`),
     ],
     [
-      Markup.button.callback('📦 Orders',        `um_orders:${uid}`),
-      Markup.button.callback('💰 Topup History', `um_txs:${uid}`),
+      Markup.button.callback('📦 All Orders',      `um_orders:${uid}:1`),
+      Markup.button.callback('💰 All Topups',      `um_txs:${uid}:1`),
     ],
     ...(hasPendingTopup
       ? [[Markup.button.callback('⏳ Pending Topup စစ်ရန်', `um_ptopup:${uid}`)]]
@@ -105,7 +129,87 @@ async function buildUserCard(ctx, identifier) {
   return { text, keyboard, user };
 }
 
+const PAGE_SIZE_ORDERS = 8;
+const PAGE_SIZE_TXS    = 8;
+
 module.exports = function registerUserManagement(bot) {
+
+  // ── 👥 Manage Users button — hub menu ─────────────────────────────────────
+  bot.hears('👥 Manage Users', adminOnly(), async (ctx) => {
+    await ctx.reply(
+      `👥 *User Management*\n\n` +
+      `🔍 ID/Username နဲ့ ရှာ သို့မဟုတ် စာရင်းကြည့်ပါ 👇`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback('🔍 Search User',  'um_search_prompt'),
+            Markup.button.callback('📋 All Users',     'um_list:1'),
+          ],
+          [
+            Markup.button.callback('🚫 Banned Users', 'um_banned:1'),
+            Markup.button.callback('🆕 Recently Joined', 'um_recent:1'),
+          ],
+        ]),
+      }
+    );
+  });
+
+  // ── Hub paginators ─────────────────────────────────────────────────────────
+  bot.action(/^um_list:(\d+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const page = Math.max(1, parseInt(ctx.match[1], 10) || 1);
+    let { users, total, totalPages } = await listUsers({ page, limit: 10 });
+    if (!total) return ctx.reply('👥 User မရှိသေးပါ။');
+    if (page > totalPages) ({ users, total, totalPages } = await listUsers({ page: totalPages, limit: 10 }));
+
+    const navBtns = [];
+    if (page > 1) navBtns.push(Markup.button.callback(`‹ ${page - 1}`, `um_list:${page - 1}`));
+    navBtns.push(Markup.button.callback(`${page}/${totalPages}`, 'um_noop'));
+    if (page < totalPages) navBtns.push(Markup.button.callback(`${page + 1} ›`, `um_list:${page + 1}`));
+
+    const fn = ctx.callbackQuery?.message ? 'editMessageText' : 'reply';
+    await ctx[fn](
+      `👥 *Users (${total} total)* — Page ${page}/${totalPages}\n\n_User တစ်ယောက်ချင်း ကြည့်ရန် နှိပ်ပါ_ 👇`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([...userListButtons(users), navBtns]) }
+    ).catch(() => {});
+  });
+
+  bot.action(/^um_banned:(\d+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const page = Math.max(1, parseInt(ctx.match[1], 10) || 1);
+    await sendBannedList(ctx, page, !!ctx.callbackQuery?.message);
+  });
+
+  bot.action(/^um_recent:(\d+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const page = Math.max(1, parseInt(ctx.match[1], 10) || 1);
+    const { users, total, totalPages } = await listUsers({ page, limit: 10, filter: {} });
+    if (!total) return ctx.reply('👥 User မရှိသေးပါ။');
+
+    const navBtns = [];
+    if (page > 1) navBtns.push(Markup.button.callback(`‹ ${page - 1}`, `um_recent:${page - 1}`));
+    navBtns.push(Markup.button.callback(`${page}/${totalPages}`, 'um_noop'));
+    if (page < totalPages) navBtns.push(Markup.button.callback(`${page + 1} ›`, `um_recent:${page + 1}`));
+
+    const fn = ctx.callbackQuery?.message ? 'editMessageText' : 'reply';
+    await ctx[fn](
+      `🆕 *Recently Joined (${total} total)* — Page ${page}/${totalPages}\n\n_User တစ်ယောက်ချင်း ကြည့်ရန် နှိပ်ပါ_ 👇`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([...userListButtons(users), navBtns]) }
+    ).catch(() => {});
+  });
+
+  bot.action('um_noop', adminOnly(), async (ctx) => ctx.answerCbQuery());
+
+  // ── Search prompt ──────────────────────────────────────────────────────────
+  bot.action('um_search_prompt', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.umSearchPending = true;
+    await ctx.reply(
+      `🔍 *User ရှာပါ*\n\nTelegram ID (နံပါတ်) သို့မဟုတ် @username ရိုက်ပေးပါ:`,
+      { parse_mode: 'Markdown', ...Markup.forceReply() }
+    );
+  });
 
   // ── /userinfo ─────────────────────────────────────────────────────────────
   bot.command('userinfo', adminOnly(), async (ctx) => {
@@ -180,73 +284,115 @@ module.exports = function registerUserManagement(bot) {
       .catch(() => ctx.reply(result.text.replace(/[*_`]/g, ''), result.keyboard));
   });
 
-  // ── um_orders — user's purchase history ────────────────────────────────────
-  bot.action(/^um_orders:(\d+)$/, adminOnly(), async (ctx) => {
+  // ── um_orders — user's purchase history (paginated) ────────────────────────
+  bot.action(/^um_orders:(\d+)(?::(\d+))?$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const uid = ctx.match[1];
+    const uid  = ctx.match[1];
+    const page = Math.max(1, parseInt(ctx.match[2] || '1', 10));
     const user = await resolveUser(uid);
     if (!user) return ctx.reply('❌ User not found.');
 
     const Order = require('../models/Order');
+    const skip  = (page - 1) * PAGE_SIZE_ORDERS;
+    const total = await Order.countDocuments({ userId: user._id });
+    const totalPages = Math.ceil(total / PAGE_SIZE_ORDERS) || 1;
     const orders = await Order.find({ userId: user._id })
-      .sort({ timestamp: -1 }).limit(10).populate('productId');
+      .sort({ timestamp: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(PAGE_SIZE_ORDERS)
+      .populate('productId', 'name')
+      .lean();
 
     const tag = user.username ? `@${esc(user.username)}` : `\`${user.telegramId}\``;
     const lines = orders.length
       ? orders.map((o) => {
-          const icon = o.status === 'Success' ? '✅' : o.status === 'Pending' ? '🟡' : o.status === 'Processing' ? '🔵' : '❌';
-          return `${icon} \`#${o.orderId}\` ${esc(o.productId?.name || 'Product')}\n     ${price(o.amount || 0)} — *${o.status}* — ${formatDate(o.timestamp || o.createdAt)}`;
+          const icon = o.status === 'Success' ? '✅' : o.status === 'Pending' ? '🟡'
+            : o.status === 'Processing' ? '🔵' : o.status === 'Cancelled' ? '❌' : '↩️';
+          // who processed this order (last statusHistory entry with an actor)
+          const lastChange = (o.statusHistory || []).slice().reverse()
+            .find((h) => h.changedBy || h.by);
+          const byLine = lastChange
+            ? ` _(${esc(String(lastChange.changedBy || lastChange.by))})_`
+            : '';
+          return (
+            `${icon} \`#${o.orderId || '?'}\` ${esc((o.productId?.name || 'Product').slice(0, 18))}\n` +
+            `     💸 ${price(o.amount || 0)} — *${o.status}*${byLine}\n` +
+            `     🕐 ${formatDate(o.timestamp || o.createdAt)}`
+          );
         }).join('\n')
-      : '_ဝယ်ထားတာ မရှိသေးပါ_';
+      : '_ဝယ်ထားသည့် ရာဇဝင် မရှိသေးပါ_';
 
-    await ctx.reply(
-      `📦 *Orders — ${tag}* (နောက်ဆုံး ${orders.length} ခု)\n──────────────────\n${lines}`,
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([[Markup.button.callback('🔙 User Card', `um_view:${uid}`)]]),
-      }
-    ).catch(() => ctx.reply(`Orders — ${user.telegramId}\n\n${lines.replace(/[*_`\\]/g, '')}`,
-      Markup.inlineKeyboard([[Markup.button.callback('🔙 User Card', `um_view:${uid}`)]])));
+    const navBtns = [];
+    if (page > 1)         navBtns.push(Markup.button.callback(`‹ ${page - 1}`, `um_orders:${uid}:${page - 1}`));
+    navBtns.push(Markup.button.callback(`${page}/${totalPages}`, 'um_noop'));
+    if (page < totalPages) navBtns.push(Markup.button.callback(`${page + 1} ›`, `um_orders:${uid}:${page + 1}`));
+
+    const kb = Markup.inlineKeyboard([
+      navBtns,
+      [Markup.button.callback('🔙 User Card', `um_view:${uid}`)],
+    ]);
+    const header = `📦 *Orders — ${tag}* (${total} ခု) — Page ${page}/${totalPages}\n──────────────────\n${lines}`;
+
+    const fn = ctx.callbackQuery?.message ? 'editMessageText' : 'reply';
+    await ctx[fn](header, { parse_mode: 'Markdown', ...kb })
+      .catch(() => ctx.reply(header.replace(/[*_`\\]/g, ''), kb));
   });
 
-  // ── um_txs — user's wallet/topup history ───────────────────────────────────
-  bot.action(/^um_txs:(\d+)$/, adminOnly(), async (ctx) => {
+  // ── um_txs — user's wallet/topup history (paginated) ──────────────────────
+  bot.action(/^um_txs:(\d+)(?::(\d+))?$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const uid = ctx.match[1];
+    const uid  = ctx.match[1];
+    const page = Math.max(1, parseInt(ctx.match[2] || '1', 10));
     const user = await resolveUser(uid);
     if (!user) return ctx.reply('❌ User not found.');
 
     const Transaction = require('../models/Transaction');
-    const txs = await Transaction.find({ userId: user._id })
-      .sort({ timestamp: -1 }).limit(10);
+    const skip         = (page - 1) * PAGE_SIZE_TXS;
+    const total        = await Transaction.countDocuments({ userId: user._id });
+    const totalPages   = Math.ceil(total / PAGE_SIZE_TXS) || 1;
     const pendingCount = await Transaction.countDocuments({ userId: user._id, type: 'Topup', status: 'Pending' });
+    const txs = await Transaction.find({ userId: user._id })
+      .sort({ timestamp: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(PAGE_SIZE_TXS)
+      .lean();
 
     const tag = user.username ? `@${esc(user.username)}` : `\`${user.telegramId}\``;
     const lines = txs.length
       ? txs.map((t) => {
-          const icon = t.status === 'Completed' ? '✅' : t.status === 'Pending' ? '⏳' : '❌';
-          const sign = t.amount > 0 ? '+' : '';
+          const icon   = t.status === 'Completed' ? '✅' : t.status === 'Pending' ? '⏳' : '❌';
+          const sign   = (t.amount || 0) >= 0 ? '+' : '';
           const method = t.paymentMethod ? ` (${esc(t.paymentMethod)})` : '';
-          return `${icon} *${t.type}*${method} ${sign}${(t.amount || 0).toLocaleString()} ${t.wallet}\n     ${t.status} — ${formatDate(t.timestamp)}`;
+          const byLine = t.processedBy ? ` _(by ${esc(String(t.processedBy))})_` : '';
+          return (
+            `${icon} *${esc(t.type)}*${method} ${sign}${(t.amount || 0).toLocaleString()} ${t.wallet || 'KS'}\n` +
+            `     *${t.status}*${byLine} — ${formatDate(t.timestamp || t.createdAt)}`
+          );
         }).join('\n')
       : '_Transaction မရှိသေးပါ_';
 
     const pendingNote = pendingCount
-      ? `\n\n⚠️ *Pending topup ${pendingCount} ခု ရှိနေသည်* — အောက်က ခလုတ်နဲ့ စစ်ပြီး Approve လုပ်နိုင်သည်`
+      ? `\n\n⚠️ *Pending topup ${pendingCount} ခု ရှိနေသည်*`
       : '';
 
-    const kbRows = [];
+    const navBtns = [];
+    if (page > 1)         navBtns.push(Markup.button.callback(`‹ ${page - 1}`, `um_txs:${uid}:${page - 1}`));
+    navBtns.push(Markup.button.callback(`${page}/${totalPages}`, 'um_noop'));
+    if (page < totalPages) navBtns.push(Markup.button.callback(`${page + 1} ›`, `um_txs:${uid}:${page + 1}`));
+
+    const kbRows = [navBtns];
     if (pendingCount) kbRows.push([Markup.button.callback('⏳ Pending Topup စစ်ရန်', `um_ptopup:${uid}`)]);
     kbRows.push([Markup.button.callback('🔙 User Card', `um_view:${uid}`)]);
 
-    await ctx.reply(
-      `💰 *Wallet History — ${tag}*\n` +
+    const header =
+      `💰 *Wallet History — ${tag}* (${total} ခု) — Page ${page}/${totalPages}\n` +
       `💵 လက်ကျန်: *${price(user.balanceKS || 0)}* | 🪙 ${(user.balanceCoin || 0).toLocaleString()} MC\n` +
       `💼 စုစုပေါင်း ငွေဖြည့်ပြီး: *${price(user.totalDeposited || 0)}*\n` +
-      `──────────────────\n${lines}${pendingNote}`,
-      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(kbRows) }
-    ).catch(() => ctx.reply(`Wallet — ${user.telegramId}\n\n${lines.replace(/[*_`\\]/g, '')}`,
-      Markup.inlineKeyboard(kbRows)));
+      `──────────────────\n${lines}${pendingNote}`;
+
+    const fn = ctx.callbackQuery?.message ? 'editMessageText' : 'reply';
+    await ctx[fn](header, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(kbRows) })
+      .catch(() => ctx.reply(header.replace(/[*_`\\]/g, ''), Markup.inlineKeyboard(kbRows)));
   });
 
   // ── um_ptopup — this user's pending topups w/ approve buttons ──────────────
@@ -674,8 +820,32 @@ module.exports = function registerUserManagement(bot) {
 
   // ── Session text handler for inline actions ────────────────────────────────
   bot.on('text', async (ctx, next) => {
+    const adminId = require('../../config/settings').config.bot.adminId;
+    if (ctx.from.id !== adminId) return next();
+
+    // ── Search flow ─────────────────────────────────────────────────────────
+    if (ctx.session?.umSearchPending) {
+      ctx.session.umSearchPending = false;
+      const query = ctx.message.text.trim();
+      if (!query) return next();
+
+      const found = await searchUsers(query);
+      if (!found.length) {
+        return ctx.reply(
+          `❌ *"${esc(query)}"* — user မတွေ့ပါ\n\nID (နံပါတ်) သို့မဟုတ် @username စစ်ကြည့်ပါ`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+      return ctx.reply(
+        `🔍 *"${esc(query)}"* — ${found.length} ယောက် တွေ့သည်\n\n_User တစ်ယောက်ချင်း ကြည့်ရန် နှိပ်ပါ_ 👇`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard(userListButtons(found)) }
+      ).catch(() =>
+        ctx.reply(`Search: ${query} (${found.length} found)`, Markup.inlineKeyboard(userListButtons(found)))
+      );
+    }
+
     const action = ctx.session?.umPendingAction;
-    if (!action || ctx.from.id !== require('../../config/settings').config.bot.adminId) return next();
+    if (!action) return next();
 
     const { type, uid } = action;
     const input = ctx.message.text.trim();

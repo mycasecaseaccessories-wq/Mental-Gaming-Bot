@@ -160,16 +160,178 @@ async function renderTopups(ctx, page, type, edit = false) {
     .catch(() => ctx.reply(`Global Wallet History (${total}) p${page}/${totalPages}`, keyboard));
 }
 
+// ── Pending topups action view (with approve/reject buttons per item) ──────────
+async function renderPendingTopupsAction(ctx, page, edit = false) {
+  const Transaction = require('../models/Transaction');
+  const User        = require('../models/User');
+  const { sendScreenshot } = require('../services/ScreenshotService');
+
+  const skip  = (page - 1) * PAGE_SIZE;
+  const total = await Transaction.countDocuments({ type: 'Topup', status: 'Pending' });
+
+  if (!total) {
+    const msg = `✅ *Pending topup မရှိပါ*\n\nအားလုံး စစ်ပြီးသားပါ။`;
+    const kb  = Markup.inlineKeyboard([[Markup.button.callback('🔙 History Menu', 'gh_menu')]]);
+    if (edit) return ctx.editMessageText(msg, { parse_mode: 'Markdown', ...kb }).catch(() => {});
+    return ctx.reply(msg, { parse_mode: 'Markdown', ...kb });
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+  const txs = await Transaction.find({ type: 'Topup', status: 'Pending' })
+    .sort({ createdAt: 1 })
+    .skip(skip)
+    .limit(PAGE_SIZE)
+    .lean();
+
+  const userIds = [...new Set(txs.map((t) => t.userId?.toString()).filter(Boolean))];
+  const users   = await User.find({ _id: { $in: userIds } }).select('telegramId username').lean();
+  const userMap = Object.fromEntries(users.map((u) => [u._id.toString(), u]));
+
+  const navBtns = navRow(page, totalPages, 'gh_ptopups', 'pending');
+  const menuBtn = [Markup.button.callback('🔙 History Menu', 'gh_menu')];
+
+  // Send each pending topup as a separate message with action buttons
+  if (!edit) {
+    await ctx.reply(
+      `⏳ *Pending Topups — ${total} ခု* (Page ${page}/${totalPages})\n_တစ်ခုချင်းအောက်မှာ ပြပေးသည် ↓_`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([navBtns, menuBtn]) }
+    );
+
+    for (const tx of txs) {
+      const u      = userMap[tx.userId?.toString()];
+      const tag    = u?.username ? `@${esc(u.username)}` : u ? `\`${u.telegramId}\`` : `_unknown_`;
+      const caption =
+        `⏳ *Pending Topup*\n` +
+        `──────────────────\n` +
+        `👤 User: ${tag}\n` +
+        `💰 Amount: *${price(tx.amount || 0)}*\n` +
+        `🏦 Method: *${esc(tx.paymentMethod || '—')}*\n` +
+        `🧾 TxID: \`${tx.txId}\`\n` +
+        `🕐 ${formatDate(tx.createdAt || tx.timestamp)}`;
+      const kb = Markup.inlineKeyboard([
+        [
+          Markup.button.callback('✅ Approve', `topup_approve:${tx.txId}`),
+          Markup.button.callback('❌ Reject',  `topup_reject:${tx.txId}`),
+        ],
+        [Markup.button.callback('💬 Ask for Info', `topup_askinfo:${tx.txId}`)],
+        [Markup.button.callback(`👤 User Card`, `um_view:${u?.telegramId || tx.txId}`)],
+      ]);
+      const sent = await sendScreenshot(ctx.telegram, ctx.chat.id, tx, {
+        caption, parse_mode: 'Markdown', ...kb,
+      });
+      if (!sent) {
+        await ctx.reply(
+          caption + `\n\n_📸 Screenshot ပြလို့မရပါ_`,
+          { parse_mode: 'Markdown', ...kb }
+        ).catch(() => {});
+      }
+    }
+    return;
+  }
+
+  // edit=true: just update the header/nav (can't re-send individual messages in-place)
+  const lines = txs.map((tx) => {
+    const u   = userMap[tx.userId?.toString()];
+    const tag = u?.username ? `@${esc(u.username)}` : u ? `\`${u.telegramId}\`` : `_unknown_`;
+    return `⏳ ${tag} — *${price(tx.amount || 0)}* — \`${tx.txId}\``;
+  }).join('\n');
+  const header =
+    `⏳ *Pending Topups — ${total} ခု* (Page ${page}/${totalPages})\n` +
+    `──────────────────\n${lines}\n\n` +
+    `_⬇️ Approve/Reject လုပ်ရန် ဒီ message ၏ ကြေငြာချက်များကို ကြည့်ပါ_`;
+  return ctx.editMessageText(header, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([navBtns, menuBtn]),
+  }).catch(() => {});
+}
+
+// ── Pending orders action view ─────────────────────────────────────────────────
+async function renderPendingOrdersAction(ctx, page, edit = false) {
+  const Order = require('../models/Order');
+  const skip  = (page - 1) * PAGE_SIZE;
+  const filter = { status: { $in: ['Pending', 'Processing'] } };
+  const total = await Order.countDocuments(filter);
+
+  if (!total) {
+    const msg = `✅ *Pending / Processing order မရှိပါ*\n\nအားလုံး ပြီးသားပါ။`;
+    const kb  = Markup.inlineKeyboard([[Markup.button.callback('🔙 History Menu', 'gh_menu')]]);
+    if (edit) return ctx.editMessageText(msg, { parse_mode: 'Markdown', ...kb }).catch(() => {});
+    return ctx.reply(msg, { parse_mode: 'Markdown', ...kb });
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+  const orders = await Order.find(filter)
+    .sort({ timestamp: -1, createdAt: -1 })
+    .skip(skip)
+    .limit(PAGE_SIZE)
+    .populate('userId', 'username telegramId')
+    .populate('productId', 'name')
+    .lean();
+
+  const statusIcon = { Pending: '🟡', Processing: '🔵' };
+
+  const lines = orders.map((o) => {
+    const icon = statusIcon[o.status] || '❓';
+    const user = o.userId?.username
+      ? `@${esc(o.userId.username)}`
+      : o.userId?.telegramId ? `\`${o.userId.telegramId}\`` : `_unknown_`;
+    const prod = esc((o.productId?.name || 'Product').slice(0, 20));
+    return `${icon} \`#${o.orderId || o._id.toString().slice(-6).toUpperCase()}\` ${prod}\n     👤 ${user} — *${price(o.amount || 0)}* — ${formatDate(o.timestamp || o.createdAt)}`;
+  }).join('\n');
+
+  const actionBtns = orders.map((o) => [
+    Markup.button.callback(
+      `${statusIcon[o.status] || '?'} #${(o.orderId || o._id.toString().slice(-6).toUpperCase())} Manage →`,
+      `admin_order_view:${o._id}`
+    ),
+  ]);
+
+  const navBtns = navRow(page, totalPages, 'gh_porders', 'pending');
+  const header =
+    `🟡 *Pending / Processing Orders — ${total} ခု* (Page ${page}/${totalPages})\n` +
+    `──────────────────\n${lines}`;
+
+  const keyboard = Markup.inlineKeyboard([
+    ...actionBtns,
+    navBtns,
+    [Markup.button.callback('🔙 History Menu', 'gh_menu')],
+  ]);
+
+  if (edit) {
+    return ctx.editMessageText(header, { parse_mode: 'Markdown', ...keyboard }).catch(() => {});
+  }
+  return ctx.reply(header, { parse_mode: 'Markdown', ...keyboard })
+    .catch(() => ctx.reply(`Pending Orders (${total}) p${page}/${totalPages}`, keyboard));
+}
+
 // ── Menu ───────────────────────────────────────────────────────────────────────
-function sendMenu(ctx, edit = false) {
+async function sendMenu(ctx, edit = false) {
+  const Transaction = require('../models/Transaction');
+  const Order       = require('../models/Order');
+
+  const [pendingTopups, pendingOrders] = await Promise.all([
+    Transaction.countDocuments({ type: 'Topup', status: 'Pending' }),
+    Order.countDocuments({ status: { $in: ['Pending', 'Processing'] } }),
+  ]);
+
+  const topupBadge  = pendingTopups  ? ` (${pendingTopups} ⚠️)`  : '';
+  const orderBadge  = pendingOrders  ? ` (${pendingOrders} ⚠️)`  : '';
+
   const text =
     `📋 *Global History*\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+    (pendingTopups || pendingOrders
+      ? `⚠️ *Action လိုသည်:* Topup ${pendingTopups} ✦ Order ${pendingOrders}\n\n`
+      : `✅ Pending action မရှိပါ\n\n`) +
     `ကြည့်ချင်တာ ရွေးပါ 👇`;
 
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('📦 All Orders',        'gh_orders:1:all')],
-    [Markup.button.callback('💰 All Topups / Wallet', 'gh_topups:1:all')],
+    [
+      Markup.button.callback(`⏳ Pending Topups${topupBadge}`, 'gh_ptopups:1:pending'),
+      Markup.button.callback(`🟡 Pending Orders${orderBadge}`, 'gh_porders:1:pending'),
+    ],
+    [Markup.button.callback('📦 All Orders',           'gh_orders:1:all')],
+    [Markup.button.callback('💰 All Topups / Wallet',  'gh_topups:1:all')],
   ]);
 
   if (edit) {
@@ -211,6 +373,20 @@ module.exports = function registerGlobalHistory(bot) {
     const page = Math.max(1, parseInt(ctx.match[1], 10) || 1);
     const type = TX_TYPES.includes(ctx.match[2]) ? ctx.match[2] : 'all';
     await renderTopups(ctx, page, type, true);
+  });
+
+  // gh_ptopups:page:pending — pending topups with action buttons
+  bot.action(/^gh_ptopups:(\d+):\w+$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const page = Math.max(1, parseInt(ctx.match[1], 10) || 1);
+    await renderPendingTopupsAction(ctx, page, false);
+  });
+
+  // gh_porders:page:pending — pending/processing orders with manage buttons
+  bot.action(/^gh_porders:(\d+):\w+$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const page = Math.max(1, parseInt(ctx.match[1], 10) || 1);
+    await renderPendingOrdersAction(ctx, page, !!ctx.callbackQuery?.message?.text);
   });
 
   // Dashboard shortcut actions
