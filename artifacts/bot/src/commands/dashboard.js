@@ -4,9 +4,10 @@ const { getTheme } = require('../services/ThemeService');
 const { getAllRates } = require('../services/currencyService');
 const { buildMessage, stat, divider, price } = require('../utils/ui');
 const { pulseLoading, resolveMessage } = require('../utils/animations');
-const Order = require('../models/Order');
-const User = require('../models/User');
-const Product = require('../models/Product');
+const Order       = require('../models/Order');
+const User        = require('../models/User');
+const Transaction = require('../models/Transaction');
+const Product     = require('../models/Product');
 const SystemStatus = require('../models/SystemStatus');
 const PaymentMethod = require('../models/PaymentMethod');
 const { Markup } = require('telegraf');
@@ -23,40 +24,57 @@ async function buildDashboardText(theme) {
   const [
     ordersToday,
     pendingOrders,
+    pendingTopups,
     totalUsers,
     totalProducts,
     successToday,
     rates,
     sysStatus,
     paymentMethods,
+    recentOrders,
+    recentPendingTopups,
   ] = await Promise.all([
     Order.countDocuments({ timestamp: { $gte: startOfDay } }),
-    Order.countDocuments({ status: 'Pending' }),
+    Order.countDocuments({ status: { $in: ['Pending', 'Processing'] } }),
+    Transaction.countDocuments({ type: 'Topup', status: 'Pending' }),
     User.countDocuments({}),
     Product.countDocuments({ isActive: true }),
     Order.countDocuments({ status: 'Success', timestamp: { $gte: startOfDay } }),
     getAllRates(),
     SystemStatus.get(),
     PaymentMethod.find().sort({ displayOrder: 1, name: 1 }),
+    Order.find({ status: { $in: ['Pending', 'Processing'] } })
+      .populate('userId', 'username telegramId')
+      .populate('productId', 'name')
+      .sort({ timestamp: -1 })
+      .limit(5),
+    Transaction.find({ type: 'Topup', status: 'Pending' })
+      .populate('userId', 'username telegramId')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
   ]);
-
-  const recentOrders = await Order.find({ status: 'Pending' })
-    .populate('userId', 'username telegramId')
-    .populate('productId', 'name')
-    .sort({ timestamp: -1 })
-    .limit(5);
 
   const rateLines = rates.map(
     (r) => `  ${r.currencyCode}: \`${parseFloat(r.rateToMMK.toFixed(4))}\` MMK`
   );
 
-  const pendingLines = recentOrders.length
+  const pendingOrderLines = recentOrders.length
     ? recentOrders.map((o, i) => {
-        const user = o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`;
+        const icon    = o.status === 'Processing' ? '🔵' : '🟡';
+        const user    = o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`;
         const product = o.productId?.name || 'Unknown';
-        return `  ${i + 1}. ${user} → ${product} — \`${price(o.amount)}\``;
+        return `  ${icon} ${user} → ${product} — \`${price(o.amount)}\``;
       })
-    : ['  _No pending orders_'];
+    : ['  _Pending order မရှိပါ_'];
+
+  const pendingTopupLines = recentPendingTopups.length
+    ? recentPendingTopups.map((t) => {
+        const u   = t.userId;
+        const tag = u?.username ? `@${u.username}` : u?.telegramId ? `ID:${u.telegramId}` : 'Unknown';
+        return `  ⏳ ${tag} — *${price(t.amount || 0)}* (${t.paymentMethod || '?'})`;
+      })
+    : ['  _Pending topup မရှိပါ_'];
 
   // Gateway display — driven by PaymentMethod (same list users see in /topup)
   const gwLines = paymentMethods.length
@@ -84,7 +102,8 @@ async function buildDashboardText(theme) {
         `📦 *Orders Today*`,
         stat('🔵', 'Total Today', ordersToday),
         stat('✅', 'Successful', successToday),
-        stat('🟡', 'Pending',    pendingOrders),
+        stat('🟡', 'Pending Orders',  pendingOrders),
+        stat('⏳', 'Pending Topups',  pendingTopups),
         ``,
         `👥 *Store Stats*`,
         stat('👤', 'Total Users',    totalUsers),
@@ -96,11 +115,37 @@ async function buildDashboardText(theme) {
         `💱 *Exchange Rates*`,
         ...rateLines,
         ``,
-        `🟡 *Recent Pending Orders*`,
-        ...pendingLines,
+        `🟡 *Pending Orders (${pendingOrders} ခု)*`,
+        ...pendingOrderLines,
+        ``,
+        `⏳ *Pending Topups (${pendingTopups} ခု)*`,
+        ...pendingTopupLines,
         sep,
       ],
     },
+  ]);
+}
+
+// ── Reusable dashboard keyboard builder ───────────────────────────────────────
+function dashboardKeyboard() {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('🔄 Refresh',          'dashboard_refresh'),
+      Markup.button.callback('🖥 System Health',    'dashboard_syshealth'),
+    ],
+    [
+      Markup.button.callback('⏳ Pending Topups',   'gh_ptopups:1:pending'),
+      Markup.button.callback('📦 Pending Orders',   'admin_pending_orders'),
+    ],
+    [
+      Markup.button.callback('📊 Analytics',        'dashboard_analytics'),
+      Markup.button.callback('💱 Manage Rates',     'open_rate_manager'),
+    ],
+    [
+      Markup.button.callback('🚫 Banned Users',     'banned_users_panel'),
+      Markup.button.callback('📋 Global History',   'global_history_panel'),
+    ],
+    [Markup.button.callback('🛍️ Mini App Button',   'miniapp_panel')],
   ]);
 }
 
@@ -109,22 +154,8 @@ module.exports = function registerDashboard(bot) {
     const ref = await pulseLoading(ctx, 'Loading Dashboard', 3, 400);
     try {
       const theme = getTheme(ctx.user);
-      const text = await buildDashboardText(theme);
-
-      await resolveMessage(ctx, ref, text, {
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('🔄 Refresh', 'dashboard_refresh')],
-          [Markup.button.callback('📦 View Pending', 'admin_pending_orders')],
-          [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
-          [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
-          [
-            Markup.button.callback('🚫 Banned Users',   'banned_users_panel'),
-            Markup.button.callback('📋 Global History', 'global_history_panel'),
-          ],
-          [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
-          [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
-        ]),
-      });
+      const text  = await buildDashboardText(theme);
+      await resolveMessage(ctx, ref, text, { ...dashboardKeyboard() });
     } catch (err) {
       await resolveMessage(ctx, ref, `❌ Dashboard error: ${err.message}`);
     }
@@ -134,21 +165,8 @@ module.exports = function registerDashboard(bot) {
     const ref = await pulseLoading(ctx, 'Loading Dashboard', 3, 400);
     try {
       const theme = getTheme(ctx.user);
-      const text = await buildDashboardText(theme);
-      await resolveMessage(ctx, ref, text, {
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('🔄 Refresh', 'dashboard_refresh')],
-          [Markup.button.callback('📦 View Pending', 'admin_pending_orders')],
-          [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
-          [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
-          [
-            Markup.button.callback('🚫 Banned Users',   'banned_users_panel'),
-            Markup.button.callback('📋 Global History', 'global_history_panel'),
-          ],
-          [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
-          [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
-        ]),
-      });
+      const text  = await buildDashboardText(theme);
+      await resolveMessage(ctx, ref, text, { ...dashboardKeyboard() });
     } catch (err) {
       await resolveMessage(ctx, ref, `❌ Dashboard error: ${err.message}`);
     }
@@ -158,21 +176,10 @@ module.exports = function registerDashboard(bot) {
     await ctx.answerCbQuery('Refreshing...');
     try {
       const theme = getTheme(ctx.user);
-      const text = await buildDashboardText(theme);
+      const text  = await buildDashboardText(theme);
       await ctx.editMessageText(text, {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('🔄 Refresh', 'dashboard_refresh')],
-          [Markup.button.callback('📦 View Pending', 'admin_pending_orders')],
-          [Markup.button.callback('📊 Analytics', 'dashboard_analytics')],
-          [Markup.button.callback('💱 Manage Rates', 'open_rate_manager')],
-          [
-            Markup.button.callback('🚫 Banned Users',   'banned_users_panel'),
-            Markup.button.callback('📋 Global History', 'global_history_panel'),
-          ],
-          [Markup.button.callback('🖥 System Health', 'dashboard_syshealth')],
-          [Markup.button.callback('🛍️ Mini App Button', 'miniapp_panel')],
-        ]),
+        ...dashboardKeyboard(),
       });
     } catch (err) {
       await ctx.reply(`❌ ${err.message}`);
