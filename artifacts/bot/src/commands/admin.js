@@ -1674,29 +1674,6 @@ module.exports = function registerAdmin(bot) {
     }
   });
 
-  // ── Orders ─────────────────────────────────────────────────────────────────
-  bot.action('admin_pending_orders', adminOnly(), async (ctx) => {
-    await ctx.answerCbQuery();
-    const orders = await Order.find({ status: 'Pending' })
-      .populate('userId', 'username telegramId')
-      .populate('productId', 'name')
-      .sort({ timestamp: -1 })
-      .limit(10);
-    if (!orders.length) return ctx.reply('✅ No pending orders!', {
-      ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'admin_orders_action')]]),
-    });
-    await ctx.reply(`🟡 *Pending Orders (${orders.length})*`, { parse_mode: 'Markdown' });
-    for (const order of orders) {
-      await ctx.reply(`🟡 *Pending Order*\n\n${adminOrders.orderSummaryText(order)}`, {
-        parse_mode: 'Markdown',
-        ...adminOrders.adminOrderActionKeyboard(order._id.toString()),
-      });
-    }
-    await ctx.reply('⬆️ Pending orders above', {
-      ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back', 'admin_orders_action')]]),
-    });
-  });
-
   bot.action('admin_all_orders', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const orders = await Order.find()
