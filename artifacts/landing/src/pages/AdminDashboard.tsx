@@ -6,7 +6,17 @@ import { Glass } from "@/components/Glass";
 import { Skeleton } from "@/components/EmptyState";
 import { api } from "@/lib/api";
 
-interface Summary { pendingOrders: number; processingOrders: number; pendingTopups: number }
+interface Summary {
+  pendingOrders: number;
+  processingOrders: number;
+  pendingTopups: number;
+  ordersToday: number;
+  salesToday: number;
+  topupsToday: number;
+  totalUsers: number;
+  walletKS: number;
+  walletCoin: number;
+}
 interface AdminMe { isAdmin: boolean; role: string }
 
 export default function AdminDashboard() {
@@ -46,7 +56,7 @@ export default function AdminDashboard() {
           </div>
         </Glass>
 
-        {/* Summary cards */}
+        {/* Live summary cards */}
         <div className="grid grid-cols-3 gap-2">
           {sumQ.isLoading ? (
             Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)
@@ -69,9 +79,21 @@ export default function AdminDashboard() {
                 color="text-yellow-400"
                 urgent={(sumQ.data?.pendingTopups ?? 0) > 0}
               />
+              <SummaryCard label="Orders Today" value={sumQ.data?.ordersToday ?? 0} color="text-violet-300" />
+              <SummaryCard label="Sales Today" value={sumQ.data?.salesToday ?? 0} color="text-emerald-300" money />
+              <SummaryCard label="Topups Today" value={sumQ.data?.topupsToday ?? 0} color="text-cyan-300" money />
             </>
           )}
         </div>
+
+        {sumQ.data && (
+          <Glass className="p-4 grid grid-cols-2 gap-3">
+            <InfoStat label="Total Users" value={sumQ.data.totalUsers.toLocaleString()} />
+            <InfoStat label="Total KS in Wallets" value={`${sumQ.data.walletKS.toLocaleString()} Ks`} />
+            <InfoStat label="Total Coins" value={sumQ.data.walletCoin.toLocaleString()} />
+            <InfoStat label="Today" value={`${sumQ.data.ordersToday} orders`} />
+          </Glass>
+        )}
 
         {/* Navigation cards */}
         <Glass className="divide-y divide-white/5">
@@ -123,17 +145,28 @@ function SummaryCard({
   value,
   color,
   urgent,
+  money,
 }: {
   label: string;
   value: number;
   color: string;
   urgent?: boolean;
+  money?: boolean;
 }) {
   return (
     <Glass className={`p-3 flex flex-col items-center gap-1 text-center ${urgent ? "ring-1 ring-orange-400/40" : ""}`}>
-      <span className={`text-2xl font-bold ${color}`}>{value}</span>
+       <span className={`text-2xl font-bold ${color}`}>{money ? value.toLocaleString() : value}</span>
       <span className="text-[10px] text-white/50 leading-tight">{label}</span>
     </Glass>
+  );
+}
+
+function InfoStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="glass-strong rounded-xl px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-white/50">{label}</div>
+      <div className="text-sm font-semibold mt-0.5">{value}</div>
+    </div>
   );
 }
 

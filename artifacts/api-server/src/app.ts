@@ -71,4 +71,16 @@ app.use("/api", apiLimiter);
 
 app.use("/api", router);
 
+// Express 5 forwards rejected async handlers here. Return JSON instead of the
+// default HTML error page so the Mini App can show the real configuration/
+// database problem and distinguish it from an application response.
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const message = err instanceof Error ? err.message : "Internal server error";
+  logger.error({ err }, "API request failed");
+  const unavailable = /MONGODB_URI|Mongo|topology|server selection|ECONNREFUSED/i.test(message);
+  res.status(unavailable ? 503 : 500).json({
+    error: unavailable ? "Store database is unavailable" : "Internal server error",
+  });
+});
+
 export default app;

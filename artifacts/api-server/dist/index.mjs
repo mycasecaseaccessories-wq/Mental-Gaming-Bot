@@ -85071,7 +85071,7 @@ function verifyInitData(initData, botToken2) {
 async function telegramAuth(req, res, next) {
   const botToken2 = process.env["BOT_TOKEN"];
   if (!botToken2) {
-    res.status(500).json({ error: "BOT_TOKEN not configured" });
+    res.status(503).json({ error: "Telegram authentication is not configured" });
     return;
   }
   const initData = req.header("x-telegram-init-data") || req.query["initData"] || "";
@@ -85218,7 +85218,11 @@ function adminChatId() {
   return Number.isFinite(n) ? n : null;
 }
 var router3 = (0, import_express3.Router)();
-router3.use(telegramAuth);
+var PUBLIC_STORE_PATH = /^\/(?:catalogs(?:\/[^/]+)?|products(?:\/[^/]+)?|flashsale|payment-methods|banners|popular|feature-gates|mc\/config)$/;
+router3.use((req, res, next) => {
+  if (PUBLIC_STORE_PATH.test(req.path)) return next();
+  return telegramAuth(req, res, next);
+});
 function shortCodeFor(method) {
   const m = method.toUpperCase();
   if (m === "KPAY" || m === "KBZPAY") return "KPAY";
@@ -85717,7 +85721,7 @@ router3.get("/orders/:id", async (req, res) => {
 router3.get("/wallet", async (req, res) => {
   const u = asUser(req);
   const txs = await getCollection("transactions");
-  const docs = await txs.find({ userId: u._id }).sort({ createdAt: -1, timestamp: -1 }).limit(30).toArray();
+  const docs = await txs.find({ userId: u._id }).sort({ timestamp: -1, createdAt: -1 }).limit(30).toArray();
   res.json({
     balanceKS: u.balanceKS,
     balanceCoin: u.balanceCoin,
@@ -86624,12 +86628,41 @@ router6.get("/admin/summary", telegramAuth, adminAuth, async (_req, res) => {
   try {
     const orders = await getCollection("orders");
     const txs = await getCollection("transactions");
-    const [pendingOrders, processingOrders, pendingTopups] = await Promise.all([
+    const users = await getCollection("users");
+    const startOfDay = /* @__PURE__ */ new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const [pendingOrders, processingOrders, pendingTopups, ordersToday, salesToday, topupsToday, totalUsers, walletTotals] = await Promise.all([
       orders.countDocuments({ status: "Pending" }),
       orders.countDocuments({ status: "Processing" }),
-      txs.countDocuments({ type: "Topup", status: "Pending" })
+      txs.countDocuments({ type: "Topup", status: "Pending" }),
+      orders.countDocuments({ timestamp: { $gte: startOfDay } }),
+      orders.aggregate([
+        { $match: { timestamp: { $gte: startOfDay }, status: "Success" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]).toArray(),
+      txs.aggregate([
+        { $match: { timestamp: { $gte: startOfDay }, type: "Topup", status: "Completed" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]).toArray(),
+      users.countDocuments({}),
+      users.aggregate([
+        { $group: { _id: null, balanceKS: { $sum: "$balanceKS" }, balanceCoin: { $sum: "$balanceCoin" } } }
+      ]).toArray()
     ]);
-    res.json({ pendingOrders, processingOrders, pendingTopups });
+    const sales = salesToday[0]?.total ?? 0;
+    const topups = topupsToday[0]?.total ?? 0;
+    const wallets = walletTotals[0] ?? {};
+    res.json({
+      pendingOrders,
+      processingOrders,
+      pendingTopups,
+      ordersToday,
+      salesToday: sales,
+      topupsToday: topups,
+      totalUsers,
+      walletKS: wallets.balanceKS ?? 0,
+      walletCoin: wallets.balanceCoin ?? 0
+    });
   } catch (err) {
     logger.error({ err }, "admin summary error");
     res.status(500).json({ error: "Internal error" });
@@ -86810,22 +86843,6 @@ router6.patch("/admin/topups/:id/approve", telegramAuth, adminAuth, async (req, 
         }
       }
     );
-    await txs.insertOne({
-      _id: new import_mongodb12.ObjectId(),
-      userId: user._id,
-      type: "Topup",
-      amount: amountKS,
-      txId: dupKey,
-      status: "Completed",
-      paymentMethod: tx.paymentMethod ?? null,
-      screenshotUrl: tx.screenshotUrl ?? null,
-      screenshotHash: tx.screenshotHash ?? null,
-      note: `Top-up approved \u2014 ${tx.paymentMethod ?? ""}`,
-      processedBy: adminTid,
-      balanceAfter: newBalance,
-      rejectionReason: null,
-      timestamp: /* @__PURE__ */ new Date()
-    });
     res.json({ ok: true, amountKS, bonusCoins, newTier });
   } catch (err) {
     if (err?.code === 11e3) {
@@ -88617,6 +88634,14 @@ var apiLimiter = rate_limit_default({
 });
 app.use("/api", apiLimiter);
 app.use("/api", routes_default);
+app.use((err, _req, res, _next) => {
+  const message = err instanceof Error ? err.message : "Internal server error";
+  logger.error({ err }, "API request failed");
+  const unavailable = /MONGODB_URI|Mongo|topology|server selection|ECONNREFUSED/i.test(message);
+  res.status(unavailable ? 503 : 500).json({
+    error: unavailable ? "Store database is unavailable" : "Internal server error"
+  });
+});
 var app_default = app;
 
 // src/index.ts

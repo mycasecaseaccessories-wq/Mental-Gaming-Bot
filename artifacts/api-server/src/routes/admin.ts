@@ -47,6 +47,7 @@ interface TxDoc {
   rejectionReason?: string | null;
   processedBy?: number | null;
   balanceAfter?: number | null;
+  balanceBefore?: number | null;
   timestamp: Date;
 }
 
@@ -120,12 +121,41 @@ router.get("/admin/summary", telegramAuth, adminAuth, async (_req, res) => {
   try {
     const orders = await getCollection<OrderDoc>("orders");
     const txs = await getCollection<TxDoc>("transactions");
-    const [pendingOrders, processingOrders, pendingTopups] = await Promise.all([
+    const users = await getCollection<UserDoc>("users");
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const [pendingOrders, processingOrders, pendingTopups, ordersToday, salesToday, topupsToday, totalUsers, walletTotals] = await Promise.all([
       orders.countDocuments({ status: "Pending" }),
       orders.countDocuments({ status: "Processing" }),
       txs.countDocuments({ type: "Topup", status: "Pending" }),
+      orders.countDocuments({ timestamp: { $gte: startOfDay } }),
+      orders.aggregate([
+        { $match: { timestamp: { $gte: startOfDay }, status: "Success" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]).toArray(),
+      txs.aggregate([
+        { $match: { timestamp: { $gte: startOfDay }, type: "Topup", status: "Completed" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]).toArray(),
+      users.countDocuments({}),
+      users.aggregate([
+        { $group: { _id: null, balanceKS: { $sum: "$balanceKS" }, balanceCoin: { $sum: "$balanceCoin" } } },
+      ]).toArray(),
     ]);
-    res.json({ pendingOrders, processingOrders, pendingTopups });
+    const sales = (salesToday[0] as { total?: number } | undefined)?.total ?? 0;
+    const topups = (topupsToday[0] as { total?: number } | undefined)?.total ?? 0;
+    const wallets = (walletTotals[0] as { balanceKS?: number; balanceCoin?: number } | undefined) ?? {};
+    res.json({
+      pendingOrders,
+      processingOrders,
+      pendingTopups,
+      ordersToday,
+      salesToday: sales,
+      topupsToday: topups,
+      totalUsers,
+      walletKS: wallets.balanceKS ?? 0,
+      walletCoin: wallets.balanceCoin ?? 0,
+    });
   } catch (err) {
     logger.error({ err }, "admin summary error");
     res.status(500).json({ error: "Internal error" });
@@ -349,22 +379,9 @@ router.patch("/admin/topups/:id/approve", telegramAuth, adminAuth, async (req, r
       },
     );
 
-    await txs.insertOne({
-      _id: new ObjectId(),
-      userId: user._id,
-      type: "Topup",
-      amount: amountKS,
-      txId: dupKey,
-      status: "Completed",
-      paymentMethod: tx.paymentMethod ?? null,
-      screenshotUrl: tx.screenshotUrl ?? null,
-      screenshotHash: tx.screenshotHash ?? null,
-      note: `Top-up approved — ${tx.paymentMethod ?? ""}`,
-      processedBy: adminTid,
-      balanceAfter: newBalance,
-      rejectionReason: null,
-      timestamp: new Date(),
-    } as never);
+    // The pending document is the top-up ledger entry. Do not insert a second
+    // completed Topup here: that made wallet history and analytics count one
+    // approval twice (the bot follows the same single-ledger convention).
 
     res.json({ ok: true, amountKS, bonusCoins, newTier });
   } catch (err) {

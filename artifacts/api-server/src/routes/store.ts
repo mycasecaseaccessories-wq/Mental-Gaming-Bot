@@ -29,7 +29,15 @@ function adminChatId(): number | null {
 }
 
 const router: IRouter = Router();
-router.use(telegramAuth);
+
+// Store browsing is public; only account, wallet, order, and notification
+// operations need Telegram identity. Keeping this split here prevents a
+// missing bot token from turning the whole storefront into a 500 page.
+const PUBLIC_STORE_PATH = /^\/(?:catalogs(?:\/[^/]+)?|products(?:\/[^/]+)?|flashsale|payment-methods|banners|popular|feature-gates|mc\/config)$/;
+router.use((req, res, next) => {
+  if (PUBLIC_STORE_PATH.test(req.path)) return next();
+  return telegramAuth(req, res, next);
+});
 
 // ── Types mirroring bot Mongoose models ─────────────────────────────────────
 
@@ -840,7 +848,10 @@ router.get("/wallet", async (req: Request, res: Response) => {
   const txs = await getCollection<TxDoc>("transactions");
   const docs = await txs
     .find({ userId: u._id })
-    .sort({ createdAt: -1, timestamp: -1 })
+    // Bot transactions use `timestamp`; API-created transactions may also
+    // have `createdAt`. Sort by the canonical ledger timestamp first so the
+    // wallet never shows an older top-up above a newer purchase.
+    .sort({ timestamp: -1, createdAt: -1 })
     .limit(30)
     .toArray();
 

@@ -79,7 +79,7 @@ export async function telegramAuth(
 ): Promise<void> {
   const botToken = process.env["BOT_TOKEN"];
   if (!botToken) {
-    res.status(500).json({ error: "BOT_TOKEN not configured" });
+    res.status(503).json({ error: "Telegram authentication is not configured" });
     return;
   }
 
