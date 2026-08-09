@@ -333,7 +333,7 @@ module.exports = function registerDashboard(bot) {
   // ── /setlivefeed — toggle live activity feed on/off ──────────────────────
   bot.command('setlivefeed', adminOnly(), async (ctx) => {
     const st = await SystemStatus.get();
-    if (!st.liveFeedChannelId) {
+    if (!st.liveFeedChannelId && !(st.liveFeedChannels || []).length) {
       return ctx.reply(
         `📡 *Live Feed Channel မသတ်မှတ်ရသေးပါ*\n\n` +
         `/channels → ➕ Channel ထည့်မယ် → *📡 Live Feed* ကိုရွေးပြီး channel သတ်မှတ်ပါ။`,
@@ -346,6 +346,19 @@ module.exports = function registerDashboard(bot) {
       newState
         ? `✅ *Live Feed ဖွင့်လိုက်ပါပြီ!*\n\nProduct ဝယ်တာ၊ ပိုက်ဆံ ထည့်တာ၊ giveaway ရယူတာတွေကို channel ထဲ ကြေညာပါမယ်။`
         : `🔕 *Live Feed ပိတ်လိုက်ပါပြီ။*\n\n/setlivefeed နဲ့ ပြန်ဖွင့်နိုင်ပါတယ်။`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  bot.command('testlivefeed', adminOnly(), async (ctx) => {
+    const LiveFeedService = require('../services/LiveFeedService');
+    const destinations = await LiveFeedService.getDestinations();
+    if (!destinations.length) {
+      return ctx.reply('❌ Live Feed channel မသတ်မှတ်ရသေးပါ။ /channels မှာ 📡 Live Feed ကို ထည့်ပါ။');
+    }
+    const result = await LiveFeedService.sendTest(ctx.telegram);
+    return ctx.reply(
+      `🧪 Live Feed test ပြီးပါပြီ။\n✅ Sent: ${result.sent}\n❌ Failed: ${result.failed}`,
       { parse_mode: 'Markdown' }
     );
   });

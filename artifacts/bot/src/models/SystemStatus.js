@@ -84,6 +84,11 @@ const systemStatusSchema = new mongoose.Schema(
       default: null,
       comment: 'Channel to receive live activity posts (purchases, top-ups, giveaway claims)',
     },
+    liveFeedChannels: {
+      type: [{ chatId: String, title: String, link: String }],
+      default: () => [],
+      comment: 'Additional live activity destinations; liveFeedChannelId is retained for backwards compatibility',
+    },
     liveFeedEnabled: {
       type:    Boolean,
       default: false,

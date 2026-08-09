@@ -1,0 +1,859 @@
+Mental Gaming Bot — SAFE EXTENSION ONLY
+
+Read Existing Code First. Preserve Existing System. Add Only What Is Missing.
+
+You are working on an EXISTING production-style Mental Gaming Bot repository.
+
+🚨 MOST IMPORTANT RULE
+
+DO NOT start coding immediately.
+
+Before changing ANY file, you MUST first inspect and understand the existing project.
+
+The primary goal is:
+
+EXTEND the existing system, NOT rebuild, replace, refactor, or redesign the existing system.
+
+Existing functionality has priority over this request.
+
+If an existing feature already does something required by this request:
+
+REUSE IT. DO NOT CREATE A SECOND VERSION OF IT.
+
+If an existing file already contains related logic:
+
+EXTEND it minimally instead of replacing the file.
+
+If a requested feature does not require a code change:
+
+DO NOT change that code.
+
+⸻
+
+PHASE 0 — STOP AND AUDIT FIRST
+
+Before writing code, inspect the complete repository.
+
+Read and understand:
+
+* package.json
+* pnpm-workspace.yaml
+* tsconfig.json
+* tsconfig.base.json
+* project/replit configuration
+* existing bot source
+* API/server source
+* database/schema/model files
+* services
+* repositories
+* controllers
+* handlers
+* middleware
+* keyboards
+* admin commands
+* user commands
+* wallet system
+* transaction system
+* topup system
+* shop system
+* order system
+* account/direct-topup system
+* channel system
+* channel reward system
+* auto-post system
+* giveaway-related code if it already exists
+* cron/scheduler/background jobs
+* Telegram/Telegraf integration
+* logging
+* error handling
+* tests
+* utility/helper functions
+
+Also inspect archived/related project code if it is part of the repository and determine which implementation is actually active.
+
+Do not assume that a feature does not exist just because its name is different.
+
+Search the repository by behavior, model names, handlers, callbacks, services, and database fields.
+
+⸻
+
+PHASE 1 — CREATE AN EXISTING-SYSTEM MAP
+
+Before implementation, create an internal map of the current architecture.
+
+Identify the CURRENT source of truth for:
+
+Topup
+
+Find exactly:
+
+User starts topup
+→ payment/request
+→ admin approval or automatic verification
+→ transaction completion
+→ wallet update
+
+Determine the exact function/service/event where topup becomes successfully completed.
+
+Do NOT create another topup completion mechanism.
+
+⸻
+
+Purchase
+
+Find exactly:
+
+Shop
+→ Product
+→ Order
+→ payment
+→ delivery/completion
+→ Success
+
+Also identify the existing Account / DirectTopup purchase flow.
+
+Determine the exact source of truth for a successful purchase.
+
+Do NOT create another order system.
+
+⸻
+
+Channels
+
+Find:
+
+* Channel model
+* Channel service
+* channel add flow
+* channel list flow
+* channel edit flow
+* channel delete/deactivate flow
+* channel link handling
+* channel permissions
+* channel type system
+* ChannelRewardClaim
+* ChannelAutoPost
+* existing admin channel UI
+
+Determine whether live-feed functionality can be added to the EXISTING Channel system.
+
+Do NOT create a duplicate channel table/system if the existing system can support it.
+
+⸻
+
+Admin
+
+Find the existing:
+
+* admin authentication
+* admin authorization
+* admin menu
+* admin keyboard
+* callback handlers
+* channel management UI
+
+Reuse the existing admin architecture.
+
+Do NOT create a separate admin system.
+
+⸻
+
+Scheduler / Cron
+
+Find the existing:
+
+* CronService
+* scheduled jobs
+* background workers
+* retry mechanism
+* cleanup mechanism
+
+If there is already a suitable scheduler:
+
+REUSE IT.
+
+Do not create an unrelated new scheduler unless absolutely necessary.
+
+⸻
+
+Giveaway
+
+Search the COMPLETE repository for:
+
+giveaway
+Giveaway
+claim
+reward
+quantity
+remaining
+expires
+expiry
+delete
+winner
+
+If a giveaway system already exists, understand it fully before changing anything.
+
+If no suitable giveaway system exists, then create the minimum new models/services required.
+
+⸻
+
+PHASE 2 — REPORT BEFORE CODING
+
+After auditing the repository, produce an implementation plan BEFORE modifying files.
+
+The plan must contain:
+
+1. Existing feature/system
+2. Existing source files
+3. Existing source of truth
+4. What can be reused
+5. What must be extended
+6. What genuinely needs new code
+7. Exact files that will be modified
+8. New files that will be created
+9. Database changes
+10. Migration/index changes
+11. Tests required
+
+Also explicitly list:
+
+FILES THAT MUST NOT BE MODIFIED
+
+when a file is unrelated to the requested feature.
+
+IMPORTANT
+
+Do NOT ask the user to approve the plan unless the coding environment requires approval.
+
+After the audit and plan, proceed with implementation while following the plan.
+
+⸻
+
+PHASE 3 — MINIMAL CHANGE POLICY
+
+Follow these rules strictly.
+
+Rule 1
+
+Do not rewrite existing files just because a cleaner architecture is possible.
+
+Rule 2
+
+Do not rename existing models, services, functions, callbacks, commands, or database fields unless absolutely required.
+
+Rule 3
+
+Do not remove existing behavior.
+
+Rule 4
+
+Do not replace existing working logic with a new implementation.
+
+Rule 5
+
+Do not duplicate existing functionality.
+
+Rule 6
+
+Do not refactor unrelated code.
+
+Rule 7
+
+Do not change UI that is unrelated to this feature.
+
+Rule 8
+
+Do not change database fields unless necessary.
+
+Rule 9
+
+If an existing function can safely be extended with one event call, prefer that over rewriting the entire function.
+
+Rule 10
+
+Every modification must have a direct reason related to the requested features.
+
+⸻
+
+FEATURE A — LIVE FEED
+
+Add a reusable Live Feed mechanism to the existing architecture.
+
+Required events:
+
+TOPUP_COMPLETED
+PURCHASE_COMPLETED
+GIVEAWAY_CLAIMED
+
+But first determine whether the project already has an event/notification architecture.
+
+If it exists:
+
+EXTEND IT.
+
+If it does not:
+
+Create a minimal reusable service such as:
+
+LiveFeedService
+
+Do not build an unnecessarily large event framework.
+
+⸻
+
+LIVE FEED CHANNELS
+
+Use the EXISTING Channel system.
+
+If possible, extend the existing Channel model with only the required field(s), for example:
+
+liveFeedEnabled
+
+or integrate with the existing channel type system if that already supports this concept.
+
+Do NOT create a completely separate channel management system.
+
+Only active configured live-feed channels should receive events.
+
+Multiple channels must be supported.
+
+One event should fan out independently to every active live-feed channel.
+
+If one channel fails, other channels must still receive the event.
+
+⸻
+
+LIVE FEED — USER IDENTITY MASKING
+
+This requirement is IMPORTANT.
+
+The live feed SHOULD show the user identity, but MUST NOT expose it completely.
+
+Example:
+
+👤 User: @MgMg****
+
+or:
+
+🆔 User ID: 123456****
+
+Use a consistent masking utility.
+
+Do NOT hard-code masking separately in every message.
+
+Create/reuse a helper such as:
+
+maskUsername()
+maskUserId()
+
+Recommended behavior
+
+Username:
+
+@mgmg12345
+→
+@mgmg****
+
+User ID:
+
+123456789
+→
+123456****
+
+Do not expose the complete username or complete Telegram ID in the public live feed.
+
+⸻
+
+BOT USER-FACING PRIVACY
+
+This is DIFFERENT from Live Feed.
+
+When sending messages directly to the user through the bot:
+
+DO NOT show the user’s own full ID, username, or private user information unless the existing feature explicitly requires it.
+
+For normal user-facing messages, only show information required for the operation.
+
+Example:
+
+✅ Top Up Successful
+💰 Amount: 50,000 KS
+
+Do not add unnecessary user identity information.
+
+⸻
+
+LIVE FEED — TOPUP
+
+When an EXISTING topup flow reaches its real successful/completed state:
+
+Emit:
+
+TOPUP_COMPLETED
+
+Do not trigger it when the transaction is:
+
+* pending
+* rejected
+* cancelled
+* failed
+
+Example live feed:
+
+💰 New Top Up
+👤 User: @mgmg****
+💵 Amount: 50,000 KS
+✅ Completed
+🕐 12:34 PM
+
+Use the existing transaction/topup source of truth.
+
+Do not create another topup workflow.
+
+⸻
+
+LIVE FEED — PURCHASE
+
+When an EXISTING order reaches its real successful/completed state:
+
+Emit:
+
+PURCHASE_COMPLETED
+
+This must cover:
+
+1. Shop purchases
+2. Account / DirectTopup purchases
+
+Example:
+
+🛒 New Purchase
+👤 User: @mgmg****
+📦 Product: MLBB 86 Diamonds
+💵 Amount: 5,000 KS
+✅ Successful
+
+Use existing Order/Product/Account purchase logic.
+
+Do not create a second order system.
+
+⸻
+
+LIVE FEED — IDEMPOTENCY
+
+A successful transaction/order must not create duplicate live-feed messages.
+
+Check the existing project for an idempotency/event mechanism first.
+
+If none exists, implement the smallest safe solution.
+
+Examples:
+
+topup:<transactionId>
+purchase:<orderId>
+giveaway:<giveawayId>:<userId>
+
+The same event must not be posted twice even if:
+
+* bot restarts
+* callback is repeated
+* webhook is retried
+* status handler runs twice
+* function is accidentally called twice
+
+⸻
+
+ADMIN CHANNEL ACCESS
+
+Extend the EXISTING admin channel management.
+
+Do not create a second channel list.
+
+Admin should be able to see configured channels and, where a valid channel link exists:
+
+🔗 Open Channel
+
+Use the existing stored channel link.
+
+Do not invent a Telegram URL from a private channel ID.
+
+If a test-feed feature is added, integrate it into the existing admin channel UI.
+
+⸻
+
+ADMIN LIVE FEED TEST
+
+Add a minimal:
+
+🧪 Test Live Feed
+
+only where appropriate.
+
+The test should send:
+
+🧪 Live Feed Test
+Mental Gaming Bot live feed is working correctly.
+
+Handle Telegram errors gracefully.
+
+Do not crash the bot if:
+
+* bot is not admin
+* channel is invalid
+* bot cannot post
+* channel was deleted
+
+⸻
+
+GIVEAWAY
+
+Before implementing Giveaway:
+
+SEARCH THE ENTIRE EXISTING PROJECT FOR AN EXISTING GIVEAWAY IMPLEMENTATION.
+
+If one exists:
+
+EXTEND IT.
+
+If only Channel Reward exists:
+
+Do not incorrectly turn ChannelRewardClaim into a general Giveaway system.
+
+Only create a separate Giveaway model if the existing architecture truly has no suitable giveaway system.
+
+⸻
+
+GIVEAWAY DATA
+
+If new models are genuinely required, use the minimum required fields.
+
+Potentially:
+
+Giveaway
+GiveawayClaim
+
+Possible fields:
+
+title
+description
+reward
+totalQuantity
+claimedQuantity
+remainingQuantity
+status
+startAt
+expiresAt
+deleteAfterSeconds
+messageId
+channelId
+createdBy
+createdAt
+updatedAt
+
+But DO NOT blindly add every field above.
+
+First inspect the existing schema and use existing fields where possible.
+
+⸻
+
+GIVEAWAY CLAIM
+
+Claiming must be atomic.
+
+Prevent:
+
+remaining = 1
+User A claims
+User B claims
+
+from giving the reward to both users.
+
+Use database transaction/atomic conditional update according to the existing database architecture.
+
+Also prevent the same user from claiming the same giveaway twice.
+
+⸻
+
+GIVEAWAY USER VIEW
+
+Users should see:
+
+🎁 Giveaway
+🎁 Reward: 100 Diamonds
+🎟 Total: 10
+👥 Claimed: 7
+🔥 Remaining: 3
+⏳ Ends in: 03:12
+[🎁 CLAIM NOW]
+
+Do NOT show complete user IDs or usernames to normal bot users.
+
+Do not expose other users’ personal information.
+
+⸻
+
+GIVEAWAY LIVE FEED
+
+The live feed SHOULD show masked user identity.
+
+Example:
+
+🎁 Giveaway Claimed
+👤 User: @mgmg****
+🎁 Reward: 100 Diamonds
+🔥 Remaining: 3
+
+Use the same centralized masking utility.
+
+Do not duplicate masking logic.
+
+⸻
+
+GIVEAWAY STATUS UPDATE
+
+After every successful claim:
+
+Update the giveaway message to show:
+
+Total
+Claimed
+Remaining
+Time remaining
+
+Do not show full claimant identities to normal bot users.
+
+⸻
+
+GIVEAWAY EXPIRATION
+
+Use the EXISTING CronService/scheduler if available.
+
+Do not depend only on:
+
+setTimeout()
+
+The system must survive bot restart.
+
+When expired:
+
+* mark giveaway expired
+* disable/remove claim button
+* update final status
+* schedule/delete message according to existing architecture
+
+If the project already has cleanup jobs, extend them rather than creating another unrelated worker.
+
+⸻
+
+AUTO DELETE
+
+Giveaway messages should be deleted after the configured delay.
+
+This must be restart-safe.
+
+Do not rely only on memory timers.
+
+Use persisted timestamps and existing scheduler/cron infrastructure.
+
+⸻
+
+PRIVACY RULES
+
+Public Live Feed
+
+Allowed:
+
+@mgmg****
+123456****
+product name
+amount
+reward
+remaining quantity
+status
+time
+
+Not allowed:
+
+full username
+full Telegram ID
+phone number
+email
+payment credentials
+payment screenshots
+passwords
+game account password
+private account credentials
+full sensitive transaction data
+
+Normal Bot User Messages
+
+Do not unnecessarily expose:
+
+* their full Telegram ID
+* other users’ identities
+* other users’ private data
+* payment information
+* private account information
+
+Only display information necessary for the current action.
+
+Admin
+
+Authorized admins may access detailed information where the EXISTING admin system already permits it.
+
+Do not weaken existing authorization.
+
+⸻
+
+ERROR ISOLATION
+
+Live-feed failure MUST NOT fail the original business operation.
+
+Example:
+
+Purchase succeeds
+        ↓
+Live feed fails
+        ↓
+Purchase STILL remains successful
+
+Same for:
+
+* topup
+* giveaway claim
+
+Log the error using the existing logging system.
+
+If an existing retry mechanism exists, reuse it.
+
+⸻
+
+DATABASE SAFETY
+
+Before changing schemas:
+
+1. Inspect existing models.
+2. Determine whether an equivalent field already exists.
+3. Avoid duplicate fields.
+4. Follow the existing schema naming conventions.
+5. Follow the existing index conventions.
+6. Add only required indexes.
+7. Do not delete existing data.
+8. Do not reset/drop production collections.
+9. Do not recreate the database.
+
+If a migration mechanism exists, use it.
+
+⸻
+
+TESTING
+
+Before finishing, test the actual existing flows.
+
+At minimum verify:
+
+Existing functionality
+
+* bot starts
+* existing user commands still work
+* existing admin commands still work
+* existing channel management still works
+* existing channel rewards still work
+* existing wallet still works
+* existing topup still works
+* existing shop still works
+* existing account/direct-topup still works
+* existing order flow still works
+
+New functionality
+
+* completed topup → live feed
+* pending topup → no feed
+* successful Shop purchase → live feed
+* successful Account purchase → live feed
+* failed purchase → no feed
+* multiple live-feed channels → all receive feed
+* duplicate event → no duplicate feed
+* username masking works
+* user ID masking works
+* bot user messages do not unnecessarily expose identity
+* giveaway claim works
+* duplicate claim is blocked
+* race condition is handled
+* remaining quantity is correct
+* giveaway expiry works
+* claim button disables
+* auto-delete works
+* bot restart does not break cleanup
+* giveaway claim → live feed
+
+⸻
+
+FINAL SAFETY CHECK BEFORE FINISHING
+
+Before declaring the task complete:
+
+Run a diff/change review.
+
+For EVERY changed file, ask:
+
+Why was this file changed?
+Is the change directly required?
+Could the existing code have been reused instead?
+Did I accidentally rewrite unrelated code?
+Did I remove existing behavior?
+Did I change unrelated UI?
+Did I rename anything unnecessarily?
+Did I duplicate an existing service?
+Did I introduce duplicate database models?
+
+If a change is unrelated:
+
+REVERT IT.
+
+If an existing implementation was unnecessarily rewritten:
+
+RESTORE the original implementation and make a minimal extension instead.
+
+⸻
+
+REQUIRED FINAL REPORT
+
+At the end, report:
+
+EXISTING SYSTEMS FOUND
+- ...
+REUSED
+- ...
+MODIFIED
+- file
+  reason
+CREATED
+- file
+  reason
+DATABASE CHANGES
+- ...
+NEW LIVE FEED EVENTS
+- ...
+GIVEAWAY CHANGES
+- ...
+ADMIN CHANGES
+- ...
+PRIVACY / MASKING
+- ...
+TESTS RUN
+- ...
+EXISTING FEATURES VERIFIED
+- ...
+POTENTIAL RISKS / FOLLOW-UP
+- ...
+
+Most importantly:
+
+Do not claim that an existing feature was missing until you searched the complete repository for it.
+
+Do not modify existing code simply because you prefer a different architecture.
+
+Read first. Map existing functionality second. Reuse third. Modify minimally fourth. Create new code only when genuinely necessary.
+
+Preserve the original Mental Gaming Bot as the source of truth and treat this task as a safe incremental feature addition.

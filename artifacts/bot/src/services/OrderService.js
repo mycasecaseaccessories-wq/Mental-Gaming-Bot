@@ -189,6 +189,8 @@ async function completeOrder(orderId, adminId, deliveredData, telegram) {
         await LiveFeedService.postPurchase(telegram, {
           user:        order.userId,
           productName: order.productId?.name || 'Unknown',
+          qty:          order.orderQuantity || 1,
+          eventKey:     `purchase:${order._id}`,
         }).catch(() => {});
       }
     } catch (e) {

@@ -70,6 +70,19 @@ const accountGiveawaySchema = new mongoose.Schema(
       default: '',
     },
 
+    // ── Restart-safe announcement lifecycle ──────────────────────────────────
+    announcementChannelId: { type: String, default: null },
+    announcementMessageId: { type: Number, default: null },
+    announcementBody: { type: String, default: null },
+    announcementButtonUrl: { type: String, default: null },
+    deleteAfterSeconds: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'Delete the announcement after expiry; 0 = keep the final status',
+    },
+    deleteAt: { type: Date, default: null },
+
     createdBy: { type: Number, default: null },
   },
   { timestamps: true, versionKey: false }

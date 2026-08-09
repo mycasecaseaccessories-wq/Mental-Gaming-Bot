@@ -126,7 +126,11 @@ module.exports = function registerTopup(bot) {
       await auditLog(ctx.from.id, 'TOPUP_APPROVED', txId, 'Transaction', { amountKS, bonusCoins, happyHourCoins });
 
       // Live feed notification (non-blocking)
-      require('../services/LiveFeedService').postTopup(ctx.telegram, { user, amount: amountKS }).catch(() => {});
+      require('../services/LiveFeedService').postTopup(ctx.telegram, {
+        user,
+        amount: amountKS,
+        eventKey: `topup:${txId}_approved`,
+      }).catch(() => {});
 
       // ── Process referral commission (first or every-topup mode) ────────
       processTopupCommission(user._id, amountKS, ctx.telegram).catch((err) =>

@@ -610,6 +610,7 @@ module.exports = function registerAccounts(bot) {
       productName: `${p.serviceName} — ${p.planLabel}`,
       qty: 1,
       productEmoji: p.emoji || '🔐',
+      eventKey: `account-purchase:${cred._id}`,
     }).catch(() => {});
   });
 
@@ -801,6 +802,7 @@ module.exports = function registerAccounts(bot) {
       productName: `${p.serviceName} — ${p.planLabel}`,
       qty,
       productEmoji: p.emoji || '🔐',
+      eventKey: `account-purchase:${slot?._id || cred._id}`,
     }).catch(() => {});
   });
 

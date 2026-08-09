@@ -30,14 +30,15 @@ async function getKnownChannels() {
 
   const st = await SystemStatus.get();
   const map = new Map();
-  const add = (chatId, title, source) => {
+  const add = (chatId, title, source, link = '') => {
     if (!chatId) return;
     const key = String(chatId).trim();
     if (!key) return;
-    if (!map.has(key)) map.set(key, { chatId: key, title: title || key, sources: [] });
+    if (!map.has(key)) map.set(key, { chatId: key, title: title || key, link: link || '', sources: [] });
     const entry = map.get(key);
     if (!entry.sources.includes(source)) entry.sources.push(source);
     if ((!entry.title || entry.title === entry.chatId) && title) entry.title = title;
+    if (!entry.link && link) entry.link = link;
   };
 
   (st.couponAnnounceChannels || []).forEach((c) => add(c.chatId, c.title, 'saved'));
@@ -47,6 +48,7 @@ async function getKnownChannels() {
   if (st.gameNewsChannelId) add(st.gameNewsChannelId, 'Game Update Channel', 'game');
   if (st.faqChannelId) add(st.faqChannelId, 'FAQ Channel', 'faq');
   if (st.liveFeedChannelId) add(st.liveFeedChannelId, 'Live Feed Channel', 'livefeed');
+  (st.liveFeedChannels || []).forEach((c) => add(c.chatId, c.title || 'Live Feed Channel', 'livefeed', c.link));
 
   const [posts, rewards] = await Promise.all([
     ChannelAutoPost.find({}, 'channelId title').lean().catch(() => []),

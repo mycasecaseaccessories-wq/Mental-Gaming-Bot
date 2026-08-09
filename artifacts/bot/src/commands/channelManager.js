@@ -39,6 +39,15 @@ module.exports = (bot) => {
     }
 
     const rows = [[Markup.button.callback('➕ Channel ထည့်မယ်', 'chmgr_add')]];
+    const liveFeedChannels = channels.filter((channel) => channel.sources.includes('livefeed'));
+    for (const channel of liveFeedChannels) {
+      if (channel.link && /^https:\/\/t\.me\//.test(channel.link)) {
+        rows.push([Markup.button.url(`🔗 Open ${channel.title}`, channel.link)]);
+      }
+      if (`chmgr_testlivefeed:${channel.chatId}`.length <= 64) {
+        rows.push([Markup.button.callback(`🧪 Test ${channel.title}`, `chmgr_testlivefeed:${channel.chatId}`)]);
+      }
+    }
     if (savedCount) rows.push([Markup.button.callback('🗑 သိမ်းထားတဲ့ channel ဖျက်မယ်', 'chmgr_delmenu')]);
     rows.push([Markup.button.callback('🔄 Refresh', 'chmgr_refresh')]);
 
@@ -51,6 +60,16 @@ module.exports = (bot) => {
   bot.action('chmgr_refresh', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     await showPanel(ctx);
+  });
+
+  bot.action(/^chmgr_testlivefeed:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Testing Live Feed…');
+    const LiveFeedService = require('../services/LiveFeedService');
+    const result = await LiveFeedService.sendTest(ctx.telegram, ctx.match[1]);
+    await ctx.reply(
+      `🧪 Live Feed test ပြီးပါပြီ။\n✅ Sent: ${result.sent}\n❌ Failed: ${result.failed}`,
+      { parse_mode: 'Markdown' }
+    );
   });
 
   bot.action('chmgr_add', adminOnly(), async (ctx) => {
@@ -171,9 +190,17 @@ module.exports = (bot) => {
 
     if (purpose === 'livefeed') {
       const st = await SystemStatus.get();
+      const entry = {
+        chatId: String(chat.id),
+        title: chat.title || String(chat.id),
+        link: chat.username ? `https://t.me/${chat.username}` : (chat.invite_link || ''),
+      };
       await SystemStatus.updateOne(
         { _id: st._id },
-        { $set: { liveFeedChannelId: chat.id, liveFeedEnabled: true, updatedBy: ctx.from.id } }
+        {
+          $set: { liveFeedChannelId: String(chat.id), liveFeedEnabled: true, updatedBy: ctx.from.id },
+          $addToSet: { liveFeedChannels: entry },
+        }
       );
       await ctx.reply(
         `✅ *${escMd(chat.title)}* ကို 📡 *Live Feed channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +

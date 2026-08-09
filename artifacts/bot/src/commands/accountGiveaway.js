@@ -430,6 +430,7 @@ async function autoEndAndNotify(ctx, ga, updated, meta) {
   if (quotaFull || stockLeft === 0) {
     await AccountGiveaway.updateOne({ _id: ga._id }, { $set: { isActive: false } }).catch(() => {});
   }
+  await refreshAnnouncement(ctx.telegram, ga._id, updated.claimedCount, stockLeft, quotaFull || stockLeft === 0);
   try {
     const uname = ctx.from.username ? `@${ctx.from.username}` : `ID:${ctx.from.id}`;
     await ctx.telegram.sendMessage(
@@ -441,6 +442,40 @@ async function autoEndAndNotify(ctx, ga, updated, meta) {
     );
   } catch (err) {
     console.error('[Giveaway] Admin notify failed:', err.message);
+  }
+}
+
+async function refreshAnnouncement(telegram, giveawayId, claimedCount, stockLeft, ended = false) {
+  try {
+    const ga = await AccountGiveaway.findById(giveawayId).lean();
+    if (!ga?.announcementChannelId || !ga.announcementMessageId || !ga.announcementBody) return;
+
+    const quotaLeft = ga.maxClaims > 0 ? Math.max(0, ga.maxClaims - claimedCount) : null;
+    const remaining = stockLeft === Infinity
+      ? quotaLeft
+      : (quotaLeft === null ? stockLeft : Math.min(quotaLeft, stockLeft));
+    const progress = `\n\n👥 Claimed: *${claimedCount}*` +
+      (ga.maxClaims > 0 ? ` / ${ga.maxClaims}` : '') +
+      `\n🔥 Remaining: *${remaining === Infinity || remaining === null ? '∞' : remaining}*`;
+    const status = ended ? '\n\n🔴 *Giveaway ended — claims are closed.*' : '';
+    const extra = { parse_mode: 'Markdown' };
+    if (!ended && ga.announcementButtonUrl) {
+      extra.reply_markup = {
+        inline_keyboard: [[
+          { text: '🤖 Bot ဖွင့်မယ်', url: ga.announcementButtonUrl },
+        ]],
+      };
+    }
+
+    await telegram.editMessageText(
+      ga.announcementChannelId,
+      ga.announcementMessageId,
+      undefined,
+      `${ga.announcementBody}${progress}${status}`,
+      extra
+    );
+  } catch (error) {
+    console.error('[Giveaway] announcement update failed:', error.message);
   }
 }
 
@@ -594,6 +629,7 @@ module.exports = function registerAccountGiveaway(bot) {
         user: { username: ctx.from.username, firstName: ctx.from.first_name },
         productName: p.name,
         productEmoji: '🛍',
+        eventKey: `giveaway:${ga._id}:${ctx.from.id}`,
       }).catch(() => {});
 
       await autoEndAndNotify(ctx, ga, updated, meta);
@@ -692,6 +728,7 @@ module.exports = function registerAccountGiveaway(bot) {
         user: { username: ctx.from.username, firstName: ctx.from.first_name },
         productName: `${p.serviceName} ${p.planLabel}`,
         productEmoji: p.emoji || '🎁',
+        eventKey: `giveaway:${ga._id}:${ctx.from.id}`,
       }).catch(() => {});
 
       await autoEndAndNotify(ctx, ga, updated, meta);
@@ -768,6 +805,7 @@ module.exports = function registerAccountGiveaway(bot) {
       user: { username: ctx.from.username, firstName: ctx.from.first_name },
       productName: `${p.serviceName} ${p.planLabel}`,
       productEmoji: p.emoji || '🎁',
+      eventKey: `giveaway:${ga._id}:${ctx.from.id}`,
     }).catch(() => {});
 
     await autoEndAndNotify(ctx, ga, updated, meta);
@@ -784,6 +822,25 @@ module.exports = function registerAccountGiveaway(bot) {
   bot.hears('🎁 Giveaway', adminOnly(), async (ctx) => {
     const { text, keyboard } = await buildAdminList();
     await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  });
+
+  bot.command('setgiveawaydelete', adminOnly(), async (ctx) => {
+    const [, giveawayId, secondsText] = ctx.message.text.trim().split(/\s+/);
+    const seconds = Number(secondsText);
+    if (!/^[a-f0-9]{24}$/i.test(giveawayId || '') || !Number.isInteger(seconds) || seconds < 0) {
+      return ctx.reply('Usage: /setgiveawaydelete <giveawayId> <seconds>\nUse 0 to keep the final announcement.');
+    }
+    const ga = await AccountGiveaway.findByIdAndUpdate(
+      giveawayId,
+      { $set: { deleteAfterSeconds: seconds } },
+      { new: true }
+    );
+    if (!ga) return ctx.reply('❌ Giveaway မတွေ့ပါ။');
+    return ctx.reply(
+      seconds === 0
+        ? '✅ Expired giveaway announcement ကို ဖျက်မည်မဟုတ်ပါ။'
+        : `✅ Expired giveaway announcement ကို ${seconds} seconds နောက် ဖျက်ပါမယ်။`
+    );
   });
   bot.command('giveaway', adminOnly(), async (ctx) => {
     const { text, keyboard } = await buildAdminList();
@@ -1098,10 +1155,22 @@ module.exports = function registerAccountGiveaway(bot) {
       const ss = await SystemStatus.get();
       if (ss.announcementChannelId) {
         const me = ctx.botInfo?.username || (await ctx.telegram.getMe()).username;
-        await ctx.telegram.sendMessage(ss.announcementChannelId, body + `\n👇 Bot ထဲဝင်ပြီး ရယူလိုက်ပါ:`, {
+        const announcement = await ctx.telegram.sendMessage(ss.announcementChannelId, body + `\n👇 Bot ထဲဝင်ပြီး ရယူလိုက်ပါ:`, {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([[Markup.button.url('🤖 Bot ဖွင့်မယ်', `https://t.me/${me}?start=freebie`)]]),
         });
+        await AccountGiveaway.updateOne(
+          { _id: ga._id },
+          {
+            $set: {
+              announcementChannelId: String(ss.announcementChannelId),
+              announcementMessageId: announcement.message_id,
+              announcementBody: body + `\n👇 Bot ထဲဝင်ပြီး ရယူလိုက်ပါ:`,
+              announcementButtonUrl: `https://t.me/${me}?start=freebie`,
+              deleteAt: null,
+            },
+          }
+        );
         channelOk = true;
       }
     } catch (e) {

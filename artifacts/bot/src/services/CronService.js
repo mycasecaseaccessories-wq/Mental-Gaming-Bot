@@ -224,6 +224,81 @@ async function tickChannelAutoPosts(telegram) {
   }
 }
 
+// ── Job 7: Giveaway expiry and announcement cleanup ──────────────────────────
+
+async function cleanupGiveaways(telegram) {
+  const AccountGiveaway = require('../models/AccountGiveaway');
+  const now = new Date();
+  let expired = 0;
+  let deleted = 0;
+
+  const due = await AccountGiveaway.find({
+    isActive: true,
+    endAt: { $ne: null, $lte: now },
+  }).limit(200);
+
+  for (const giveaway of due) {
+    const updated = await AccountGiveaway.findOneAndUpdate(
+      { _id: giveaway._id, isActive: true, endAt: { $ne: null, $lte: now } },
+      {
+        $set: {
+          isActive: false,
+          ...(giveaway.deleteAfterSeconds > 0
+            ? { deleteAt: new Date(now.getTime() + giveaway.deleteAfterSeconds * 1000) }
+            : {}),
+        },
+      },
+      { new: true }
+    );
+    if (!updated) continue;
+    expired++;
+
+    if (telegram && updated.announcementChannelId && updated.announcementMessageId) {
+      try {
+        const remaining = updated.maxClaims > 0
+          ? Math.max(0, updated.maxClaims - updated.claimedCount)
+          : '∞';
+        await telegram.editMessageText(
+          updated.announcementChannelId,
+          updated.announcementMessageId,
+          undefined,
+          `${updated.announcementBody || '🎁 Giveaway'}\n\n👥 Claimed: *${updated.claimedCount}*` +
+            (updated.maxClaims > 0 ? ` / ${updated.maxClaims}` : '') +
+            `\n🔥 Remaining: *${remaining}*\n\n🔴 *Giveaway ended — claims are closed.*`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('[CronService] giveaway expiry update:', error.message);
+      }
+    }
+  }
+
+  const deletable = await AccountGiveaway.find({
+    announcementChannelId: { $ne: null },
+    announcementMessageId: { $ne: null },
+    deleteAt: { $ne: null, $lte: now },
+  }).limit(200);
+  for (const giveaway of deletable) {
+    try {
+      if (telegram) {
+        await telegram.deleteMessage(giveaway.announcementChannelId, giveaway.announcementMessageId);
+      }
+      await AccountGiveaway.updateOne(
+        { _id: giveaway._id },
+        { $set: { announcementMessageId: null, deleteAt: null } }
+      );
+      deleted++;
+    } catch (error) {
+      console.error('[CronService] giveaway announcement delete:', error.message);
+    }
+  }
+
+  if (expired || deleted) {
+    console.log(`[CronService] 🎁 Giveaways: expired=${expired} deleted=${deleted}`);
+  }
+  return { expired, deleted };
+}
+
 // ── Job 7: Premium account expiry reminders (daily 09:00 MMT) ────────────────
 
 async function notifyExpiringAccounts(telegram) {
@@ -464,6 +539,11 @@ function startCronJobs(telegram) {
     cron.schedule('*/10 * * * *', () => tickChannelAutoPosts(telegram), { timezone: 'UTC' })
   );
 
+  // Giveaway expiry/cleanup: persisted timestamps make this restart-safe.
+  scheduledJobs.push(
+    cron.schedule('*/10 * * * *', () => cleanupGiveaways(telegram).catch((e) => console.error('[Cron] giveaways:', e.message)), { timezone: 'UTC' })
+  );
+
   // 09:00 MMT = 02:30 UTC — premium account expiry reminders
   scheduledJobs.push(
     cron.schedule('30 2 * * *', () => notifyExpiringAccounts(telegram), { timezone: 'UTC' })
@@ -489,7 +569,7 @@ function startCronJobs(telegram) {
     cron.schedule('50 2 1 * *', () => sendMonthlyRevenueReport(telegram), { timezone: 'UTC' })
   );
 
-  console.log('[CronService] ✅ 11 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/AccountExpiry/Birthday/Winback/Leaderboard/MonthlyReport)');
+  console.log('[CronService] ✅ 12 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/Giveaways/AccountExpiry/Birthday/Winback/Leaderboard/MonthlyReport)');
 }
 
 function stopCronJobs() {
@@ -515,5 +595,6 @@ module.exports = {
   manualCache:           flushCache,
   manualBackup:          triggerBackup,
   manualChannelPosts:    tickChannelAutoPosts,
+  manualGiveaways:       cleanupGiveaways,
   manualMonthlyReport:   sendMonthlyRevenueReport,
 };

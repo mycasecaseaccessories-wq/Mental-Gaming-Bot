@@ -206,14 +206,6 @@ module.exports = function registerAdminOrders(bot) {
         const completedOrder = await completeOrder(orderId, ctx.from.id, null, ctx.telegram);
         await auditLog(ctx.from.id, 'ORDER_COMPLETED', orderId, 'Order', { auto: true });
 
-        // Live feed — "User X just bought Product 🎁" (non-blocking)
-        require('../services/LiveFeedService').postPurchase(ctx.telegram, {
-          user: completedOrder.userId,
-          productName: completedOrder.productId?.name || 'Product',
-          qty: completedOrder.orderQuantity || 1,
-          productEmoji: '🎁',
-        }).catch(() => {});
-
         const customerTid = completedOrder.userId?.telegramId;
         if (customerTid) {
           try {
@@ -305,14 +297,6 @@ module.exports = function registerAdminOrders(bot) {
 
         const order = await completeOrder(orderId, ctx.from.id, input, ctx.telegram);
         await auditLog(ctx.from.id, 'ORDER_COMPLETED', orderId, 'Order', { manual: true });
-
-        // Live feed — "User X just bought Product 🎮" (non-blocking)
-        require('../services/LiveFeedService').postPurchase(ctx.telegram, {
-          user: order.userId,
-          productName: order.productId?.name || 'Product',
-          qty: order.orderQuantity || 1,
-          productEmoji: '🎮',
-        }).catch(() => {});
 
         const customerTid = order.userId?.telegramId;
         if (customerTid) {

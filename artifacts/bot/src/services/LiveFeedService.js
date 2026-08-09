@@ -1,84 +1,171 @@
 /**
  * LiveFeedService
- * Sends "social proof" activity notifications to a configured Telegram channel.
  *
- * Events:
- *   postPurchase  — "User L***** just bought 1× Product Name 🎮"
- *   postTopup     — "User L***** just topped up X,XXX KS 💰"
- *   postGiveaway  — "User L***** just claimed Product Name (FREE 🎁)"
+ * Public activity notifications for configured Telegram channels.
+ * The legacy single liveFeedChannelId remains supported; liveFeedChannels
+ * adds fan-out to multiple destinations without changing existing callers.
  */
 
 const SystemStatus = require('../models/SystemStatus');
+const LiveFeedDelivery = require('../models/LiveFeedDelivery');
 
-/** Masks a name: first char + '*****' regardless of length (privacy). */
-function maskName(user) {
-  const raw = user?.username || user?.firstName || user?.first_name || '?';
-  const first = String(raw)[0] || '?';
-  return `${first}*****`;
+function maskUsername(user) {
+  const raw = user?.username || user?.firstName || user?.first_name || '';
+  if (!raw) return null;
+  const value = String(raw).replace(/^@/, '');
+  return `@${value.slice(0, Math.min(4, value.length))}****`;
 }
 
-/**
- * Low-level send — fetches liveFeedChannelId from SystemStatus, sends message.
- * Silent on error (never crash callers).
- */
-async function post(telegram, text, button = null) {
-  try {
-    const st = await SystemStatus.get();
-    if (!st.liveFeedEnabled || !st.liveFeedChannelId) return;
-    const extra = { parse_mode: 'Markdown' };
-    if (button) {
-      const { Markup } = require('telegraf');
-      Object.assign(extra, Markup.inlineKeyboard([[
-        Markup.button.url(button.label, button.url),
-      ]]));
+function maskUserId(id) {
+  const value = String(id ?? '');
+  if (!value) return null;
+  return `${value.slice(0, Math.min(6, value.length))}****`;
+}
+
+function maskedUser(user) {
+  return maskUsername(user) || maskUserId(user?.telegramId || user?.id) || '@user****';
+}
+
+function escapeMarkdown(value) {
+  return String(value ?? '').replace(/([_*`\[\]])/g, '\\$1');
+}
+
+async function getDestinations() {
+  const st = await SystemStatus.get();
+  if (!st.liveFeedEnabled) return [];
+
+  const destinations = [];
+  const add = (chatId, title = '', link = '') => {
+    if (!chatId) return;
+    const id = String(chatId);
+    if (!destinations.some((item) => item.chatId === id)) {
+      destinations.push({ chatId: id, title, link });
     }
-    await telegram.sendMessage(st.liveFeedChannelId, text, extra);
-  } catch (e) {
-    // Non-critical — swallow silently
-    console.error('[LiveFeed] send error:', e.message);
+  };
+
+  add(st.liveFeedChannelId, 'Live Feed Channel');
+  (st.liveFeedChannels || []).forEach((channel) => {
+    add(channel.chatId, channel.title, channel.link);
+  });
+  return destinations;
+}
+
+/**
+ * Send one event independently to every active destination.
+ * A failed channel never prevents other channels from receiving the event.
+ */
+async function post(telegram, text, {
+  eventKey,
+  eventType = 'ACTIVITY',
+  button = null,
+  onlyChannelId = null,
+} = {}) {
+  if (!telegram || !eventKey) return { sent: 0, failed: 0 };
+  const destinations = (await getDestinations()).filter(
+    (destination) => !onlyChannelId || destination.chatId === String(onlyChannelId)
+  );
+  let sent = 0;
+  let failed = 0;
+
+  for (const destination of destinations) {
+    let marker;
+    try {
+      marker = await LiveFeedDelivery.create({
+        eventKey,
+        channelId: destination.chatId,
+        eventType,
+      });
+    } catch (error) {
+      if (error?.code === 11000) continue;
+      console.error('[LiveFeed] idempotency marker error:', error.message);
+      failed++;
+      continue;
+    }
+
+    try {
+      const extra = { parse_mode: 'Markdown' };
+      if (button?.label && button?.url) {
+        const { Markup } = require('telegraf');
+        Object.assign(extra, Markup.inlineKeyboard([[
+          Markup.button.url(button.label, button.url),
+        ]]));
+      }
+      await telegram.sendMessage(destination.chatId, text, extra);
+      await LiveFeedDelivery.updateOne({ _id: marker._id }, { $set: { sentAt: new Date() } });
+      sent++;
+    } catch (error) {
+      // Remove only this channel's marker so a later retry can recover.
+      await LiveFeedDelivery.deleteOne({ _id: marker._id }).catch(() => {});
+      console.error(`[LiveFeed] send error for ${destination.chatId}:`, error.message);
+      failed++;
+    }
   }
+
+  return { sent, failed };
 }
 
-/**
- * Order completed — "User X just bought 1× Product".
- * @param {object} telegram  — ctx.telegram or the Telegraf bot instance
- * @param {object} opts
- * @param {object} opts.user         — Mongoose User doc (has .username / .firstName)
- * @param {string} opts.productName
- * @param {number} [opts.qty=1]
- * @param {string} [opts.productEmoji='📦']
- */
-async function postPurchase(telegram, { user, productName, qty = 1, productEmoji = '📦' }) {
-  const name = maskName(user);
-  const esc  = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
-  await post(
+async function postPurchase(telegram, {
+  user,
+  productName,
+  qty = 1,
+  productEmoji = '📦',
+  eventKey = null,
+} = {}) {
+  const key = eventKey || `purchase:${user?._id || user?.telegramId}:${productName}:${qty}`;
+  const name = escapeMarkdown(maskedUser(user));
+  return post(
     telegram,
-    `👤 *${esc(name)}* just bought *${qty}×* ${productEmoji} *${esc(productName)}*! 🎉`,
+    `🛒 *New Purchase*\n👤 User: ${name}\n📦 Product: *${escapeMarkdown(productName)}*\n💵 Quantity: *${qty}* ${productEmoji}\n✅ Successful`,
+    { eventKey: key, eventType: 'PURCHASE_COMPLETED' }
   );
 }
 
-/**
- * Top-up approved — "User X just topped up X KS".
- */
-async function postTopup(telegram, { user, amount }) {
-  const name = maskName(user);
-  const esc  = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
-  await post(
+async function postTopup(telegram, { user, amount, eventKey = null } = {}) {
+  const key = eventKey || `topup:${user?._id || user?.telegramId}:${amount}`;
+  const name = escapeMarkdown(maskedUser(user));
+  return post(
     telegram,
-    `💰 *${esc(name)}* just topped up *${Number(amount).toLocaleString()} KS*!`,
+    `💰 *New Top Up*\n👤 User: ${name}\n💵 Amount: *${Number(amount).toLocaleString()} KS*\n✅ Completed`,
+    { eventKey: key, eventType: 'TOPUP_COMPLETED' }
   );
 }
 
-/**
- * Giveaway claimed — "User X just claimed Product (FREE)".
- */
-async function postGiveaway(telegram, { user, productName, productEmoji = '🎁' }) {
-  const name = maskName(user);
-  const esc  = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
-  await post(
+async function postGiveaway(telegram, {
+  user,
+  productName,
+  productEmoji = '🎁',
+  eventKey = null,
+  remaining = null,
+} = {}) {
+  const key = eventKey || `giveaway:${user?._id || user?.telegramId}:${productName}`;
+  const remainingLine = remaining === null ? '' : `\n🔥 Remaining: *${remaining}*`;
+  const name = escapeMarkdown(maskedUser(user));
+  return post(
     telegram,
-    `🎁 *${esc(name)}* just claimed ${productEmoji} *${esc(productName)}* for FREE!`,
+    `🎁 *Giveaway Claimed*\n👤 User: ${name}\n🎁 Reward: ${productEmoji} *${escapeMarkdown(productName)}*${remainingLine}`,
+    { eventKey: key, eventType: 'GIVEAWAY_CLAIMED' }
   );
 }
 
-module.exports = { postPurchase, postTopup, postGiveaway };
+async function sendTest(telegram, onlyChannelId = null) {
+  return post(
+    telegram,
+    '🧪 *Live Feed Test*\nMental Gaming Bot live feed is working correctly.',
+    {
+      eventKey: `test:${onlyChannelId || 'all'}:${Date.now()}`,
+      eventType: 'LIVE_FEED_TEST',
+      onlyChannelId,
+    }
+  );
+}
+
+module.exports = {
+  maskUsername,
+  maskUserId,
+  maskedUser,
+  getDestinations,
+  postPurchase,
+  postTopup,
+  postGiveaway,
+  sendTest,
+};
