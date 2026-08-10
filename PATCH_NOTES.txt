@@ -1,0 +1,8 @@
+Mental Gaming Bot patch
+- User main menu: Giveaway button
+- Giveaway Center with native Telegram button colors
+  success=available, primary=claimed by user, danger=closed/full/expired/out of stock
+- Giveaway button labels use original product/account names
+- Catalog/Category/Sub-category custom emoji field and admin Set Emoji action
+- Shop category/sub-category buttons display configured emoji with folder fallback
+- Includes current accountGiveaway.js with previous multi-channel/channel-callback fixes
