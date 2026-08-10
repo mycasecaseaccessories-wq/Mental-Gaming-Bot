@@ -30,9 +30,9 @@ function escapeMarkdown(value) {
   return String(value ?? '').replace(/([_*`\[\]])/g, '\\$1');
 }
 
-async function getDestinations() {
+async function getDestinations({ includeDisabled = false } = {}) {
   const st = await SystemStatus.get();
-  if (!st.liveFeedEnabled) return [];
+  if (!st.liveFeedEnabled && !includeDisabled) return [];
 
   const destinations = [];
   const add = (chatId, title = '', link = '') => {
@@ -59,9 +59,10 @@ async function post(telegram, text, {
   eventType = 'ACTIVITY',
   button = null,
   onlyChannelId = null,
+  includeDisabled = false,
 } = {}) {
   if (!telegram || !eventKey) return { sent: 0, failed: 0 };
-  const destinations = (await getDestinations()).filter(
+  const destinations = (await getDestinations({ includeDisabled })).filter(
     (destination) => !onlyChannelId || destination.chatId === String(onlyChannelId)
   );
   let sent = 0;
@@ -155,6 +156,9 @@ async function sendTest(telegram, onlyChannelId = null) {
       eventKey: `test:${onlyChannelId || 'all'}:${Date.now()}`,
       eventType: 'LIVE_FEED_TEST',
       onlyChannelId,
+      // An explicit admin test is allowed to verify a configured channel even
+      // when the production feed master switch is currently off.
+      includeDisabled: true,
     }
   );
 }

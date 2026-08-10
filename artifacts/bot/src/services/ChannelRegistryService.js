@@ -88,4 +88,40 @@ async function removeChannel(chatId, byTelegramId) {
   return removed;
 }
 
-module.exports = { getKnownChannels, saveChannel, removeChannel, SOURCE_LABELS };
+/** Remove only the live-feed role, leaving other channel roles untouched. */
+async function removeLiveFeedChannel(chatId, byTelegramId) {
+  const SystemStatus = require('../models/SystemStatus');
+  const st = await SystemStatus.get();
+  const id = String(chatId);
+  const wasConfigured = String(st.liveFeedChannelId || '') === id ||
+    (st.liveFeedChannels || []).some((channel) => String(channel.chatId) === id);
+  if (!wasConfigured) return null;
+
+  const remaining = (st.liveFeedChannels || []).filter(
+    (channel) => String(channel.chatId) !== id
+  );
+  const nextPrimary = String(st.liveFeedChannelId || '') === id
+    ? (remaining[0]?.chatId || null)
+    : st.liveFeedChannelId;
+
+  await SystemStatus.updateOne(
+    { _id: st._id },
+    {
+      $pull: { liveFeedChannels: { chatId: id } },
+      $set: {
+        liveFeedChannelId: nextPrimary,
+        liveFeedEnabled: Boolean(nextPrimary || remaining.length),
+        updatedBy: byTelegramId,
+      },
+    }
+  );
+  return { chatId: id };
+}
+
+module.exports = {
+  getKnownChannels,
+  saveChannel,
+  removeChannel,
+  removeLiveFeedChannel,
+  SOURCE_LABELS,
+};

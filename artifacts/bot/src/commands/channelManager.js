@@ -13,6 +13,7 @@ const {
   getKnownChannels,
   saveChannel,
   removeChannel,
+  removeLiveFeedChannel,
   SOURCE_LABELS,
 } = require('../services/ChannelRegistryService');
 
@@ -47,6 +48,9 @@ module.exports = (bot) => {
       if (`chmgr_testlivefeed:${channel.chatId}`.length <= 64) {
         rows.push([Markup.button.callback(`🧪 Test ${channel.title}`, `chmgr_testlivefeed:${channel.chatId}`)]);
       }
+      if (`chmgr_remlivefeed:${channel.chatId}`.length <= 64) {
+        rows.push([Markup.button.callback(`🔕 Remove Live Feed: ${channel.title}`, `chmgr_remlivefeed:${channel.chatId}`)]);
+      }
     }
     if (savedCount) rows.push([Markup.button.callback('🗑 သိမ်းထားတဲ့ channel ဖျက်မယ်', 'chmgr_delmenu')]);
     rows.push([Markup.button.callback('🔄 Refresh', 'chmgr_refresh')]);
@@ -70,6 +74,17 @@ module.exports = (bot) => {
       `🧪 Live Feed test ပြီးပါပြီ။\n✅ Sent: ${result.sent}\n❌ Failed: ${result.failed}`,
       { parse_mode: 'Markdown' }
     );
+  });
+
+  bot.action(/^chmgr_remlivefeed:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const removed = await removeLiveFeedChannel(ctx.match[1], ctx.from.id);
+    if (!removed) return ctx.reply('❌ ဒီ channel ကို Live Feed အဖြစ် မသတ်မှတ်ထားတော့ပါ။');
+    await ctx.reply(
+      `✅ *${escMd(removed.chatId)}* ကို Live Feed စာရင်းက ဖယ်လိုက်ပါပြီ။`,
+      { parse_mode: 'Markdown' }
+    );
+    await showPanel(ctx);
   });
 
   bot.action('chmgr_add', adminOnly(), async (ctx) => {

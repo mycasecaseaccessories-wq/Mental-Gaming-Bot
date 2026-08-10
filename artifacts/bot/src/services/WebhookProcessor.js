@@ -86,32 +86,53 @@ async function processPaymentCompleted(event, telegram) {
   // Find pending transaction by external reference
   const transaction = await Transaction.findOne({
     $or: [
+      { txId: externalRef },
       { reference: externalRef },
       { providerRef: externalRef },
     ],
-    type: 'topup',
-    status: 'pending',
+    type: 'Topup',
+    status: 'Pending',
   });
 
   if (!transaction) {
+    // A retried webhook can arrive after the wallet approval already changed
+    // the pending txId to <txId>_approved. Treat that as already handled.
+    const approved = await Transaction.findOne({
+      $or: [
+        { txId: `${externalRef}_approved` },
+        { reference: externalRef },
+        { providerRef: externalRef },
+      ],
+      type: 'Topup',
+      status: 'Completed',
+    });
+    if (approved) return { orderId: null, alreadyProcessed: true };
     throw new Error(`No pending transaction found for ref: ${externalRef}`);
   }
 
   // Approve the top-up (add KS to wallet)
   const WalletService = require('./WalletService');
-  await WalletService.approvePendingTopup(transaction._id, { autoApproved: true, providerRef: externalRef });
+  const approved = await WalletService.approveTopup(transaction.txId, 0);
 
   if (telegram) {
     try {
       await telegram.sendMessage(
-        transaction.telegramId || telegramId,
+        approved.user?.telegramId || transaction.userId?.telegramId || telegramId,
         `✅ *Payment Confirmed!*\n\n` +
-        `💰 *${transaction.amountKS?.toLocaleString() || '?'} KS* added to your wallet.\n` +
+        `💰 *${approved.amountKS?.toLocaleString() || '?'} KS* added to your wallet.\n` +
         `🔖 Ref: \`${externalRef}\`\n\n` +
         `_Approved automatically via payment gateway._`,
         { parse_mode: 'Markdown' }
       );
     } catch {}
+
+    // Keep the public activity feed outside the business operation. A failed
+    // post must never turn a successful wallet credit into a webhook retry.
+    require('./LiveFeedService').postTopup(telegram, {
+      user: approved.user,
+      amount: approved.amountKS,
+      eventKey: `topup:${approved.txId}_approved`,
+    }).catch((error) => console.error('[WebhookProcessor] live feed:', error.message));
   }
 
   return { orderId: null };
@@ -121,8 +142,12 @@ async function processPaymentFailed(event, telegram) {
   const { externalRef } = event.payload;
 
   const transaction = await Transaction.findOneAndUpdate(
-    { reference: externalRef, type: 'topup', status: 'pending' },
-    { status: 'failed', notes: 'Rejected by payment gateway webhook' },
+    {
+      $or: [{ txId: externalRef }, { reference: externalRef }, { providerRef: externalRef }],
+      type: 'Topup',
+      status: 'Pending',
+    },
+    { status: 'Rejected', note: 'Rejected by payment gateway webhook' },
     { new: true }
   );
 
