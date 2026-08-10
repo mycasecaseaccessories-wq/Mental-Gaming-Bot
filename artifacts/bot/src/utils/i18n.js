@@ -10,7 +10,7 @@
 const STRINGS = {
   // ── Main menu buttons ────────────────────────────────────────────────────
   'menu.store':      { en: '🛍 Store',          mm: '🛍 ဈေးဆိုင်' },
-  'menu.shop':       { en: '🛒 Shop',           mm: '🛒 ဈေးဝယ်' },
+  'menu.shop':       { en: '🛒 Products',       mm: '🛒 ပစ္စည်းများ' },
   'menu.orders':     { en: '📦 My Orders',      mm: '📦 အော်ဒါများ' },
   'menu.wallet':     { en: '💰 Wallet',         mm: '💰 ပိုက်ဆံအိတ်' },
   'menu.profile':    { en: '👤 Profile',        mm: '👤 ပရိုဖိုင်' },
@@ -121,7 +121,7 @@ const STRINGS = {
   'profile.total_spent':     { en: 'total spent',              mm: 'စုစုပေါင်း သုံးစွဲ' },
 
   // ── Shop ─────────────────────────────────────────────────────────────────
-  'shop.title':              { en: '🛒 Game Store',          mm: '🛒 ဂိမ်းဆိုင်' },
+  'shop.title':              { en: '🛒 Products',            mm: '🛒 ပစ္စည်းများ' },
   'shop.browse':             { en: 'Browse by game or category.',  mm: 'ဂိမ်း သို့မဟုတ် အမျိုးအစားအလိုက် ကြည့်ပါ။' },
   'shop.prices_ks':          { en: 'All prices shown in KS.',       mm: 'စျေးနှုန်း အားလုံးကို KS ဖြင့် ဖော်ပြထားသည်။' },
   'shop.select_package':     { en: 'Select a package',              mm: 'package ရွေးပါ' },

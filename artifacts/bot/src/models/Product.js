@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const productSchema = new mongoose.Schema(
   {
     name:     { type: String, required: true, trim: true },
+    emoji:    { type: String, default: '', trim: true, maxlength: 16 },
     category: { type: String, required: true, trim: true },
     region:   { type: String, required: true, trim: true },
 

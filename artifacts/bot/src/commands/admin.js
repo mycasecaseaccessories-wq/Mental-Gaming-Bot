@@ -1273,6 +1273,7 @@ module.exports = function registerAdmin(bot) {
         : `🧾 Checkout: 📝 Asks catalog fields\n`;
     await ctx.reply(
       `📦 *${p.name}*\n\n` +
+      `🎨 Emoji: ${p.emoji || 'Auto'}\n` +
       `📁 Category: ${p.category}\n` +
       `🌍 Region: ${p.region || 'Global'}\n` +
       `💰 Price: ${price(p.finalPrice)}\n` +
@@ -1311,6 +1312,7 @@ module.exports = function registerAdmin(bot) {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('✏️ Name',        `ap_ef:${id}:name`)],
+          [Markup.button.callback('🎨 Emoji',       `ap_ef:${id}:emoji`)],
           [Markup.button.callback('💰 Price (KS)',   `ap_ef:${id}:price`)],
           [Markup.button.callback('📝 Description',  `ap_ef:${id}:description`)],
           [Markup.button.callback('📁 Category',     `ap_ef:${id}:category`)],
@@ -1331,6 +1333,7 @@ module.exports = function registerAdmin(bot) {
     if (!p) return ctx.reply('❌ Product not found.');
     const fieldLabels = {
       name:        'Name',
+      emoji:       'Emoji (send one emoji, or `-` to clear / use Auto)',
       price:       'Price (in KS, numbers only)',
       description: 'Description (or send `-` to clear)',
       category:    'Category',
@@ -1340,6 +1343,7 @@ module.exports = function registerAdmin(bot) {
     };
     const current = {
       name:        p.name,
+      emoji:       p.emoji || 'Auto',
       price:       p.finalPrice,
       description: p.description || '—',
       category:    p.category,
@@ -1783,6 +1787,11 @@ module.exports = function registerAdmin(bot) {
         if (field === 'name') {
           if (!text || text.length < 2) return ctx.reply('❌ Name must be at least 2 characters.');
           p.name = text;
+        } else if (field === 'emoji') {
+          const value = text === '-' ? '' : text.trim();
+          if (value.length > 16) return ctx.reply('❌ Emoji value is too long. Send one emoji, or `-` to use Auto.');
+          if (/\s/.test(value)) return ctx.reply('❌ Send one emoji only, without spaces.');
+          p.emoji = value;
         } else if (field === 'price') {
           const val = parseFloat(text.replace(/,/g, ''));
           if (isNaN(val) || val <= 0) return ctx.reply('❌ Enter a valid price (positive number).');
@@ -1810,6 +1819,7 @@ module.exports = function registerAdmin(bot) {
         }
 
         await p.save();
+        CacheService.invalidateProducts();
         await auditLog(ctx.from.id, 'PRODUCT_EDIT', id, 'Product', { field, value: text });
 
         return ctx.reply(

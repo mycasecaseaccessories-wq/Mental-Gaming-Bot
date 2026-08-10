@@ -11,6 +11,31 @@ const { loadingMessage, resolveMessage } = require('../utils/animations');
 const { buildMessage, price, truncate } = require('../utils/ui');
 const { t } = require('../utils/i18n');
 
+// Product button presentation only. Admin-defined emoji takes priority;
+// otherwise a safe automatic fallback is selected from the product name.
+function productLogo(product = {}) {
+  const custom = String(product.emoji || '').trim();
+  if (custom) return custom;
+
+  const n = String(product.name || '').toLowerCase();
+  const logos = [
+    [/mobile legends|mlbb/, '🎮'], [/pubg/, '🔫'], [/free fire|freefire/, '🔥'],
+    [/chatgpt|openai/, '🤖'], [/claude/, '🧠'], [/gemini/, '✨'],
+    [/spotify/, '🎵'], [/apple music/, '🎧'], [/youtube/, '▶️'],
+    [/netflix/, '🎬'], [/disney/, '🏰'], [/prime video|amazon prime/, '📺'],
+    [/canva/, '🎨'], [/capcut/, '✂️'], [/telegram/, '✈️'],
+    [/facebook/, '📘'], [/instagram/, '📸'], [/tiktok/, '🎶'],
+    [/discord/, '💬'], [/steam/, '🎮'], [/playstation|psn/, '🎮'], [/xbox/, '🎮'],
+  ];
+  return logos.find(([pattern]) => pattern.test(n))?.[1] || '📦';
+}
+
+function productButtonLabel(product) {
+  const inStock = product.stockCount === -1 || Number(product.stockCount) > 0;
+  const status = inStock ? '🟢' : '🔴';
+  return `${status} ${productLogo(product)} ${truncate(product.name, 20)}`;
+}
+
 function backRow() {
   return Nav.backButton();
 }
@@ -84,7 +109,7 @@ async function loadShopTree() {
 
 Nav.register({
   id: 'shop',
-  title: '🛒 Shop',
+  title: '🛒 Products',
   build: async (ctx, theme) => {
     const { catalogs, subtreeHasProducts } = await loadShopTree();
     const roots = catalogs.filter((c) => !c.parentCategory && subtreeHasProducts(String(c._id)));
@@ -139,7 +164,7 @@ Nav.registerDynamic({
     }
     if (!cat) {
       return {
-        text: buildMessage(theme, [{ title: '🛒 Shop', lines: [`${theme.emoji.warning} ${t(ctx, 'shop.no_products')}`] }]),
+        text: buildMessage(theme, [{ title: '🛒 Products', lines: [`${theme.emoji.warning} ${t(ctx, 'shop.no_products')}`] }]),
         keyboard: Markup.inlineKeyboard([backRow()]),
       };
     }
@@ -157,12 +182,10 @@ Nav.registerDynamic({
     }
 
     const subRows = Nav.buildRows(subCatalogs.map((k) => Nav.folderButton(k.name, `cat:${k._id}`)), 2);
-    const prodRows = products.map((p) => [
-      Markup.button.callback(
-        `${theme.emoji.item} ${truncate(p.name, 28)} — ${price(p.finalPrice)}`,
-        `product:${p._id}`
-      ),
-    ]);
+    const productButtons = products.map((p) =>
+      Markup.button.callback(productButtonLabel(p), `product:${p._id}`)
+    );
+    const prodRows = Nav.buildRows(productButtons, 2);
 
     const lines = [];
     if (cat.description) lines.push(cat.description, '');
