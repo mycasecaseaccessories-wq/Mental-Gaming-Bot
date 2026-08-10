@@ -191,7 +191,7 @@ If you can't help or the issue needs human review (refunds, order disputes, acco
 
     if (!reply) return res.status(502).json({ error: "Empty AI response" });
 
-    return res.json({ reply, user: u.firstName ?? u.username ?? "User" });
+    return res.json({ reply, user: u.first_name ?? u.username ?? "User" });
   } catch (err) {
     return res.status(502).json({ error: "AI service unavailable" });
   }

@@ -391,8 +391,8 @@ router.get("/catalogs/:id", async (req: Request, res: Response) => {
 
   // Resolve effective checkout fields: own → parent
   let effectiveFields = cat.checkoutFields;
-  if (!effectiveFields.length && cat.parentCategoryId) {
-    const parent = await catalogs.findOne({ _id: cat.parentCategoryId });
+  if (!effectiveFields.length && cat.parentCategory) {
+    const parent = await catalogs.findOne({ _id: cat.parentCategory });
     if (parent?.checkoutFields?.length) effectiveFields = parent.checkoutFields;
   }
 

@@ -58,6 +58,8 @@ interface OrderDoc {
   productName?: string | null;
   productType?: string | null;
   gameId?: string | null;
+  zoneId?: string | null;
+  checkoutData?: Array<{ key: string; label: string; value: string }>;
   totalKS?: number | null;
   shortId?: string | null;
   trackingMsgId?: number | null;

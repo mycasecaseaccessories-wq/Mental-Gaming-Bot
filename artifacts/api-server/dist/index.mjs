@@ -85423,8 +85423,8 @@ router3.get("/catalogs/:id", async (req, res) => {
     ]
   }).sort({ sortOrder: 1, name: 1 }).toArray();
   let effectiveFields = cat.checkoutFields;
-  if (!effectiveFields.length && cat.parentCategoryId) {
-    const parent = await catalogs.findOne({ _id: cat.parentCategoryId });
+  if (!effectiveFields.length && cat.parentCategory) {
+    const parent = await catalogs.findOne({ _id: cat.parentCategory });
     if (parent?.checkoutFields?.length) effectiveFields = parent.checkoutFields;
   }
   res.json({
@@ -86663,7 +86663,7 @@ If you can't help or the issue needs human review (refunds, order disputes, acco
     const data = await geminiRes.json();
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
     if (!reply) return res.status(502).json({ error: "Empty AI response" });
-    return res.json({ reply, user: u.firstName ?? u.username ?? "User" });
+    return res.json({ reply, user: u.first_name ?? u.username ?? "User" });
   } catch (err) {
     return res.status(502).json({ error: "AI service unavailable" });
   }
