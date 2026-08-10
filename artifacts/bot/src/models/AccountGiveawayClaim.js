@@ -33,6 +33,11 @@ const accountGiveawayClaimSchema = new mongoose.Schema(
       ref: 'Promo',
       default: null,
     },
+    // Finite shop stock is reserved at giveaway-claim time so coupons can never
+    // be minted beyond physical stock. OrderService consumes this reservation
+    // instead of decrementing stock a second time.
+    shopStockReserved: { type: Boolean, default: false },
+    shopStockConsumed: { type: Boolean, default: false },
   },
   { timestamps: true, versionKey: false }
 );

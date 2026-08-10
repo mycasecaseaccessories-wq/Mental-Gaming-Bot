@@ -69,6 +69,15 @@ const accountGiveawaySchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // Multi-channel requirement. Legacy single-channel fields above are kept
+    // for backward compatibility and are transparently migrated in code.
+    requireChannels: {
+      type: [{
+        chatId: { type: Number, required: true },
+        title: { type: String, default: '' },
+      }],
+      default: () => [],
+    },
 
     // ── Restart-safe announcement lifecycle ──────────────────────────────────
     announcementChannelId: { type: String, default: null },

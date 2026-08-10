@@ -14,6 +14,8 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const GameCode = require('../models/GameCode');
 const User = require('../models/User');
+const Promo = require('../models/Promo');
+const AccountGiveawayClaim = require('../models/AccountGiveawayClaim');
 const { debitKS, creditKS } = require('./WalletService');
 const { auditLog } = require('./logger');
 const { config } = require('../../config/settings');
@@ -79,9 +81,28 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
   let order;
   let chargedUser = user;
   try {
-    // Reserve finite stock inside the same transaction as the wallet debit and
-    // order insert. The conditional update prevents last-unit overselling.
-    if (product.stockCount !== -1) {
+    // Giveaway shop coupons reserve finite stock at CLAIM time. If this order is
+    // redeeming one of those coupons, atomically consume the reservation instead
+    // of decrementing product stock a second time. Normal orders keep the usual
+    // last-unit-safe stock reservation below.
+    let usedGiveawayReservation = false;
+    if (promoCode) {
+      const promo = await Promo.findOne({ code: String(promoCode).toUpperCase().trim() }).session(session);
+      if (promo) {
+        const claimed = await AccountGiveawayClaim.findOneAndUpdate(
+          {
+            couponId: promo._id,
+            shopStockReserved: true,
+            shopStockConsumed: false,
+          },
+          { $set: { shopStockConsumed: true } },
+          { new: true, session }
+        );
+        usedGiveawayReservation = !!claimed;
+      }
+    }
+
+    if (product.stockCount !== -1 && !usedGiveawayReservation) {
       const reserved = await Product.findOneAndUpdate(
         { _id: product._id, isActive: true, stockCount: { $gte: 1 } },
         { $inc: { stockCount: -1 } },

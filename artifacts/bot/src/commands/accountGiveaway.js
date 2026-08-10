@@ -36,6 +36,34 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('en-GB', { timeZone: 'Asia/Rangoon' });
 }
 
+function styledButton(button, style) { return { ...button, style }; }
+
+function requiredChannelsOf(ga) {
+  const list = Array.isArray(ga?.requireChannels) ? ga.requireChannels : [];
+  if (list.length) return list.map((c) => ({ chatId: Number(c.chatId), title: c.title || String(c.chatId) }));
+  if (ga?.requireChannelId) return [{ chatId: Number(ga.requireChannelId), title: ga.requireChannelTitle || String(ga.requireChannelId) }];
+  return [];
+}
+
+async function clearGiveawayClaims(ga) {
+  // Return finite shop units that were reserved by claimed coupons but never
+  // consumed by an order. Then remove campaign-scoped claim history.
+  if (ga?.kind === 'shop' && ga.shopProductId) {
+    const reserved = await AccountGiveawayClaim.countDocuments({
+      giveawayId: ga._id,
+      shopStockReserved: true,
+      shopStockConsumed: false,
+    });
+    if (reserved > 0) {
+      await Product.updateOne(
+        { _id: ga.shopProductId, stockCount: { $ne: -1 } },
+        { $inc: { stockCount: reserved } }
+      ).catch(() => {});
+    }
+  }
+  await AccountGiveawayClaim.deleteMany({ giveawayId: ga._id });
+}
+
 // ── Kind-agnostic helpers ────────────────────────────────────────────────────
 // A giveaway targets either a premium AccountProduct (kind 'account', any type:
 // single/shared/invite) or a regular shop Product (kind 'shop', delivered as a
@@ -117,16 +145,17 @@ async function checkRequirements(ga, ctx) {
     checks.push({ ok: !!bought, label: `🛒 Order တစ်ခါ အောင်မြင်စွာ ဝယ်ဖူးရမယ်` });
   }
 
-  if (ga.requireChannelId) {
+  for (const channel of requiredChannelsOf(ga)) {
     let joined = false;
     try {
-      const m = await ctx.telegram.getChatMember(ga.requireChannelId, ctx.from.id);
+      const m = await ctx.telegram.getChatMember(channel.chatId, ctx.from.id);
       joined = ['member', 'administrator', 'creator'].includes(m?.status);
     } catch {}
     checks.push({
       ok: joined,
-      label: `📣 "${esc(ga.requireChannelTitle || 'channel')}" ကို join ထားရမယ်`,
-      channelId: ga.requireChannelId,
+      label: `📣 "${esc(channel.title || 'channel')}" ကို join ထားရမယ်`,
+      channelId: channel.chatId,
+      channelTitle: channel.title || String(channel.chatId),
     });
   }
 
@@ -230,21 +259,31 @@ async function buildUserView(ctx, ga) {
 
   const rows = [];
   if (already) {
-    text += `\n✅ _သင် ရယူပြီးသားပါ — ${isShop ? '/mycoupons မှာ coupon ကြည့်ပါ' : '🎟 ကျွန်ုပ်၏ Accounts မှာ ကြည့်နိုင်ပါတယ်'}။_`;
+    text += `
+✅ _သင် ရယူပြီးသားပါ — ${isShop ? '/mycoupons မှာ coupon ကြည့်ပါ' : '🎟 ကျွန်ုပ်၏ Accounts မှာ ကြည့်နိုင်ပါတယ်'}။_`;
     rows.push([Markup.button.callback(isShop ? '🎟 ကျွန်ုပ်၏ Coupons' : '🎟 ကျွန်ုပ်၏ Accounts', isShop ? 'promo_my_coupons' : 'acc_mine')]);
   } else if (stock === 0 || (quotaLeft !== null && quotaLeft === 0)) {
-    text += `\n😢 _ကုန်သွားပါပြီ…_`;
-  } else if (allOk) {
-    text += `\n_👇 ခလုတ်နှိပ်ပြီး ချက်ချင်း ရယူလိုက်ပါ!_`;
-    rows.push([Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', `accga_claim:${ga._id}`)]);
+    text += `
+😢 _ကုန်သွားပါပြီ…_`;
   } else {
-    text += `\n_❌ ပြထားတဲ့ လိုအပ်ချက်တွေ ပြည့်မီရင် ရယူနိုင်ပါမယ်။_`;
-    const chanCheck = checks.find((c) => !c.ok && c.channelId);
-    if (chanCheck) {
-      const url = await channelJoinUrl(ctx, chanCheck.channelId);
-      if (url) rows.push([Markup.button.url('📣 Channel Join မယ်', url)]);
+    const channelChecks = checks.filter((c) => c.channelId);
+    for (const c of channelChecks) {
+      if (c.ok) {
+        rows.push([styledButton(Markup.button.callback(`✅ ${c.channelTitle}`, 'accga_joined_ok'), 'success')]);
+      } else {
+        const url = await channelJoinUrl(ctx, c.channelId);
+        if (url) rows.push([styledButton(Markup.button.url(`❌ ${c.channelTitle} — Join`, url), 'danger')]);
+      }
     }
-    rows.push([Markup.button.callback('🔄 ပြန်စစ်မယ်', `accga_free:${ga._id}`)]);
+    if (allOk) {
+      text += `
+_👇 ခလုတ်နှိပ်ပြီး ချက်ချင်း ရယူလိုက်ပါ!_`;
+      rows.push([styledButton(Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', `accga_claim:${ga._id}`), 'success')]);
+    } else {
+      text += `
+_❌ ပြထားတဲ့ လိုအပ်ချက်တွေ ပြည့်မီရင် ရယူနိုင်ပါမယ်။_`;
+      rows.push([styledButton(Markup.button.callback('🔄 Join Status ပြန်စစ်မယ်', `accga_free:${ga._id}`), 'primary')]);
+    }
   }
   rows.push([
     Markup.button.callback('🎁 အခြားအခမဲ့', 'accga_free'),
@@ -388,7 +427,7 @@ async function buildGaDetail(gaId) {
     `⏰ နောက်ဆုံးရက်: ${ga.endAt ? `*${fmtDate(ga.endAt)}*` : '_မကန့်သတ်_'}\n` +
     `📅 Account သက်တမ်း: ${ga.minAccountAgeDays > 0 ? `*${ga.minAccountAgeDays} ရက်ကျော်*` : '_မစစ်_'}\n` +
     `🛒 ဝယ်ဖူးမှ: ${ga.requirePurchase ? '*လိုအပ်*' : '_မလို_'}\n` +
-    `📣 Channel join: ${ga.requireChannelId ? `*${esc(ga.requireChannelTitle || String(ga.requireChannelId))}*` : '_မလို_'}\n`;
+    `📣 Channel join: ${requiredChannelsOf(ga).length ? `*${requiredChannelsOf(ga).length} ခု* — ${requiredChannelsOf(ga).map((c) => esc(c.title)).join(', ')}` : '_မလို_'}\n`;
 
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback(ga.isActive ? '🔴 ရပ်မယ်' : '🟢 စတင်မယ်', `accga_toggle:${id}`)],
@@ -400,7 +439,7 @@ async function buildGaDetail(gaId) {
       Markup.button.callback('📅 Acc သက်တမ်း', `accga_age:${id}`),
       Markup.button.callback(`🛒 ဝယ်ဖူးမှ: ${ga.requirePurchase ? 'ON' : 'OFF'}`, `accga_purch:${id}`),
     ],
-    [Markup.button.callback('📣 Channel join သတ်မှတ်', `accga_chan:${id}`)],
+    [Markup.button.callback(`📣 Channels (${requiredChannelsOf(ga).length})`, `accga_chan:${id}`)],
     [
       Markup.button.callback('♻️ Product ပြောင်း', `accga_repick:${id}`),
       Markup.button.callback('🗑 ဖျက်', `accga_del:${id}`),
@@ -574,6 +613,20 @@ module.exports = function registerAccountGiveaway(bot) {
         await releaseQuota();
         return ctx.answerCbQuery('😢 Stock ကုန်သွားပါပြီ', { show_alert: true });
       }
+      let shopStockReserved = false;
+      if (p.stockCount !== -1) {
+        const reservedProduct = await Product.findOneAndUpdate(
+          { _id: p._id, isActive: true, stockCount: { $gte: 1 } },
+          { $inc: { stockCount: -1 } },
+          { new: true }
+        );
+        if (!reservedProduct) {
+          await rollbackClaim();
+          await releaseQuota();
+          return ctx.answerCbQuery('😢 Stock ကုန်သွားပါပြီ', { show_alert: true });
+        }
+        shopStockReserved = true;
+      }
       let promo;
       try {
         promo = await generateCoupon(config.bot.adminId, {
@@ -590,11 +643,15 @@ module.exports = function registerAccountGiveaway(bot) {
         });
       } catch (err) {
         console.error('[Giveaway] coupon mint failed:', err.message);
+        if (shopStockReserved) await Product.findByIdAndUpdate(p._id, { $inc: { stockCount: 1 } }).catch(() => {});
         await rollbackClaim();
         await releaseQuota();
         return ctx.answerCbQuery('❌ တစ်ခုခုမှားနေပါတယ် — ခဏနေ ပြန်စမ်းပါ', { show_alert: true });
       }
-      await AccountGiveawayClaim.updateOne({ _id: claim._id }, { $set: { couponId: promo._id } }).catch(() => {});
+      await AccountGiveawayClaim.updateOne(
+        { _id: claim._id },
+        { $set: { couponId: promo._id, shopStockReserved, shopStockConsumed: false } }
+      ).catch(() => {});
       await ctx.answerCbQuery('🎉 ရပါပြီ!');
       await auditLog(ctx.from.id, 'CLAIM_GIVEAWAY_SHOP', promo._id.toString(), 'System', {
         product: p.name, code: promo.code, giveawayId: ga._id.toString(),
@@ -928,6 +985,14 @@ module.exports = function registerAccountGiveaway(bot) {
     ga.kind = 'account';
     ga.productId = p._id;
     ga.shopProductId = undefined;
+    ga.claimedCount = 0;
+    ga.isActive = false;
+    ga.announcementChannelId = null;
+    ga.announcementMessageId = null;
+    ga.announcementBody = null;
+    ga.announcementButtonUrl = null;
+    ga.deleteAt = null;
+    await clearGiveawayClaims(ga);
     await ga.save();
     await auditLog(ctx.from.id, 'SET_GIVEAWAY_PRODUCT', ga._id.toString(), 'System', {
       product: `${p.serviceName} ${p.planLabel}`,
@@ -946,9 +1011,17 @@ module.exports = function registerAccountGiveaway(bot) {
     if (clash) return ctx.answerCbQuery('❌ ဒီ product အတွက် giveaway ရှိပြီးသားပါ', { show_alert: true });
     const ga = await AccountGiveaway.findById(gaId);
     if (!ga) return ctx.answerCbQuery('❌ Giveaway မတွေ့ပါ', { show_alert: true });
+    await clearGiveawayClaims(ga);
     ga.kind = 'shop';
     ga.shopProductId = p._id;
     ga.productId = undefined;
+    ga.claimedCount = 0;
+    ga.isActive = false;
+    ga.announcementChannelId = null;
+    ga.announcementMessageId = null;
+    ga.announcementBody = null;
+    ga.announcementButtonUrl = null;
+    ga.deleteAt = null;
     await ga.save();
     await auditLog(ctx.from.id, 'SET_GIVEAWAY_PRODUCT', ga._id.toString(), 'System', { product: p.name, kind: 'shop' });
     await ctx.answerCbQuery('✅ Product ပြောင်းပြီး');
@@ -966,6 +1039,9 @@ module.exports = function registerAccountGiveaway(bot) {
       if (s.count === 0) return ctx.answerCbQuery('❌ Stock မရှိလို့ မစနိုင်ပါ — 📥 Stock အရင်ထည့်ပါ', { show_alert: true });
       if (ga.endAt && ga.endAt.getTime() <= Date.now()) {
         return ctx.answerCbQuery('❌ နောက်ဆုံးရက် ကျော်နေပါပြီ — ⏰ ရက် ပြန်သတ်မှတ်ပါ', { show_alert: true });
+      }
+      if (ga.maxClaims > 0 && ga.claimedCount >= ga.maxClaims) {
+        return ctx.answerCbQuery('❌ Claim quota ပြည့်နေပါပြီ — 📦 အရေအတွက်ကို claimed count ထက်ပိုသတ်မှတ်ပါ', { show_alert: true });
       }
       ga.isActive = true;
     } else {
@@ -1035,6 +1111,9 @@ module.exports = function registerAccountGiveaway(bot) {
     if (!ga) return ctx.reply('❌ Giveaway မရှိတော့ပါ။');
 
     if (wiz.field === 'max') {
+      if (n > 0 && n <= ga.claimedCount) {
+        return ctx.reply(`❌ အခု ${ga.claimedCount} ယောက် ရယူပြီးသားပါ။ Max Claims ကို *${ga.claimedCount + 1}* နဲ့အထက် သတ်မှတ်ပါ၊ ဒါမှမဟုတ် ` + '`0`' + ` နဲ့ unlimited ထားပါ။`, { parse_mode: 'Markdown' });
+      }
       ga.maxClaims = n;
     } else if (wiz.field === 'days') {
       ga.endAt = n > 0 ? new Date(Date.now() + n * DAY_MS) : null;
@@ -1048,56 +1127,84 @@ module.exports = function registerAccountGiveaway(bot) {
     return ctx.reply(detail.text, { parse_mode: 'Markdown', ...detail.keyboard });
   });
 
-  // ── Channel join requirement ────────────────────────────────────────────────
+  // ── Multi-channel join requirement ──────────────────────────────────────────
+
+  async function showChannelPicker(ctx, gaId) {
+    const ga = await AccountGiveaway.findById(gaId);
+    if (!ga) return editOrReply(ctx, '❌ Giveaway မတွေ့ပါ');
+    const selected = requiredChannelsOf(ga);
+    const selectedIds = new Set(selected.map((c) => String(c.chatId)));
+    const channels = await getKnownChannels();
+    const rows = channels.slice(0, 30).map((c) => {
+      const on = selectedIds.has(String(c.chatId));
+      return [styledButton(
+        Markup.button.callback(`${on ? '✅' : '➕'} ${c.title || c.chatId}`, `accga_chantoggle:${gaId}:${c.chatId}`),
+        on ? 'success' : 'primary'
+      )];
+    });
+    if (selected.length) rows.push([styledButton(Markup.button.callback('🚫 Channel requirements အားလုံးဖြုတ်မယ်', `accga_chanoff:${gaId}`), 'danger')]);
+    rows.push([Markup.button.callback('🔙 Giveaway Panel', `accga_view:${gaId}`)]);
+    return editOrReply(
+      ctx,
+      `📣 *Required Channels*
+
+User က အောက်ကရွေးထားတဲ့ channel *အားလုံး* join ထားမှ Giveaway ရယူနိုင်ပါမယ်။
+
+ရွေးထားပြီး: *${selected.length} ခု*${selected.length ? `
+${selected.map((c) => `✅ ${esc(c.title)}`).join('\n')}` : ''}
+
+_(Channel အသစ်ထည့်ချင်ရင် /channels မှာ အရင်ထည့်ပါ။ Member status စစ်ဖို့ bot က channel ကို access ရပါမယ်။)_`,
+      Markup.inlineKeyboard(rows)
+    );
+  }
 
   bot.action(/^accga_chan:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const gaId = ctx.match[1];
-    const channels = await getKnownChannels();
-    const rows = channels.slice(0, 15).map((c) => [
-      Markup.button.callback(`📣 ${c.title || c.chatId}`, `accga_chansel:${gaId}:${c.chatId}`),
-    ]);
-    rows.push([Markup.button.callback('🚫 Channel join မလိုတော့ဘူး', `accga_chanoff:${gaId}`)]);
-    rows.push([Markup.button.callback('🔙 Giveaway Panel', `accga_view:${gaId}`)]);
-    await editOrReply(
-      ctx,
-      `📣 *Channel join လိုအပ်ချက်*\n\nJoin ထားမှရမယ့် channel ကို ရွေးပါ:\n_(Channel အသစ်ထည့်ချင်ရင် /channels မှာ အရင်ထည့်ပါ။ Bot က channel admin ဖြစ်ရပါမယ် — မဟုတ်ရင် member စစ်လို့မရပါ။)_`,
-      Markup.inlineKeyboard(rows)
-    );
+    return showChannelPicker(ctx, ctx.match[1]);
   });
 
-  bot.action(/^accga_chansel:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^accga_chantoggle:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
     const gaId = ctx.match[1];
     const chatId = Number(ctx.match[2]);
     const ga = await AccountGiveaway.findById(gaId);
     if (!ga) return ctx.answerCbQuery('❌ Giveaway မရှိသေးပါ', { show_alert: true });
-
-    let title = String(chatId);
-    try {
-      const chat = await ctx.telegram.getChat(chatId);
-      title = chat.title || chat.username || title;
-    } catch {
-      return ctx.answerCbQuery('❌ Channel ကို bot က မမြင်ရပါ — bot ကို channel admin ထားပေးပါ', { show_alert: true });
+    let channels = requiredChannelsOf(ga);
+    const exists = channels.some((c) => String(c.chatId) === String(chatId));
+    if (exists) {
+      channels = channels.filter((c) => String(c.chatId) !== String(chatId));
+      await ctx.answerCbQuery('➖ Channel ဖြုတ်ပြီး');
+    } else {
+      let title = String(chatId);
+      try {
+        const chat = await ctx.telegram.getChat(chatId);
+        title = chat.title || chat.username || title;
+      } catch {
+        return ctx.answerCbQuery('❌ Channel ကို bot က မမြင်ရပါ — bot access/admin permission စစ်ပါ', { show_alert: true });
+      }
+      channels.push({ chatId, title });
+      await ctx.answerCbQuery('✅ Required channel ထည့်ပြီး');
     }
-
-    ga.requireChannelId = chatId;
-    ga.requireChannelTitle = title;
+    ga.requireChannels = channels;
+    ga.requireChannelId = null;
+    ga.requireChannelTitle = '';
     await ga.save();
-    await auditLog(ctx.from.id, 'SET_GIVEAWAY_CHANNEL', ga._id.toString(), 'System', { chatId, title });
-    await ctx.answerCbQuery('📣 သတ်မှတ်ပြီး');
-    const detail = await buildGaDetail(ga._id);
-    await editOrReply(ctx, detail.text, detail.keyboard);
+    await auditLog(ctx.from.id, 'SET_GIVEAWAY_CHANNELS', ga._id.toString(), 'System', { channels });
+    return showChannelPicker(ctx, gaId);
   });
 
   bot.action(/^accga_chanoff:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     const ga = await AccountGiveaway.findById(ctx.match[1]);
     if (!ga) return ctx.answerCbQuery('❌ Giveaway မရှိသေးပါ', { show_alert: true });
+    ga.requireChannels = [];
     ga.requireChannelId = null;
     ga.requireChannelTitle = '';
     await ga.save();
-    await ctx.answerCbQuery('🚫 Channel လိုအပ်ချက် ဖြုတ်ပြီး');
-    const detail = await buildGaDetail(ga._id);
-    await editOrReply(ctx, detail.text, detail.keyboard);
+    await ctx.answerCbQuery('🚫 Channel requirements အားလုံးဖြုတ်ပြီး');
+    return showChannelPicker(ctx, ga._id.toString());
+  });
+
+  bot.action('accga_joined_ok', async (ctx) => {
+    await ctx.answerCbQuery('✅ ဒီ channel ကို join ပြီးသားပါ');
   });
 
   // ── Delete ──────────────────────────────────────────────────────────────────
@@ -1120,6 +1227,7 @@ module.exports = function registerAccountGiveaway(bot) {
   bot.action(/^accga_delyes:([a-f0-9]{24})$/, adminOnly(), async (ctx) => {
     const ga = await AccountGiveaway.findById(ctx.match[1]);
     if (!ga) return ctx.answerCbQuery('❌ မရှိတော့ပါ', { show_alert: true });
+    await clearGiveawayClaims(ga);
     await AccountGiveaway.deleteOne({ _id: ga._id });
     await auditLog(ctx.from.id, 'DELETE_GIVEAWAY', ga._id.toString(), 'System', {});
     await ctx.answerCbQuery('🗑 ဖျက်ပြီးပါပြီ');
