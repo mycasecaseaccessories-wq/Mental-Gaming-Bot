@@ -1138,7 +1138,7 @@ module.exports = function registerAccountGiveaway(bot) {
     const rows = channels.slice(0, 30).map((c) => {
       const on = selectedIds.has(String(c.chatId));
       return [styledButton(
-        Markup.button.callback(`${on ? '✅' : '➕'} ${c.title || c.chatId}`, `accga_chantoggle:${gaId}:${c.chatId}`),
+        Markup.button.callback(`${on ? '✅' : '➕'} ${c.title || c.chatId}`, `gct:${gaId}:${c.chatId}`),
         on ? 'success' : 'primary'
       )];
     });
@@ -1163,7 +1163,7 @@ _(Channel အသစ်ထည့်ချင်ရင် /channels မှာ အ�
     return showChannelPicker(ctx, ctx.match[1]);
   });
 
-  bot.action(/^accga_chantoggle:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^gct:([a-f0-9]{24}):(-?\d+)$/, adminOnly(), async (ctx) => {
     const gaId = ctx.match[1];
     const chatId = Number(ctx.match[2]);
     const ga = await AccountGiveaway.findById(gaId);
