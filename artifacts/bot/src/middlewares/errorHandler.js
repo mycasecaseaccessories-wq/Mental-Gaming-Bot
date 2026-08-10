@@ -28,7 +28,7 @@ function fmtUptime(sec) {
 
 async function alertAdmin(telegram, text) {
   try {
-    await telegram.sendMessage(config.bot.adminId, text, { parse_mode: 'Markdown' });
+    await telegram.sendMessage(config.bot.adminId, text);
   } catch (e) {
     console.error('[ErrorHandler] Failed to alert admin:', e.message);
   }
