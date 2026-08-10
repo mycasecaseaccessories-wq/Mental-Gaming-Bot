@@ -30,14 +30,24 @@ function productLogo(product = {}) {
   return logos.find(([pattern]) => pattern.test(n))?.[1] || '📦';
 }
 
+function isInStock(product = {}) {
+  return product.stockCount === -1 || Number(product.stockCount) > 0;
+}
+
 function productButtonLabel(product) {
-  const inStock = product.stockCount === -1 || Number(product.stockCount) > 0;
-  const status = inStock ? '🟢' : '🔴';
-  return `${status} ${productLogo(product)} ${truncate(product.name, 20)}`;
+  return `${productLogo(product)} ${truncate(product.name, 22)}`;
+}
+
+// Telegram Bot API supports native button styles: primary (blue),
+// success (green) and danger (red). Telegraf 4.16 doesn't expose a helper
+// yet, but it forwards this field to Telegram unchanged.
+function withStyle(button, style) {
+  if (button && style) button.style = style;
+  return button;
 }
 
 function backRow() {
-  return Nav.backButton();
+  return Nav.backButton().map((button) => withStyle(button, 'danger'));
 }
 
 const { mainMenuKeyboard } = require('../utils/keyboard');
@@ -183,7 +193,10 @@ Nav.registerDynamic({
 
     const subRows = Nav.buildRows(subCatalogs.map((k) => Nav.folderButton(k.name, `cat:${k._id}`)), 2);
     const productButtons = products.map((p) =>
-      Markup.button.callback(productButtonLabel(p), `product:${p._id}`)
+      withStyle(
+        Markup.button.callback(productButtonLabel(p), `product:${p._id}`),
+        isInStock(p) ? 'success' : 'danger'
+      )
     );
     const prodRows = Nav.buildRows(productButtons, 2);
 
@@ -230,6 +243,10 @@ module.exports = function registerShop(bot) {
     await Nav.navigate(ctx, 'main');
   });
 
+  bot.action('shop_out_of_stock', async (ctx) => {
+    await ctx.answerCbQuery('This product is currently out of stock.', { show_alert: true });
+  });
+
   bot.action(/^product:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const productId = ctx.match[1];
@@ -260,11 +277,16 @@ module.exports = function registerShop(bot) {
         ? `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?start=product_${product._id}`)}&text=${encodeURIComponent(`🎮 ${product.name} — Mental Gaming Store`)}`
         : null;
 
+      const inStock = isInStock(product);
+      const orderButton = inStock
+        ? withStyle(Markup.button.callback(t(ctx, 'shop.order_now'), `order_start:${product._id}`), 'success')
+        : withStyle(Markup.button.callback('📦 Out of Stock', 'shop_out_of_stock'), 'danger');
+
       await resolveMessage(ctx, ref, text, {
         ...Markup.inlineKeyboard([
-          [Markup.button.callback(t(ctx, 'shop.order_now'), `order_start:${product._id}`)],
-          ...(shareUrl ? [[Markup.button.url('📤 Share', shareUrl)]] : []),
-          Nav.backButton(),
+          [orderButton],
+          ...(shareUrl ? [[withStyle(Markup.button.url('📤 Share', shareUrl), 'primary')]] : []),
+          backRow(),
         ]),
       });
     } catch (err) {

@@ -12,6 +12,11 @@ const SystemStatus = require('../models/SystemStatus');
 const PaymentMethod = require('../models/PaymentMethod');
 const { Markup } = require('telegraf');
 
+
+function escapeMarkdown(value = '') {
+  return String(value).replace(/([\\_*`\[\]])/g, '\\$1');
+}
+
 function gatewayIcon(status) {
   return status === 'Online' ? '🟢' : status === 'Busy' ? '🟡' : '🔴';
 }
@@ -56,14 +61,14 @@ async function buildDashboardText(theme) {
   ]);
 
   const rateLines = rates.map(
-    (r) => `  ${r.currencyCode}: \`${parseFloat(r.rateToMMK.toFixed(4))}\` MMK`
+    (r) => `  ${escapeMarkdown(r.currencyCode)}: \`${parseFloat(r.rateToMMK.toFixed(4))}\` MMK`
   );
 
   const pendingOrderLines = recentOrders.length
     ? recentOrders.map((o, i) => {
         const icon    = o.status === 'Processing' ? '🔵' : '🟡';
-        const user    = o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`;
-        const product = o.productId?.name || 'Unknown';
+        const user    = escapeMarkdown(o.userId?.username ? `@${o.userId.username}` : `ID:${o.userId?.telegramId}`);
+        const product = escapeMarkdown(o.productId?.name || 'Unknown');
         return `  ${icon} ${user} → ${product} — \`${price(o.amount)}\``;
       })
     : ['  _Pending order မရှိပါ_'];
@@ -71,19 +76,20 @@ async function buildDashboardText(theme) {
   const pendingTopupLines = recentPendingTopups.length
     ? recentPendingTopups.map((t) => {
         const u   = t.userId;
-        const tag = u?.username ? `@${u.username}` : u?.telegramId ? `ID:${u.telegramId}` : 'Unknown';
-        return `  ⏳ ${tag} — *${price(t.amount || 0)}* (${t.paymentMethod || '?'})`;
+        const tag = escapeMarkdown(u?.username ? `@${u.username}` : u?.telegramId ? `ID:${u.telegramId}` : 'Unknown');
+        const method = escapeMarkdown(t.paymentMethod || '?');
+        return `  ⏳ ${tag} — *${price(t.amount || 0)}* (${method})`;
       })
     : ['  _Pending topup မရှိပါ_'];
 
   // Gateway display — driven by PaymentMethod (same list users see in /topup)
   const gwLines = paymentMethods.length
     ? paymentMethods.map(
-        (m) => `  ${m.isActive ? '🟢' : '🔴'} ${m.emoji} ${m.name}${m.isActive ? '' : ' _(hidden)_'}`
+        (m) => `  ${m.isActive ? '🟢' : '🔴'} ${escapeMarkdown(m.emoji || '')} ${escapeMarkdown(m.name)}${m.isActive ? '' : ' _(hidden)_'}`
       )
     : ['  _No payment methods configured_'];
   if (sysStatus.gatewayNote) {
-    gwLines.push(`  📝 _${sysStatus.gatewayNote}_`);
+    gwLines.push(`  📝 _${escapeMarkdown(sysStatus.gatewayNote)}_`);
   }
 
   const sep = divider(theme);
@@ -218,10 +224,10 @@ module.exports = function registerDashboard(bot) {
     const methods = await PaymentMethod.find().sort({ displayOrder: 1, name: 1 });
     const gwStatus = methods.length
       ? methods
-          .map((m) => `  ${m.isActive ? '🟢' : '🔴'} *${m.name}*${m.isActive ? '' : ' (hidden)'}`)
+          .map((m) => `  ${m.isActive ? '🟢' : '🔴'} *${escapeMarkdown(m.name)}*${m.isActive ? '' : ' (hidden)'}`)
           .join('\n')
       : '  _No payment methods configured_';
-    const gwNote = status.gatewayNote ? `\n  📝 _${status.gatewayNote}_` : '';
+    const gwNote = status.gatewayNote ? `\n  📝 _${escapeMarkdown(status.gatewayNote)}_` : '';
     await ctx.reply(
       `🖥 *System Health*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
       `⏱ Uptime: *${Math.floor(uptimeSec/3600)}h ${Math.floor((uptimeSec%3600)/60)}m*\n` +
