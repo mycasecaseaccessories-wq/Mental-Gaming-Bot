@@ -5,12 +5,9 @@
  * (comma-separated: "1.2.3.4,5.6.7.8") plus a live list from SystemStatus
  * in MongoDB (polled every 5 minutes).
  *
- * Passes if:
- *   - WEBHOOK_ALLOWED_IPS is not set (open — useful in dev)
- *   - Client IP is in the whitelist
- *   - X-Forwarded-For header matches a whitelisted IP (behind proxy)
- *
- * Blocks with 403 if the whitelist is configured and the IP is not in it.
+ * In production, an IP allow-list is required unless
+ * WEBHOOK_ALLOW_ANY_IP=true is explicitly configured. Dynamic DB entries and
+ * WEBHOOK_ALLOWED_IPS are merged. Development remains open by default.
  */
 
 import type { Request, Response, NextFunction } from "express";
@@ -63,14 +60,22 @@ function getClientIp(req: Request): string {
 export function ipWhitelist() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const staticList = getStaticWhitelist();
-
-    // Whitelist not configured → open access (dev mode)
-    if (!staticList.length) {
-      return next();
-    }
-
     const dynamicList = await getDynamicWhitelist();
-    const allowed     = new Set([...staticList, ...dynamicList]);
+    const allowed = new Set([...staticList, ...dynamicList]);
+
+    if (!allowed.size) {
+      if (
+        process.env["NODE_ENV"] !== "production" ||
+        process.env["WEBHOOK_ALLOW_ANY_IP"] === "true"
+      ) {
+        return next();
+      }
+      logger.error("Webhook IP whitelist is empty in production");
+      res.status(503).json({
+        error: "Webhook IP authentication is not configured",
+      });
+      return;
+    }
 
     const clientIp = getClientIp(req);
 

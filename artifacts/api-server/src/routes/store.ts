@@ -4,7 +4,7 @@ import { ObjectId, type Filter, type WithId } from "mongodb";
 import multer from "multer";
 import { getClient, getCollection } from "../lib/mongodb";
 import { telegramAuth, type StoreUser } from "../middlewares/telegramAuth";
-import { sendPhoto } from "../lib/telegramApi";
+import { deleteMessage, sendPhoto } from "../lib/telegramApi";
 import { logger } from "../lib/logger";
 import { validatePromo, calcPromoDiscount, type PromoDoc } from "../lib/promo";
 
@@ -161,6 +161,7 @@ interface TxDoc {
   txId?: string;
   screenshotUrl?: string | null;
   screenshotHash?: string | null;
+  screenshotContentHash?: string | null;
   createdAt?: Date;
   timestamp?: Date;
 }
@@ -669,6 +670,34 @@ router.post("/orders", async (req: Request, res: Response) => {
     });
   }
 
+  // Reserve finite stock BEFORE charging the wallet. The quantity is part of
+  // the atomic filter, so concurrent buyers can never oversell the last units.
+  let stockReserved = false;
+  const restoreStock = async (): Promise<void> => {
+    if (!stockReserved || product.stockCount === -1) return;
+    stockReserved = false;
+    try {
+      await products.updateOne(
+        { _id: product._id },
+        { $inc: { stockCount: quantity } },
+      );
+    } catch {
+      /* best effort; logged by the surrounding failure path */
+    }
+  };
+
+  if (product.stockCount !== -1) {
+    const reserved = await products.updateOne(
+      { _id: product._id, isActive: true, stockCount: { $gte: quantity } },
+      { $inc: { stockCount: -quantity } },
+    );
+    if (reserved.modifiedCount !== 1) {
+      await rollbackPromo();
+      return res.status(409).json({ error: "Not enough stock for the requested quantity" });
+    }
+    stockReserved = true;
+  }
+
   // Atomic debit: conditional update on balance prevents overspend race.
   const debited = await users.findOneAndUpdate(
     { _id: u._id, [balanceField]: { $gte: payableAmount } },
@@ -676,6 +705,7 @@ router.post("/orders", async (req: Request, res: Response) => {
     { returnDocument: "after" }
   );
   if (!debited) {
+    await restoreStock();
     await rollbackPromo();
     return res.status(402).json({ error: "Balance changed, please retry" });
   }
@@ -733,21 +763,17 @@ router.post("/orders", async (req: Request, res: Response) => {
       timestamp: now,
     });
 
-    // Decrement stock to match the bot's OrderService (mini-app data parity).
-    // Guarded so it can never drive stockCount below zero.
-    if (product.stockCount !== -1) {
-      await products.updateOne(
-        { _id: product._id, stockCount: { $gt: 0 } },
-        { $inc: { stockCount: -1 } },
-      );
-    }
+    // Stock was already reserved atomically before the wallet debit.
+    stockReserved = false;
   } catch (err) {
-    // Compensating refund — keep wallet whole if order/tx writes fail.
+    // Compensating refund — keep wallet, stock, and promo state whole if an
+    // order/transaction write fails.
     try {
       await users.updateOne(
         { _id: u._id },
         { $inc: { [balanceField]: payableAmount } }
       );
+      await restoreStock();
       await orders.deleteOne({ _id: orderId }).catch(() => {});
       await rollbackPromo();
     } catch {
@@ -947,7 +973,22 @@ router.post(
 
     const txs = await getCollection<TxDoc>("transactions");
 
-    // Prevent multiple pending top-ups per user (matches bot behaviour).
+    // Enforce one pending top-up per user at the database level. The partial
+    // unique index closes the find-then-insert race between concurrent requests.
+    try {
+      await txs.createIndex(
+        { userId: 1 },
+        {
+          unique: true,
+          partialFilterExpression: { type: "Topup", status: "Pending" },
+          name: "uniq_pending_topup_per_user",
+        },
+      );
+    } catch (err) {
+      logger.error({ err }, "Could not ensure pending top-up uniqueness index");
+      return res.status(503).json({ error: "Top-up service is temporarily unavailable" });
+    }
+
     const pending = await txs.findOne({
       userId: u._id,
       type: "Topup",
@@ -960,12 +1001,57 @@ router.post(
       });
     }
 
-    // Forward photo to admin first — Telegram returns a stable file_id we
-    // store on the tx. Hash of the file_id is the fraud fingerprint.
+    // Hash the uploaded bytes BEFORE notifying the admin. This catches repeated
+    // Mini App submissions without creating a stale Approve/Reject message.
+    const contentHash = crypto.createHash("sha256").update(file.buffer).digest("hex");
+    const duplicateByContent = await txs.findOne({ screenshotContentHash: contentHash });
+    if (duplicateByContent) {
+      const sameUser = duplicateByContent.userId.toString() === u._id.toString();
+      return res.status(409).json({
+        error: sameUser
+          ? "You've already submitted this exact screenshot."
+          : "This screenshot was already used.",
+      });
+    }
+
+    // Reserve the pending transaction BEFORE Telegram side effects. The unique
+    // partial index makes this insert the concurrency gate for this user.
+    const txIdPreview = await ensureUniqueTxId(txs);
+    const reservationId = new ObjectId();
+    const reservationNow = new Date();
+    try {
+      await txs.insertOne({
+        _id: reservationId,
+        userId: u._id,
+        type: "Topup",
+        wallet: "KS",
+        amount,
+        balanceBefore: u.balanceKS,
+        balanceAfter: u.balanceKS,
+        status: "Pending",
+        paymentMethod: shortCode,
+        screenshotUrl: null,
+        screenshotHash: null,
+        screenshotContentHash: contentHash,
+        txId: txIdPreview,
+        note: "Reserving top-up submission (Mini App)",
+        createdAt: reservationNow,
+        timestamp: reservationNow,
+      });
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000) {
+        return res.status(409).json({
+          error: "You already have a pending top-up. Wait for it to be processed.",
+        });
+      }
+      throw err;
+    }
+
+    // Forward photo to admin — Telegram returns a stable file_id which is kept
+    // for compatibility with the existing bot-side screenshot checks.
     let fileId: string;
     let adminMessageId: number | null = null;
     try {
-      const txIdPreview = "TX" + crypto.randomBytes(6).toString("hex").toUpperCase();
       const caption =
         `🆕 *Mini App Top-Up Request*\n\n` +
         `👤 User: ${u.first_name || u.username || u.telegramId} ` +
@@ -999,9 +1085,12 @@ router.post(
       // Duplicate / fraud check using Telegram's file_id (same logic as bot).
       const hash = md5Hex(fileId);
       const existing = await txs.findOne({
+        _id: { $ne: reservationId },
         $or: [{ screenshotUrl: fileId }, { screenshotHash: hash }],
       });
       if (existing) {
+        await txs.deleteOne({ _id: reservationId });
+        if (adminMessageId != null) await deleteMessage(admin, adminMessageId);
         const sameUser = existing.userId.toString() === u._id.toString();
         return res.status(409).json({
           error: sameUser
@@ -1010,24 +1099,20 @@ router.post(
         });
       }
 
-      const now = new Date();
-      await txs.insertOne({
-        _id: new ObjectId(),
-        userId: u._id,
-        type: "Topup",
-        wallet: "KS",
-        amount,
-        balanceBefore: u.balanceKS,
-        balanceAfter: u.balanceKS,
-        status: "Pending",
-        paymentMethod: shortCode,
-        screenshotUrl: fileId,
-        screenshotHash: hash,
-        txId: txIdPreview,
-        note: "Awaiting admin approval (Mini App)",
-        createdAt: now,
-        timestamp: now,
-      });
+      const updated = await txs.updateOne(
+        { _id: reservationId, status: "Pending" },
+        {
+          $set: {
+            screenshotUrl: fileId,
+            screenshotHash: hash,
+            screenshotContentHash: contentHash,
+            note: "Awaiting admin approval (Mini App)",
+          },
+        },
+      );
+      if (updated.modifiedCount !== 1) {
+        throw new Error("Top-up reservation disappeared before finalization");
+      }
 
       return res.json({
         requestId: txIdPreview,
@@ -1037,6 +1122,10 @@ router.post(
           "Top-up request submitted! An admin will review your screenshot — usually within minutes.",
       });
     } catch (err) {
+      await txs.deleteOne({ _id: reservationId }).catch(() => {});
+      if (adminMessageId != null) {
+        await deleteMessage(admin, adminMessageId).catch(() => {});
+      }
       logger.error(
         { err, adminMessageId },
         "Failed to forward top-up screenshot"

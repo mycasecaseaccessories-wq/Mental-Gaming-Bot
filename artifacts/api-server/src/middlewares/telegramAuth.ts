@@ -83,9 +83,10 @@ export async function telegramAuth(
     return;
   }
 
+  // Accept initData only from a header. Query-string credentials can leak into
+  // browser history, reverse-proxy logs, analytics, and referrer headers.
   const initData =
     (req.header("x-telegram-init-data") as string | undefined) ||
-    (req.query["initData"] as string | undefined) ||
     "";
 
   let tgUser: TelegramUser | null = null;

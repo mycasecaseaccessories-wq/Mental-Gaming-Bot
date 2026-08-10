@@ -1,0 +1,56 @@
+I uploaded an already-fixed version of my Mental Gaming Bot project.
+
+IMPORTANT: I want to minimize Replit Agent usage and credits.
+
+Your job is ONLY to deploy/setup the uploaded code and report errors. Do not perform a broad code review and do not rewrite working code.
+
+Please follow these rules:
+
+1. Extract the uploaded ZIP.
+2. Read FIXES_APPLIED.md.
+3. Compare the uploaded project with the current Replit project.
+4. Use the uploaded fixed source as the intended version.
+5. Preserve my existing Replit Secrets / environment variables.
+6. Do NOT create a new project from scratch.
+7. Do NOT redesign the UI.
+8. Do NOT rewrite existing features.
+9. Do NOT refactor the architecture.
+10. Do NOT make optional improvements.
+11. Do NOT spend time analyzing code that already works.
+12. Do NOT remove security checks to make the app run.
+13. Do NOT modify production database data.
+14. Do NOT hard-code secrets.
+
+Only do the minimum required setup:
+
+* Put the uploaded source files in the correct project location.
+* Install missing dependencies if necessary.
+* Use the existing project package manager.
+* Check required environment variables from .env.example.
+* Run the existing build/typecheck command if available.
+* Start the application.
+
+If the application starts successfully, STOP. Do not continue changing code.
+
+If an error occurs:
+
+* Do not attempt large automatic fixes.
+* Identify the exact error.
+* Tell me the exact file path and line if available.
+* Show me the complete error message.
+* Explain briefly what is causing it.
+* Only make a very small obvious fix if it is required for Replit-specific setup, such as a start command, port binding, or missing dependency.
+* For source-code bugs, STOP and report them to me so I can fix the code separately.
+
+Do not repeatedly retry or explore alternative implementations.
+
+At the end, only report:
+
+1. App started successfully: YES/NO
+2. Bot started successfully: YES/NO
+3. API/server started successfully: YES/NO
+4. Missing environment variables
+5. Exact remaining errors, if any
+6. Any Replit-specific configuration still required
+
+The goal is deployment, not development. Minimize Agent work and credit usage.

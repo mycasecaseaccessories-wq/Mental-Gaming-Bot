@@ -77,7 +77,26 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
   session.startTransaction();
 
   let order;
+  let chargedUser = user;
   try {
+    // Reserve finite stock inside the same transaction as the wallet debit and
+    // order insert. The conditional update prevents last-unit overselling.
+    if (product.stockCount !== -1) {
+      const reserved = await Product.findOneAndUpdate(
+        { _id: product._id, isActive: true, stockCount: { $gte: 1 } },
+        { $inc: { stockCount: -1 } },
+        { new: true, session }
+      );
+      if (!reserved) throw new Error('Product is out of stock');
+    }
+
+    chargedUser = await User.findOneAndUpdate(
+      { _id: user._id, balanceKS: { $gte: amount } },
+      { $inc: { balanceKS: -amount }, $set: { lastActive: new Date() } },
+      { new: true, session }
+    );
+    if (!chargedUser) throw new Error('Balance changed, please retry');
+
     order = await Order.create([{
       userId: user._id,
       productId: product._id,
@@ -96,10 +115,6 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
     }], { session });
     order = order[0];
 
-    // Deduct wallet
-    user.balanceKS -= amount;
-    await user.save({ session });
-
     await session.commitTransaction();
   } catch (err) {
     await session.abortTransaction();
@@ -108,18 +123,13 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
     session.endSession();
   }
 
-  // Decrement stock count for non-unlimited products
-  if (product.stockCount !== -1) {
-    await Product.findByIdAndUpdate(product._id, { $inc: { stockCount: -1 } });
-  }
-
   await auditLog(telegramId, 'ORDER_CREATED', order._id.toString(), 'Order', {
     product: product.name,
     amount,
     productType: product.productType,
   });
 
-  return { order, product, user };
+  return { order, product, user: chargedUser };
 }
 
 // ── Mark order as Processing ──────────────────────────────────────────────────

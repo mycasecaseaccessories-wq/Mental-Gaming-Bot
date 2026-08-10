@@ -84893,11 +84893,18 @@ function getClientIp(req) {
 function ipWhitelist() {
   return async (req, res, next) => {
     const staticList = getStaticWhitelist();
-    if (!staticList.length) {
-      return next();
-    }
     const dynamicList = await getDynamicWhitelist();
     const allowed = /* @__PURE__ */ new Set([...staticList, ...dynamicList]);
+    if (!allowed.size) {
+      if (process.env["NODE_ENV"] !== "production" || process.env["WEBHOOK_ALLOW_ANY_IP"] === "true") {
+        return next();
+      }
+      logger.error("Webhook IP whitelist is empty in production");
+      res.status(503).json({
+        error: "Webhook IP authentication is not configured"
+      });
+      return;
+    }
     const clientIp = getClientIp(req);
     if (allowed.has(clientIp)) {
       return next();
@@ -84916,7 +84923,7 @@ function ipWhitelist() {
 // src/routes/webhook.ts
 var router2 = (0, import_express2.Router)();
 function verifySignature(rawBody, signature, secret) {
-  if (!secret) return true;
+  if (!secret) return process.env["NODE_ENV"] !== "production";
   if (!signature) return false;
   const expected = crypto2.createHmac("sha256", secret).update(rawBody).digest("hex");
   try {
@@ -84960,6 +84967,11 @@ router2.post(
     const sig = req.headers["x-signature"];
     const secret = process.env["WEBHOOK_SECRET"];
     const clientIp = (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+    if (!secret && process.env["NODE_ENV"] === "production") {
+      logger.error("WEBHOOK_SECRET is required in production");
+      res.status(503).json({ error: "Webhook authentication is not configured" });
+      return;
+    }
     if (!verifySignature(rawBody, sig, secret)) {
       logger.warn({ ip: clientIp }, "Payment webhook: invalid signature");
       res.status(401).json({ error: "Invalid signature" });
@@ -85003,6 +85015,11 @@ router2.post(
     const sig = req.headers["x-signature"];
     const secret = process.env["WEBHOOK_SECRET"];
     const clientIp = (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+    if (!secret && process.env["NODE_ENV"] === "production") {
+      logger.error("WEBHOOK_SECRET is required in production");
+      res.status(503).json({ error: "Webhook authentication is not configured" });
+      return;
+    }
     if (!verifySignature(rawBody, sig, secret)) {
       logger.warn({ ip: clientIp }, "Provider webhook: invalid signature");
       res.status(401).json({ error: "Invalid signature" });
@@ -85074,7 +85091,7 @@ async function telegramAuth(req, res, next) {
     res.status(503).json({ error: "Telegram authentication is not configured" });
     return;
   }
-  const initData = req.header("x-telegram-init-data") || req.query["initData"] || "";
+  const initData = req.header("x-telegram-init-data") || "";
   let tgUser = null;
   if (initData) {
     tgUser = verifyInitData(initData, botToken2);
@@ -85164,6 +85181,18 @@ async function sendPhoto(opts) {
   if (!largest) throw new Error("Telegram returned no photo sizes");
   return { fileId: largest.file_id, messageId: json.result.message_id };
 }
+async function deleteMessage(chatId, messageId) {
+  const url = `${BOT_API}/bot${botToken()}/deleteMessage`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+  });
+  const json = await res.json();
+  if (!json.ok) {
+    logger.warn({ desc: json.description, chatId, messageId }, "Telegram deleteMessage failed");
+  }
+}
 
 // src/lib/promo.ts
 function calcPromoDiscount(promo, amount) {
@@ -85230,6 +85259,14 @@ function shortCodeFor(method) {
   if (m === "AYA" || m === "AYAPAY") return "AYA";
   if (m === "CB" || m === "CBPAY") return "CB";
   return m;
+}
+async function ensureUniqueTxId(txs) {
+  for (let i = 0; i < 5; i++) {
+    const id = "TX" + crypto4.randomBytes(6).toString("hex").toUpperCase();
+    const existing = await txs.findOne({ txId: id });
+    if (!existing) return id;
+  }
+  throw new Error("Could not generate unique txId");
 }
 function effectivePrice(p) {
   const now = Date.now();
@@ -85586,12 +85623,36 @@ router3.post("/orders", async (req, res) => {
       balance: currentBalance
     });
   }
+  let stockReserved = false;
+  const restoreStock = async () => {
+    if (!stockReserved || product.stockCount === -1) return;
+    stockReserved = false;
+    try {
+      await products.updateOne(
+        { _id: product._id },
+        { $inc: { stockCount: quantity } }
+      );
+    } catch {
+    }
+  };
+  if (product.stockCount !== -1) {
+    const reserved = await products.updateOne(
+      { _id: product._id, isActive: true, stockCount: { $gte: quantity } },
+      { $inc: { stockCount: -quantity } }
+    );
+    if (reserved.modifiedCount !== 1) {
+      await rollbackPromo();
+      return res.status(409).json({ error: "Not enough stock for the requested quantity" });
+    }
+    stockReserved = true;
+  }
   const debited = await users.findOneAndUpdate(
     { _id: u._id, [balanceField]: { $gte: payableAmount } },
     { $inc: { [balanceField]: -payableAmount }, $set: { lastActive: now } },
     { returnDocument: "after" }
   );
   if (!debited) {
+    await restoreStock();
     await rollbackPromo();
     return res.status(402).json({ error: "Balance changed, please retry" });
   }
@@ -85639,18 +85700,14 @@ router3.post("/orders", async (req, res) => {
       createdAt: now,
       timestamp: now
     });
-    if (product.stockCount !== -1) {
-      await products.updateOne(
-        { _id: product._id, stockCount: { $gt: 0 } },
-        { $inc: { stockCount: -1 } }
-      );
-    }
+    stockReserved = false;
   } catch (err) {
     try {
       await users.updateOne(
         { _id: u._id },
         { $inc: { [balanceField]: payableAmount } }
       );
+      await restoreStock();
       await orders.deleteOne({ _id: orderId }).catch(() => {
       });
       await rollbackPromo();
@@ -85783,6 +85840,19 @@ router3.post(
       return res.status(500).json({ error: "Payment proof routing not configured" });
     }
     const txs = await getCollection("transactions");
+    try {
+      await txs.createIndex(
+        { userId: 1 },
+        {
+          unique: true,
+          partialFilterExpression: { type: "Topup", status: "Pending" },
+          name: "uniq_pending_topup_per_user"
+        }
+      );
+    } catch (err) {
+      logger.error({ err }, "Could not ensure pending top-up uniqueness index");
+      return res.status(503).json({ error: "Top-up service is temporarily unavailable" });
+    }
     const pending = await txs.findOne({
       userId: u._id,
       type: "Topup",
@@ -85793,10 +85863,47 @@ router3.post(
         error: "You already have a pending top-up. Wait for it to be processed."
       });
     }
+    const contentHash = crypto4.createHash("sha256").update(file.buffer).digest("hex");
+    const duplicateByContent = await txs.findOne({ screenshotContentHash: contentHash });
+    if (duplicateByContent) {
+      const sameUser = duplicateByContent.userId.toString() === u._id.toString();
+      return res.status(409).json({
+        error: sameUser ? "You've already submitted this exact screenshot." : "This screenshot was already used."
+      });
+    }
+    const txIdPreview = await ensureUniqueTxId(txs);
+    const reservationId = new import_mongodb6.ObjectId();
+    const reservationNow = /* @__PURE__ */ new Date();
+    try {
+      await txs.insertOne({
+        _id: reservationId,
+        userId: u._id,
+        type: "Topup",
+        wallet: "KS",
+        amount,
+        balanceBefore: u.balanceKS,
+        balanceAfter: u.balanceKS,
+        status: "Pending",
+        paymentMethod: shortCode,
+        screenshotUrl: null,
+        screenshotHash: null,
+        screenshotContentHash: contentHash,
+        txId: txIdPreview,
+        note: "Reserving top-up submission (Mini App)",
+        createdAt: reservationNow,
+        timestamp: reservationNow
+      });
+    } catch (err) {
+      if (err.code === 11e3) {
+        return res.status(409).json({
+          error: "You already have a pending top-up. Wait for it to be processed."
+        });
+      }
+      throw err;
+    }
     let fileId;
     let adminMessageId = null;
     try {
-      const txIdPreview = "TX" + crypto4.randomBytes(6).toString("hex").toUpperCase();
       const caption = `\u{1F195} *Mini App Top-Up Request*
 
 \u{1F464} User: ${u.first_name || u.username || u.telegramId} (\`${u.telegramId}\`)
@@ -85827,32 +85934,31 @@ _Tap a button below to process._`;
       adminMessageId = sent.messageId;
       const hash = md5Hex(fileId);
       const existing = await txs.findOne({
+        _id: { $ne: reservationId },
         $or: [{ screenshotUrl: fileId }, { screenshotHash: hash }]
       });
       if (existing) {
+        await txs.deleteOne({ _id: reservationId });
+        if (adminMessageId != null) await deleteMessage(admin, adminMessageId);
         const sameUser = existing.userId.toString() === u._id.toString();
         return res.status(409).json({
           error: sameUser ? "You've already submitted this exact screenshot." : "This screenshot was already used. Admin has been notified."
         });
       }
-      const now = /* @__PURE__ */ new Date();
-      await txs.insertOne({
-        _id: new import_mongodb6.ObjectId(),
-        userId: u._id,
-        type: "Topup",
-        wallet: "KS",
-        amount,
-        balanceBefore: u.balanceKS,
-        balanceAfter: u.balanceKS,
-        status: "Pending",
-        paymentMethod: shortCode,
-        screenshotUrl: fileId,
-        screenshotHash: hash,
-        txId: txIdPreview,
-        note: "Awaiting admin approval (Mini App)",
-        createdAt: now,
-        timestamp: now
-      });
+      const updated = await txs.updateOne(
+        { _id: reservationId, status: "Pending" },
+        {
+          $set: {
+            screenshotUrl: fileId,
+            screenshotHash: hash,
+            screenshotContentHash: contentHash,
+            note: "Awaiting admin approval (Mini App)"
+          }
+        }
+      );
+      if (updated.modifiedCount !== 1) {
+        throw new Error("Top-up reservation disappeared before finalization");
+      }
       return res.json({
         requestId: txIdPreview,
         txId: txIdPreview,
@@ -85860,6 +85966,12 @@ _Tap a button below to process._`;
         message: "Top-up request submitted! An admin will review your screenshot \u2014 usually within minutes."
       });
     } catch (err) {
+      await txs.deleteOne({ _id: reservationId }).catch(() => {
+      });
+      if (adminMessageId != null) {
+        await deleteMessage(admin, adminMessageId).catch(() => {
+        });
+      }
       logger.error(
         { err, adminMessageId },
         "Failed to forward top-up screenshot"
@@ -88276,12 +88388,24 @@ async function issuePersonalCoupon(userId, spec, source) {
   return doc;
 }
 async function createRedemptionOrder(userId, product, checkoutData, coinCost, source) {
-  if (coinCost > 0) {
-    const users = await getCollection("users");
-    const u = await users.findOne({ _id: userId });
-    await debitCoins(userId, coinCost, `Coin reward: ${product.name}`, u?.balanceCoin ?? 0);
-  }
+  const products = await getCollection("products");
+  let stockReserved = false;
+  let coinDebited = false;
   try {
+    if (product.stockCount !== -1) {
+      const reserved = await products.updateOne(
+        { _id: product._id, isActive: true, stockCount: { $gte: 1 } },
+        { $inc: { stockCount: -1 } }
+      );
+      if (reserved.modifiedCount !== 1) throw new Error("Product is out of stock");
+      stockReserved = true;
+    }
+    if (coinCost > 0) {
+      const users = await getCollection("users");
+      const u = await users.findOne({ _id: userId });
+      await debitCoins(userId, coinCost, `Coin reward: ${product.name}`, u?.balanceCoin ?? 0);
+      coinDebited = true;
+    }
     const now = /* @__PURE__ */ new Date();
     const orderId = new import_mongodb19.ObjectId();
     const orders = await getCollection("orders");
@@ -88304,13 +88428,14 @@ async function createRedemptionOrder(userId, product, checkoutData, coinCost, so
       createdAt: now,
       updatedAt: now
     });
-    if (product.stockCount !== -1) {
-      const products = await getCollection("products");
-      await products.updateOne({ _id: product._id }, { $inc: { stockCount: -1 } });
-    }
+    stockReserved = false;
     return { _id: orderId, shortId: orderId.toString().slice(-8).toUpperCase() };
   } catch (err) {
-    if (coinCost > 0) {
+    if (stockReserved) {
+      await products.updateOne({ _id: product._id }, { $inc: { stockCount: 1 } }).catch(() => {
+      });
+    }
+    if (coinDebited) {
       await creditCoins(userId, coinCost, "Reward redemption failed \u2014 coin refund").catch(() => {
       });
     }
@@ -88608,23 +88733,57 @@ app.use(
     }
   })
 );
-app.use((0, import_cors.default)());
-app.use("/api/webhook", (req, _res, next) => {
+var allowedOrigins = (process.env["CORS_ALLOWED_ORIGINS"] || "").split(",").map((origin) => origin.trim()).filter(Boolean);
+app.use(
+  (0, import_cors.default)({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      if (process.env["NODE_ENV"] !== "production" && !allowedOrigins.length) {
+        return cb(null, true);
+      }
+      return cb(null, false);
+    }
+  })
+);
+app.use("/api/webhook", (req, res, next) => {
   const chunks = [];
-  req.on("data", (chunk) => chunks.push(chunk));
+  let received = 0;
+  let tooLarge = false;
+  const maxBytes = 1024 * 1024;
+  req.on("data", (chunk) => {
+    if (tooLarge) return;
+    received += chunk.length;
+    if (received > maxBytes) {
+      tooLarge = true;
+      chunks.length = 0;
+      res.status(413).json({ error: "Webhook payload too large" });
+      return;
+    }
+    chunks.push(chunk);
+  });
   req.on("end", () => {
+    if (tooLarge || res.headersSent) return;
     const raw = Buffer.concat(chunks).toString("utf8");
     req.rawBody = raw;
     try {
       req.body = raw ? JSON.parse(raw) : {};
     } catch {
-      req.body = {};
+      res.status(400).json({ error: "Invalid JSON webhook payload" });
+      return;
     }
     next();
   });
 });
 app.use(import_express13.default.json());
 app.use(import_express13.default.urlencoded({ extended: true }));
+var webhookLimiter = rate_limit_default({
+  windowMs: 60 * 1e3,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use("/api/webhook", webhookLimiter);
 var apiLimiter = rate_limit_default({
   windowMs: 60 * 1e3,
   max: 120,

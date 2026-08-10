@@ -324,12 +324,12 @@ module.exports = function registerOrders(bot) {
   bot.action(/^user_cancel_order:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const orderId = ctx.match[1];
-    const { cancelOrder } = require('../controllers/orderController');
+    const { cancelAndRefund } = require('../services/OrderService');
 
     try {
-      await cancelOrder(orderId, ctx.from.id, 'Cancelled by customer');
+      await cancelAndRefund(orderId, ctx.from.id, 'Cancelled by customer');
       await ctx.editMessageText(
-        `❌ *Order Cancelled*\n\nYour order \`${orderId.slice(-8).toUpperCase()}\` has been cancelled.\n_Your refund will be processed shortly._`,
+        `❌ *Order Cancelled*\n\nYour order \`${orderId.slice(-8).toUpperCase()}\` has been cancelled.\n_Your wallet refund has been processed._`,
         { parse_mode: 'Markdown' }
       );
     } catch (err) {

@@ -237,12 +237,27 @@ async function issuePersonalCoupon(
 async function createRedemptionOrder(
   userId: ObjectId, product: ProductDoc, checkoutData: CheckoutValue[], coinCost: number, source: string
 ): Promise<{ _id: ObjectId; shortId: string }> {
-  if (coinCost > 0) {
-    const users = await getCollection<{ _id: ObjectId; balanceCoin: number }>("users");
-    const u = await users.findOne({ _id: userId });
-    await debitCoins(userId, coinCost, `Coin reward: ${product.name}`, u?.balanceCoin ?? 0);
-  }
+  const products = await getCollection<ProductDoc>("products");
+  let stockReserved = false;
+  let coinDebited = false;
+
   try {
+    if (product.stockCount !== -1) {
+      const reserved = await products.updateOne(
+        { _id: product._id, isActive: true, stockCount: { $gte: 1 } },
+        { $inc: { stockCount: -1 } },
+      );
+      if (reserved.modifiedCount !== 1) throw new Error("Product is out of stock");
+      stockReserved = true;
+    }
+
+    if (coinCost > 0) {
+      const users = await getCollection<{ _id: ObjectId; balanceCoin: number }>("users");
+      const u = await users.findOne({ _id: userId });
+      await debitCoins(userId, coinCost, `Coin reward: ${product.name}`, u?.balanceCoin ?? 0);
+      coinDebited = true;
+    }
+
     const now = new Date();
     const orderId = new ObjectId();
     const orders = await getCollection<Record<string, unknown>>("orders");
@@ -265,13 +280,13 @@ async function createRedemptionOrder(
       createdAt: now,
       updatedAt: now,
     });
-    if (product.stockCount !== -1) {
-      const products = await getCollection<ProductDoc>("products");
-      await products.updateOne({ _id: product._id }, { $inc: { stockCount: -1 } });
-    }
+    stockReserved = false;
     return { _id: orderId, shortId: orderId.toString().slice(-8).toUpperCase() };
   } catch (err) {
-    if (coinCost > 0) {
+    if (stockReserved) {
+      await products.updateOne({ _id: product._id }, { $inc: { stockCount: 1 } }).catch(() => {});
+    }
+    if (coinDebited) {
       await creditCoins(userId, coinCost, "Reward redemption failed — coin refund").catch(() => {});
     }
     throw err;

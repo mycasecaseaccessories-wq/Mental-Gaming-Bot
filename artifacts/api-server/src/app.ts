@@ -34,21 +34,55 @@ app.use(
     },
   }),
 );
-app.use(cors());
+const allowedOrigins = (process.env["CORS_ALLOWED_ORIGINS"] || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Requests without Origin are non-browser/server requests. In production,
+      // browser cross-origin access must be explicitly allow-listed.
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      if (process.env["NODE_ENV"] !== "production" && !allowedOrigins.length) {
+        return cb(null, true);
+      }
+      return cb(null, false);
+    },
+  }),
+);
 
 // ── Raw body capture for webhook HMAC verification ───────────────────────────
 // Must run BEFORE express.json(). Reads the stream, stores the raw string on
 // req.rawBody, then also populates req.body so route handlers work normally.
-app.use("/api/webhook", (req: Request, _res: Response, next: NextFunction) => {
+app.use("/api/webhook", (req: Request, res: Response, next: NextFunction) => {
   const chunks: Buffer[] = [];
-  req.on("data", (chunk: Buffer) => chunks.push(chunk));
+  let received = 0;
+  let tooLarge = false;
+  const maxBytes = 1024 * 1024; // 1 MiB webhook payload cap
+
+  req.on("data", (chunk: Buffer) => {
+    if (tooLarge) return;
+    received += chunk.length;
+    if (received > maxBytes) {
+      tooLarge = true;
+      chunks.length = 0;
+      res.status(413).json({ error: "Webhook payload too large" });
+      return;
+    }
+    chunks.push(chunk);
+  });
   req.on("end", () => {
+    if (tooLarge || res.headersSent) return;
     const raw = Buffer.concat(chunks).toString("utf8");
     (req as any).rawBody = raw;
     try {
       (req as any).body = raw ? (JSON.parse(raw) as unknown) : {};
     } catch {
-      (req as any).body = {};
+      res.status(400).json({ error: "Invalid JSON webhook payload" });
+      return;
     }
     next();
   });
@@ -57,9 +91,17 @@ app.use("/api/webhook", (req: Request, _res: Response, next: NextFunction) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Webhooks get their own burst-friendly limiter in addition to HMAC/IP checks.
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/webhook", webhookLimiter);
+
 // Basic abuse protection: 120 requests / minute / IP on the API surface.
-// Webhook callbacks (payment providers) are exempt — they can legitimately
-// burst and are already authenticated via HMAC.
+// Webhook callbacks are handled by the dedicated limiter above.
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,

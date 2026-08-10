@@ -57,7 +57,13 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       default: null,
       index: true,
-      comment: 'MD5 of file_id — used for duplicate screenshot detection',
+      comment: 'MD5 of file_id — used for Telegram-side duplicate screenshot detection',
+    },
+    screenshotContentHash: {
+      type: String,
+      default: null,
+      index: true,
+      comment: 'SHA-256 of uploaded image bytes — Mini App duplicate detection before admin notification',
     },
     note: {
       type: String,
@@ -83,6 +89,14 @@ const transactionSchema = new mongoose.Schema(
 
 transactionSchema.index({ userId: 1, status: 1 });
 transactionSchema.index({ userId: 1, type: 1, timestamp: -1 });
+transactionSchema.index(
+  { userId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: 'Topup', status: 'Pending' },
+    name: 'uniq_pending_topup_per_user',
+  }
+);
 
 transactionSchema.statics.isDuplicate = async function (txId) {
   if (!txId) return false;

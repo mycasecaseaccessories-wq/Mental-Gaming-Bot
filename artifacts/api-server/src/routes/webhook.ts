@@ -26,7 +26,7 @@ function verifySignature(
   signature: string | undefined,
   secret: string | undefined
 ): boolean {
-  if (!secret) return true; // No secret configured → skip check (dev mode)
+  if (!secret) return process.env["NODE_ENV"] !== "production";
   if (!signature) return false;
 
   const expected = crypto
@@ -43,17 +43,6 @@ function verifySignature(
   } catch {
     return false;
   }
-}
-
-// ── Raw body capture middleware (for HMAC) ────────────────────────────────────
-
-function captureRawBody(req: Request, _res: Response, next: () => void): void {
-  const chunks: Buffer[] = [];
-  req.on("data", (chunk: Buffer) => chunks.push(chunk));
-  req.on("end", () => {
-    (req as any).rawBody = Buffer.concat(chunks).toString("utf8");
-    next();
-  });
 }
 
 // ── Shared write-event helper ─────────────────────────────────────────────────
@@ -106,6 +95,12 @@ router.post(
     const sig      = req.headers["x-signature"] as string | undefined;
     const secret   = process.env["WEBHOOK_SECRET"];
     const clientIp = (req.headers["x-forwarded-for"] as string || req.ip || "").split(",")[0].trim();
+
+    if (!secret && process.env["NODE_ENV"] === "production") {
+      logger.error("WEBHOOK_SECRET is required in production");
+      res.status(503).json({ error: "Webhook authentication is not configured" });
+      return;
+    }
 
     // Signature check
     if (!verifySignature(rawBody, sig, secret)) {
@@ -165,6 +160,12 @@ router.post(
     const sig      = req.headers["x-signature"] as string | undefined;
     const secret   = process.env["WEBHOOK_SECRET"];
     const clientIp = (req.headers["x-forwarded-for"] as string || req.ip || "").split(",")[0].trim();
+
+    if (!secret && process.env["NODE_ENV"] === "production") {
+      logger.error("WEBHOOK_SECRET is required in production");
+      res.status(503).json({ error: "Webhook authentication is not configured" });
+      return;
+    }
 
     if (!verifySignature(rawBody, sig, secret)) {
       logger.warn({ ip: clientIp }, "Provider webhook: invalid signature");

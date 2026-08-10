@@ -68,11 +68,25 @@ async function issuePersonalCoupon(user, { discountType, value, minOrder = 0, ex
  * @returns the created Order document
  */
 async function createRedemptionOrder(user, product, { checkoutData = [], coinCost = 0, source = 'reward_item' } = {}) {
-  if (coinCost > 0) {
-    await debitCoin(user._id, coinCost, { type: 'Debit', note: `Coin reward: ${product.name}` });
-  }
+  let stockReserved = false;
+  let coinDebited = false;
 
   try {
+    if (product.stockCount !== -1) {
+      const reserved = await Product.findOneAndUpdate(
+        { _id: product._id, isActive: true, stockCount: { $gte: 1 } },
+        { $inc: { stockCount: -1 } },
+        { new: true }
+      );
+      if (!reserved) throw new Error('Product is out of stock');
+      stockReserved = true;
+    }
+
+    if (coinCost > 0) {
+      await debitCoin(user._id, coinCost, { type: 'Debit', note: `Coin reward: ${product.name}` });
+      coinDebited = true;
+    }
+
     const order = await Order.create({
       userId: user._id,
       productId: product._id,
@@ -89,13 +103,13 @@ async function createRedemptionOrder(user, product, { checkoutData = [], coinCos
       statusHistory: [{ status: 'Pending', at: new Date(), note: `Coin redemption (${coinCost} MC)` }],
     });
 
-    if (product.stockCount !== -1) {
-      await Product.findByIdAndUpdate(product._id, { $inc: { stockCount: -1 } });
-    }
-
+    stockReserved = false;
     return order;
   } catch (err) {
-    if (coinCost > 0) {
+    if (stockReserved) {
+      await Product.findByIdAndUpdate(product._id, { $inc: { stockCount: 1 } }).catch(() => {});
+    }
+    if (coinDebited) {
       await creditCoin(user._id, coinCost, { type: 'Refund', note: 'Reward redemption failed — coin refund' }).catch(() => {});
     }
     throw err;

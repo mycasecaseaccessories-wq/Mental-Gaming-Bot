@@ -52,6 +52,18 @@ cp deploy/.env.example .env
 nano .env      # တန်ဖိုးတွေ ဖြည့် (BOT_TOKEN, MONGODB_URI, ...)
 ```
 
+### 3.1) Production security values မဖြစ်မနေဖြည့်ရန်
+
+`.env` ထဲမှာ အောက်ပါ values ကို production မတင်ခင် ဖြည့်ပါ:
+
+```bash
+WEBHOOK_SECRET=<long-random-secret>
+WEBHOOK_ALLOWED_IPS=<provider-ip-1,provider-ip-2>
+CORS_ALLOWED_ORIGINS=https://store.example.com
+```
+
+Provider က fixed IP မပေးနိုင်မှသာ `WEBHOOK_ALLOW_ANY_IP=true` သုံးပါ။ ဒီအခြေအနေမှာလည်း `WEBHOOK_SECRET` HMAC verification က မဖြစ်မနေရှိရပါမယ်။
+
 ### 4) dotenv install (PM2 က .env ဖတ်ဖို့)
 
 ```bash

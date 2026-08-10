@@ -105,3 +105,21 @@ export async function sendMessage(
     logger.warn({ desc: json.description, chatId }, "Telegram sendMessage failed");
   }
 }
+
+
+/** Best-effort deletion for admin messages that must be rolled back. */
+export async function deleteMessage(
+  chatId: number | string,
+  messageId: number
+): Promise<void> {
+  const url = `${BOT_API}/bot${botToken()}/deleteMessage`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+  });
+  const json = (await res.json()) as { ok: boolean; description?: string };
+  if (!json.ok) {
+    logger.warn({ desc: json.description, chatId, messageId }, "Telegram deleteMessage failed");
+  }
+}
