@@ -148,7 +148,7 @@ Nav.register({
       },
     ]);
 
-    const rows = Nav.buildRows(roots.map((c) => Nav.folderButton(c.name, `cat:${c._id}`)), 2);
+    const rows = Nav.buildRows(roots.map((c) => Nav.folderButton(`${c.emoji || '📁'} ${c.name}`, `cat:${c._id}`)), 2);
     const keyboard = Markup.inlineKeyboard([
       ...rows,
       [Markup.button.callback(t(ctx, 'shop.search'), 'shop_search')],
@@ -179,7 +179,7 @@ Nav.registerDynamic({
       };
     }
 
-    const title = `📁 ${cat.name}`;
+    const title = `${cat.emoji || '📁'} ${cat.name}`;
     const { children, subtreeHasProducts } = await loadShopTree();
     const subCatalogs = (children.get(String(cat._id)) || []).filter((k) => subtreeHasProducts(String(k._id)));
     const products = await CacheService.getCachedCatalogProducts(cat._id, cat.name);
@@ -191,7 +191,7 @@ Nav.registerDynamic({
       };
     }
 
-    const subRows = Nav.buildRows(subCatalogs.map((k) => Nav.folderButton(k.name, `cat:${k._id}`)), 2);
+    const subRows = Nav.buildRows(subCatalogs.map((k) => Nav.folderButton(`${k.emoji || '📁'} ${k.name}`, `cat:${k._id}`)), 2);
     const productButtons = products.map((p) =>
       withStyle(
         Markup.button.callback(productButtonLabel(p), `product:${p._id}`),

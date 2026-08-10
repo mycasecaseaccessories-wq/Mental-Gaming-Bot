@@ -102,13 +102,14 @@ async function sendCatalogView(ctx, catalog) {
 
   // Sub-catalogs nested directly under this one
   const subs = await Catalog.find({ parentCategory: catalog._id })
-    .sort({ sortOrder: 1, name: 1 }).select('_id name isActive').lean();
+    .sort({ sortOrder: 1, name: 1 }).select('_id name emoji isActive').lean();
   const subLines = subs.length
     ? subs.map((s, i) => `${i + 1}\\. ${s.isActive ? '✅' : '🔴'} ${s.name}`).join('\n')
     : '_None yet_';
 
   const text =
-    `📂 *${catalog.name}*\n\n` +
+    `${catalog.emoji || '📁'} *${catalog.name}*\n\n` +
+    `Emoji: ${catalog.emoji || 'Auto (📁)'}\n` +
     `Status: ${catalog.isActive ? '✅ Active' : '🔴 Inactive'}\n` +
     `Products: *${productCount}*\n` +
     `Shop position: *${pos}/${siblings.length}* (${scope})\n` +
@@ -130,7 +131,7 @@ async function sendCatalogView(ctx, catalog) {
 
   // One button per sub-catalog so admin can drill into it directly
   const subButtons = subs.map((s) => [
-    Markup.button.callback(`↳ ${s.isActive ? '' : '🔴 '}${s.name}`, `cat_view:${s._id}`),
+    Markup.button.callback(`↳ ${s.isActive ? '' : '🔴 '}${s.emoji || '📁'} ${s.name}`, `cat_view:${s._id}`),
   ]);
 
   // Root catalogs go back to the top-level list; sub-catalogs go back to their parent
@@ -148,6 +149,7 @@ async function sendCatalogView(ctx, catalog) {
       ...fieldDelButtons,
       ...subButtons,
       [Markup.button.callback('➕ Add Sub-Category', `cat_addsub:${catalog._id}`)],
+      [Markup.button.callback('🎨 Set Emoji', `cat_setemoji:${catalog._id}`)],
       [
         Markup.button.callback('⬆️ Move Up',   `cat_moveup:${catalog._id}`),
         Markup.button.callback('⬇️ Move Down', `cat_movedown:${catalog._id}`),
@@ -351,7 +353,7 @@ module.exports = (bot) => {
       const subs = subMap.get(String(c._id)) || 0;
       const meta = subs > 0 ? `${subs} sub${subs > 1 ? 's' : ''}` : `${c.checkoutFields.length} fields`;
       return [
-        Markup.button.callback(`${c.isActive ? '✅' : '🔴'} ${c.name} (${meta})`, `cat_view:${c._id}`),
+        Markup.button.callback(`${c.isActive ? '✅' : '🔴'} ${c.emoji || '📁'} ${c.name} (${meta})`, `cat_view:${c._id}`),
       ];
     });
     rows.push([Markup.button.callback('➕ Add Catalog', 'cat_add')]);
@@ -422,6 +424,19 @@ module.exports = (bot) => {
     await Catalog.deleteOne({ _id: catalog._id });
     await auditLog(ctx.from.id, 'CATALOG_DELETE', catalog._id.toString(), 'Catalog', { name: catalog.name });
     await ctx.reply(`🗑 Catalog *${catalog.name}* deleted.`, { parse_mode: 'Markdown' });
+  });
+
+  // ── Set catalog/sub-category emoji ───────────────────────────────────────
+  bot.action(/^cat_setemoji:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const catalog = await Catalog.findById(ctx.match[1]).select('name emoji').lean();
+    if (!catalog) return ctx.reply('❌ Catalog not found.');
+    ctx.session.catalogAction = 'set_emoji';
+    ctx.session.catalogId = ctx.match[1];
+    await ctx.reply(
+      `🎨 *${catalog.name} — Emoji*\n\nCurrent: ${catalog.emoji || 'Auto (📁)'}\n\nSend one emoji, or send \`-\` to clear / use 📁.\n_Send /cancel to abort._`,
+      { parse_mode: 'Markdown' }
+    );
   });
 
   // ── Set image URL ─────────────────────────────────────────────────────────
@@ -721,6 +736,25 @@ module.exports = (bot) => {
       ctx.session.bulkProductsDraft = null;
       ctx.session.newCatalogParent = null;
       return ctx.reply('❌ Cancelled.');
+    }
+
+    // ── Set catalog/sub-category emoji ──────────────────────────────────
+    if (action === 'set_emoji') {
+      if (!text) return ctx.reply('Send one emoji, or `-` to clear.');
+      const catalog = await Catalog.findById(ctx.session.catalogId);
+      if (!catalog) return ctx.reply('❌ Catalog not found.');
+      const value = text === '-' ? '' : text.trim();
+      if (value.length > 16 || /\s/.test(value)) {
+        return ctx.reply('❌ Send one emoji only, without spaces, or `-` to clear.');
+      }
+      catalog.emoji = value;
+      await catalog.save();
+      await auditLog(ctx.from.id, 'CATALOG_SET_EMOJI', catalog._id.toString(), 'Catalog', { emoji: catalog.emoji });
+      ctx.session.catalogAction = null;
+      ctx.session.catalogId = null;
+      await ctx.reply(value ? `✅ Emoji updated: ${value} ${catalog.name}` : `✅ Emoji cleared. ${catalog.name} will use 📁.`);
+      await sendCatalogView(ctx, catalog);
+      return;
     }
 
     // ── Set image URL ─────────────────────────────────────────────────────

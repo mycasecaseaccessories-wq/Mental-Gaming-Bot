@@ -16,6 +16,7 @@ const checkoutFieldSchema = new mongoose.Schema(
 const catalogSchema = new mongoose.Schema(
   {
     name:          { type: String, required: true, trim: true, unique: true },
+    emoji:         { type: String, default: '', trim: true, maxlength: 16 },
     description:   { type: String, default: '' },
     imageUrl:      { type: String, default: null },
     parentCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'Catalog', default: null },

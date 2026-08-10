@@ -189,23 +189,41 @@ async function channelJoinUrl(ctx, chatId) {
 // ── User: entry point — list all active giveaways, or jump straight in if one ─
 
 async function buildUserEntry(ctx) {
-  const gas = (await AccountGiveaway.getActives()).filter((g) => gaMeta(g));
+  // Giveaway Center: active first, then recently closed. Button background
+  // carries status; button text stays the original product/account name.
+  const gas = (await AccountGiveaway.find({})
+    .populate('productId')
+    .populate('shopProductId')
+    .sort({ isActive: -1, updatedAt: -1 })
+    .limit(12))
+    .filter((g) => gaMeta(g));
+
   if (!gas.length) return null;
-  if (gas.length === 1) return buildUserView(ctx, gas[0]);
 
   let text =
-    `🎁 *အခမဲ့ လက်ဆောင်များ!*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-    `_အခု အခမဲ့ ဝေနေတဲ့ ပစ္စည်းတွေပါ — တစ်ခုချင်း ဝင်ကြည့်ပြီး ရယူပါ:_\n`;
+    `🎁 *Giveaway Center*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+    `_ပစ္စည်း/Account နာမည်ကို နှိပ်ပြီး အသေးစိတ်ကြည့်နိုင်ပါတယ်။_\n`;
+
   const rows = [];
   for (const g of gas) {
     const meta = gaMeta(g);
-    const s = await gaStock(g);
-    const quotaLeft = g.maxClaims > 0 ? Math.max(0, g.maxClaims - g.claimedCount) : null;
-    const left = quotaLeft !== null ? Math.min(quotaLeft, s.count) : s.count;
-    text += `\n${meta.emoji} *${esc(meta.title)}*${meta.sub ? ` — ${esc(meta.sub)}` : ''}  (📦 ${left === Infinity ? '∞' : left} ကျန်)`;
-    rows.push([Markup.button.callback(`🎁 ${meta.title}${meta.sub ? ` — ${meta.sub}` : ''}`, `accga_free:${g._id}`)]);
+    const st = await gaStock(g);
+    const already = await AccountGiveawayClaim.exists({ giveawayId: g._id, telegramId: ctx.from.id });
+    const expired = !!(g.endAt && new Date(g.endAt).getTime() <= Date.now());
+    const quotaFull = g.maxClaims > 0 && g.claimedCount >= g.maxClaims;
+    const available = g.isActive && !expired && !quotaFull && st.count !== 0;
+
+    let style = 'danger';
+    if (already) style = 'primary';
+    else if (available) style = 'success';
+
+    const label = meta.kind === 'account'
+      ? `${meta.title}${meta.sub ? ` — ${meta.sub}` : ''}`
+      : meta.title;
+    rows.push([styledButton(Markup.button.callback(label, `accga_free:${g._id}`), style)]);
   }
-  rows.push([Markup.button.callback('🔙 Premium Accounts', 'acc_hub')]);
+
+  rows.push([Markup.button.callback('🔙 Back', 'nav:go:main')]);
   return { text, keyboard: Markup.inlineKeyboard(rows) };
 }
 
@@ -233,6 +251,9 @@ async function buildUserView(ctx, ga) {
   const quotaLeft = ga.maxClaims > 0 ? Math.max(0, ga.maxClaims - ga.claimedCount) : null;
   const checks = await checkRequirements(ga, ctx);
   const allOk = checks.every((c) => c.ok);
+  const expired = !!(ga.endAt && new Date(ga.endAt).getTime() <= Date.now());
+  const quotaFull = ga.maxClaims > 0 && ga.claimedCount >= ga.maxClaims;
+  const closed = !ga.isActive || expired;
 
   let text =
     `🎁 *${isShop ? 'အခမဲ့ လက်ဆောင်!' : 'အခမဲ့ Premium Account!'}*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
@@ -262,7 +283,10 @@ async function buildUserView(ctx, ga) {
     text += `
 ✅ _သင် ရယူပြီးသားပါ — ${isShop ? '/mycoupons မှာ coupon ကြည့်ပါ' : '🎟 ကျွန်ုပ်၏ Accounts မှာ ကြည့်နိုင်ပါတယ်'}။_`;
     rows.push([Markup.button.callback(isShop ? '🎟 ကျွန်ုပ်၏ Coupons' : '🎟 ကျွန်ုပ်၏ Accounts', isShop ? 'promo_my_coupons' : 'acc_mine')]);
-  } else if (stock === 0 || (quotaLeft !== null && quotaLeft === 0)) {
+  } else if (closed) {
+    text += `
+🔴 _ဒီ Giveaway ကို ပိတ်ထားပြီးပါပြီ။_`;
+  } else if (stock === 0 || quotaFull || (quotaLeft !== null && quotaLeft === 0)) {
     text += `
 😢 _ကုန်သွားပါပြီ…_`;
   } else {
@@ -535,7 +559,7 @@ module.exports = function registerAccountGiveaway(bot) {
   bot.action(/^accga_free:([a-f0-9]{24})$/, async (ctx) => {
     await ctx.answerCbQuery();
     const ga = await AccountGiveaway.findById(ctx.match[1]).populate('productId').populate('shopProductId');
-    if (!ga || !ga.isActive || !gaMeta(ga)) {
+    if (!ga || !gaMeta(ga)) {
       const view = await buildUserEntry(ctx);
       if (!view) return editOrReply(ctx, '😢 _လက်ရှိ giveaway မရှိတော့ပါ။_');
       return editOrReply(ctx, view.text, view.keyboard);
@@ -866,6 +890,15 @@ module.exports = function registerAccountGiveaway(bot) {
     }).catch(() => {});
 
     await autoEndAndNotify(ctx, ga, updated, meta);
+  });
+
+  // Main-menu Giveaway button for regular users. Let the owner fall through
+  // to the existing admin Giveaway handler below.
+  bot.hears('🎁 Giveaway', async (ctx, next) => {
+    if (Number(ctx.from?.id) === Number(config.bot.adminId)) return next();
+    const view = await buildUserEntry(ctx);
+    if (!view) return ctx.reply('😢 လက်ရှိ Giveaway မရှိသေးပါ။');
+    await ctx.reply(view.text, { parse_mode: 'Markdown', ...view.keyboard });
   });
 
   // ══ ADMIN SIDE (Owner) ══════════════════════════════════════════════════════
