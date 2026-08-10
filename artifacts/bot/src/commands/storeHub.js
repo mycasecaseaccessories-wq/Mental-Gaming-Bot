@@ -2,26 +2,41 @@
  * Store Hub — "🛍 Store" main menu button
  *
  * Groups Shop, Premium Accounts, and Outline VPN under one hub.
- * Each inline button routes to its respective feature via a bot.action
- * registered in the owning command file (shop.js, accounts.js, outlineUser.js).
+ * VPN is shown only when its external bot username is configured, matching
+ * the main-menu shortcut behaviour.
  */
 
 const { Markup } = require('telegraf');
 const { t } = require('../utils/i18n');
+const SystemStatus = require('../models/SystemStatus');
 
 module.exports = function registerStoreHub(bot) {
   bot.hears(['🛍 Store', '🛍 ဈေးဆိုင်'], async (ctx) => {
+    let status = null;
+    try {
+      status = await SystemStatus.get();
+    } catch (err) {
+      console.error('[StoreHub] SystemStatus load failed:', err.message);
+    }
+
+    const rows = [
+      [Markup.button.callback(t(ctx, 'menu.shop'), 'store_shop')],
+      [Markup.button.callback(t(ctx, 'menu.accounts'), 'store_accounts')],
+    ];
+
+    if (status?.outlineBotUsername) {
+      rows.push([Markup.button.callback(t(ctx, 'menu.outline_vpn'), 'store_vpn')]);
+    }
+
     await ctx.reply(
-      `🛍 *Store*\n` +
-      `━━━━━━━━━━━━━━━━━━━\n` +
-      `ဘာ ရှာနေတာလဲ?`,
+      `${t(ctx, 'store_hub.title')}
+` +
+      `━━━━━━━━━━━━━━━━━━━
+` +
+      `${t(ctx, 'store_hub.choose')}`,
       {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('🛒 Shop',              'store_shop')],
-          [Markup.button.callback('🔐 Premium Accounts',  'store_accounts')],
-          [Markup.button.callback('🌐 Outline VPN',       'store_vpn')],
-        ]),
+        ...Markup.inlineKeyboard(rows),
       }
     );
   });

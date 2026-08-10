@@ -148,6 +148,12 @@ const STRINGS = {
   'orders.none':             { en: '📭 You have no orders yet. Visit the 🛒 Shop to place your first order!',
                                mm: '📭 အော်ဒါ မရှိသေးပါ။ 🛒 ဈေးဝယ်တွင် စတင်ပါ။' },
 
+  // ── Main-menu hubs ─────────────────────────────────────────────────────────
+  'help_hub.title':          { en: '💬 *Help Center*',        mm: '💬 *အကူအညီဌာန*' },
+  'help_hub.choose':         { en: 'How can we help you?',    mm: 'ဘယ်လို ကူညီပေးရမလဲ?' },
+  'store_hub.title':         { en: '🛍 *Store*',              mm: '🛍 *ဈေးဆိုင်*' },
+  'store_hub.choose':        { en: 'What are you looking for?', mm: 'ဘာ ရှာနေတာလဲ?' },
+
   // ── Support ──────────────────────────────────────────────────────────────
   'support.title':           { en: '💬 *Customer Support*',  mm: '💬 *ဖောက်သည် အကူအညီ*' },
   'support.choose':          { en: 'How can we help you?',   mm: 'ဘယ်လို ကူညီပေးရမလဲ?' },

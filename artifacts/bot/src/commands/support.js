@@ -55,7 +55,10 @@ module.exports = function registerSupport(bot) {
     await ctx.scene.enter('support_scene');
   });
 
-  bot.hears(['💬 Support', '💬 အကူအညီ'], async (ctx) => {
+  // Keep direct Support distinct from the Myanmar main-menu Help label.
+  // The Myanmar '💬 အကူအညီ' button belongs to helpHub.js; support is reached
+  // from that hub via the help_support callback (or /support).
+  bot.hears('💬 Support', async (ctx) => {
     await ctx.scene.enter('support_scene');
   });
 

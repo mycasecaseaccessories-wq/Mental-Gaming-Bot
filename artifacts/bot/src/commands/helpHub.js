@@ -6,18 +6,21 @@
  */
 
 const { Markup } = require('telegraf');
+const { t } = require('../utils/i18n');
 
 module.exports = function registerHelpHub(bot) {
   bot.hears(['💬 Help', '💬 အကူအညီ'], async (ctx) => {
     await ctx.reply(
-      `💬 *Help Center*\n` +
-      `━━━━━━━━━━━━━━━━━━━\n` +
-      `ဘယ်လို ကူညီပေးရမလဲ?`,
+      `${t(ctx, 'help_hub.title')}
+` +
+      `━━━━━━━━━━━━━━━━━━━
+` +
+      `${t(ctx, 'help_hub.choose')}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('❓ FAQ',      'help_faq')],
-          [Markup.button.callback('💬 Support',  'help_support')],
+          [Markup.button.callback(t(ctx, 'menu.faq'), 'help_faq')],
+          [Markup.button.callback(t(ctx, 'menu.support'), 'help_support')],
         ]),
       }
     );
