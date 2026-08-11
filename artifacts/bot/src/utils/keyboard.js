@@ -23,47 +23,41 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
   return Markup.keyboard(rows).resize();
 }
 
-function adminMenuKeyboard() {
-  return Markup.keyboard([
+function adminMenuKeyboard(role = 'OWNER') {
+  const r = role === 'STAFF' ? 'SUPPORT' : role;
+  if (r === 'SUPPORT') {
+    return Markup.keyboard([
+      ['📦 Orders'],
+      ['📖 Admin Guide'],
+      ['🔙 Back to Main'],
+    ]).resize();
+  }
+  const rows = [
     ['📊 Dashboard', '📦 Orders'],
     ['🛍 Store', '👥 Users'],
-    ['💰 Finance', '📣 Marketing'],
-    ['🎁 Rewards', '⚙️ System'],
-    ['📖 Admin Guide'],
-    ['🔙 Back to Main'],
-  ]).resize();
+  ];
+  if (r === 'OWNER' || r === 'ADMIN') rows.push(['💰 Finance', '📣 Marketing']);
+  else rows.push(['📣 Marketing', '🎁 Rewards']);
+  if (r === 'OWNER' || r === 'ADMIN') rows.push(['🎁 Rewards', '⚙️ System']);
+  rows.push(['📖 Admin Guide']);
+  rows.push(['🔙 Back to Main']);
+  return Markup.keyboard(rows).resize();
 }
 
-function adminSectionKeyboard(section) {
+function adminSectionKeyboard(section, role = 'OWNER') {
+  const r = role === 'STAFF' ? 'SUPPORT' : role;
   const sections = {
-    orders: [
-      ['📦 Manage Orders', '🎫 Support Tickets'],
-    ],
-    store: [
-      ['🛍️ Manage Products', '🔐 Accounts'],
-      ['🎮 Game News', '🔑 Outline VPN'],
-    ],
-    users: [
-      ['👥 Manage Users', '🪙 Coins & Tiers'],
-    ],
-    finance: [
-      ['💱 Manage Rates', '💳 Payment Gateways'],
-      ['📈 Analytics'],
-    ],
-    marketing: [
-      ['📢 Broadcast', '📣 Announce'],
-      ['🎟 Promotions', '🎟 Coupons'],
-      ['🎯 Ref Campaign', '📣 Join Bonus Admin'],
-      ['🎁 Giveaway', '📡 Channels'],
-    ],
-    rewards: [
-      ['🎁 Rewards Admin', '🎁 Promo Perks'],
-    ],
-    system: [
-      ['🔧 System', '👮 Admin Roles'],
-      ['📋 Audit Logs', '📜 Global History'],
-      ['🤖 AI Insights'],
-    ],
+    orders: r === 'SUPPORT'
+      ? [['📦 Manage Orders', '🎫 Support Tickets']]
+      : [['📦 Manage Orders', '🎫 Support Tickets']],
+    store: [['🛍️ Manage Products', '🔐 Accounts'], ['🎮 Game News', '🔑 Outline VPN']],
+    users: [['👥 Manage Users', '🪙 Coins & Tiers']],
+    finance: [['💱 Manage Rates', '💳 Payment Gateways'], ['📈 Analytics']],
+    marketing: [['📢 Broadcast', '📣 Announce'], ['🎟 Promotions', '🎟 Coupons'], ['🎯 Ref Campaign', '📣 Join Bonus Admin'], ['🎁 Giveaway', '📡 Channels']],
+    rewards: [['🎁 Rewards Admin', '🎁 Promo Perks']],
+    system: r === 'OWNER'
+      ? [['🔧 System', '👮 Admin Roles'], ['📋 Audit Logs', '📜 Global History'], ['🤖 AI Insights']]
+      : [['🔧 System'], ['📋 Audit Logs', '📜 Global History'], ['🤖 AI Insights']],
   };
   return Markup.keyboard([...(sections[section] || []), ['🔙 Admin Menu']]).resize();
 }

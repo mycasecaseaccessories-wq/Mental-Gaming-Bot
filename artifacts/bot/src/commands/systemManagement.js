@@ -18,7 +18,9 @@ const { config }     = require('../../config/settings');
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
-const ROLE_BADGE = { OWNER: '👑', MANAGER: '🛠', STAFF: '🔹' };
+const ROLE_BADGE = { OWNER: '👑', ADMIN: '🛡', MANAGER: '🛠', SUPPORT: '🎧', STAFF: '🎧' };
+const ROLE_LABEL = { OWNER:'Owner', ADMIN:'Admin', MANAGER:'Manager', SUPPORT:'Support', STAFF:'Support (legacy)' };
+const PERMISSION_LABEL = { dashboard:'📊 Dashboard', orders:'📦 Orders', support:'🎫 Support Tickets', store:'🛍 Store', users:'👥 Users', finance:'💰 Finance', marketing:'📣 Marketing', rewards:'🎁 Rewards', system:'⚙️ System', channels:'📡 Channels', admin_roles:'👮 Admin Roles', guide:'📖 Admin Guide' };
 
 function fmtAdmin(a) {
   const badge = ROLE_BADGE[a.role] || '•';
@@ -59,21 +61,23 @@ module.exports = function registerSystemManagement(bot) {
   bot.action(/^rbac_view:(\d+)$/, requireRole('OWNER'), async (ctx) => {
     await ctx.answerCbQuery(); const rec = await AdminService.getAdminRecord(Number(ctx.match[1]));
     if (!rec || rec._envOwner) return ctx.reply('👑 Owner account ကို ပြင်လို့မရပါ။');
-    return ctx.reply(`👮 *Admin Detail*\n\nID: \`${rec.telegramId}\`\nRole: *${rec.role}*`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
-      [Markup.button.callback('🛠 Manager', `rbac_role:${rec.telegramId}:MANAGER`), Markup.button.callback('🔹 Staff', `rbac_role:${rec.telegramId}:STAFF`)],
+    const perms = AdminService.getPermissionsForRole(rec.role).map((p) => `• ${PERMISSION_LABEL[p] || p}`).join('\n') || '• none';
+    return ctx.reply(`👮 *Admin Detail*\n\nID: \`${rec.telegramId}\`\nRole: *${ROLE_LABEL[rec.role] || rec.role}*\n\n🔐 *Permissions*\n${perms}`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+      [Markup.button.callback('🛡 Admin', `rbac_role:${rec.telegramId}:ADMIN`), Markup.button.callback('🛠 Manager', `rbac_role:${rec.telegramId}:MANAGER`)],
+      [Markup.button.callback('🎧 Support', `rbac_role:${rec.telegramId}:SUPPORT`)],
       [Markup.button.callback('👑 Owner', `rbac_role:${rec.telegramId}:OWNER`)], [Markup.button.callback('🗑 Remove', `rbac_removeask:${rec.telegramId}`)],
     ]) });
   });
-  bot.action(/^rbac_role:(\d+):(OWNER|MANAGER|STAFF)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); try { await AdminService.updateAdminRole(Number(ctx.match[1]), ctx.match[2], ctx.from.id); await ctx.reply(`✅ Role ပြောင်းပြီးပါပြီ: ${ctx.match[1]} → ${ctx.match[2]}`); } catch(e) { await ctx.reply(`❌ ${e.message}`); } });
+  bot.action(/^rbac_role:(\d+):(OWNER|ADMIN|MANAGER|SUPPORT)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); try { await AdminService.updateAdminRole(Number(ctx.match[1]), ctx.match[2], ctx.from.id); await ctx.reply(`✅ Role ပြောင်းပြီးပါပြီ: ${ctx.match[1]} → ${ctx.match[2]}`); } catch(e) { await ctx.reply(`❌ ${e.message}`); } });
   bot.action(/^rbac_removeask:(\d+)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); return ctx.reply(`⚠️ ${ctx.match[1]} ကို admin list က ဖယ်မှာသေချာလား?`, { ...Markup.inlineKeyboard([[Markup.button.callback('✅ Remove', `rbac_remove:${ctx.match[1]}`), Markup.button.callback('❌ Cancel', 'rbac_refresh')]]) }); });
   bot.action(/^rbac_remove:(\d+)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); try { await AdminService.removeAdmin(Number(ctx.match[1]), ctx.from.id); await ctx.reply('✅ Admin ကိုဖယ်ပြီးပါပြီ။'); return showAdminRoles(ctx); } catch(e) { return ctx.reply(`❌ ${e.message}`); } });
-  bot.action(/^rbac_addrole:(\d+):(OWNER|MANAGER|STAFF)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); ctx.session.adminRoleMgr = null; try { await AdminService.addAdmin(Number(ctx.match[1]), ctx.match[2], ctx.from.id); await ctx.reply(`✅ Admin ထည့်ပြီးပါပြီ: ${ctx.match[1]} — ${ctx.match[2]}`); return showAdminRoles(ctx); } catch(e) { return ctx.reply(`❌ ${e.message}`); } });
+  bot.action(/^rbac_addrole:(\d+):(OWNER|ADMIN|MANAGER|SUPPORT)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); ctx.session.adminRoleMgr = null; try { await AdminService.addAdmin(Number(ctx.match[1]), ctx.match[2], ctx.from.id); await ctx.reply(`✅ Admin ထည့်ပြီးပါပြီ: ${ctx.match[1]} — ${ctx.match[2]}`); return showAdminRoles(ctx); } catch(e) { return ctx.reply(`❌ ${e.message}`); } });
   bot.on('text', async (ctx, next) => {
     const st = ctx.session?.adminRoleMgr; if (!st) return next();
-    if (Number(ctx.from.id) !== Number(config.bot.adminId)) { ctx.session.adminRoleMgr = null; return next(); }
+    if (!(await AdminService.hasRole(ctx.from.id, 'OWNER'))) { ctx.session.adminRoleMgr = null; return next(); }
     const id = Number(ctx.message.text.trim()); if (!Number.isInteger(id) || id <= 0) return ctx.reply('❌ Telegram ID မှန်မှန် ရိုက်ပါ။');
     ctx.session.adminRoleMgr = { step: 'add_role', telegramId: id };
-    return ctx.reply('Role ရွေးပါ:', { ...Markup.inlineKeyboard([[Markup.button.callback('🛠 Manager', `rbac_addrole:${id}:MANAGER`), Markup.button.callback('🔹 Staff', `rbac_addrole:${id}:STAFF`)], [Markup.button.callback('👑 Owner', `rbac_addrole:${id}:OWNER`)]]) });
+    return ctx.reply('Role ရွေးပါ:', { ...Markup.inlineKeyboard([[Markup.button.callback('🛡 Admin', `rbac_addrole:${id}:ADMIN`), Markup.button.callback('🛠 Manager', `rbac_addrole:${id}:MANAGER`)], [Markup.button.callback('🎧 Support', `rbac_addrole:${id}:SUPPORT`)], [Markup.button.callback('👑 Owner', `rbac_addrole:${id}:OWNER`)]]) });
   });
 
   // /addadmin <telegramId> <ROLE>
@@ -174,9 +178,10 @@ module.exports = function registerSystemManagement(bot) {
     await ctx.reply(
       `${ROLE_BADGE[role]} Your admin role: *${role}*\n\n` +
       `_Permissions: ${
-        role === 'OWNER'   ? 'Full access — all commands + exports + admin management.' :
-        role === 'MANAGER' ? 'Edit prices/products, manage tickets, approve orders. No financial exports.' :
-        'Approve/reject orders & top-ups, reply to support tickets.'
+        role === 'OWNER' ? 'Full access including admin-role management.' :
+        role === 'ADMIN' ? 'All operational panels except admin-role management.' :
+        role === 'MANAGER' ? 'Orders, store, users, marketing, rewards and channels.' :
+        'Orders and support only.'
       }_`,
       { parse_mode: 'Markdown' }
     );

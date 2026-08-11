@@ -14,6 +14,8 @@ const {
   saveChannel,
   removeChannel,
   removeLiveFeedChannel,
+  removeRole,
+  removeAllRoles,
   SOURCE_LABELS,
 } = require('../services/ChannelRegistryService');
 
@@ -81,8 +83,7 @@ module.exports = (bot) => {
       [Markup.button.callback('🔍 Check', `chmgr_check:${id}`), Markup.button.callback('✏️ Add/Edit Role', `chmgr_edit:${id}`)],
       [Markup.button.callback('🧪 Test Message', `chmgr_test:${id}`)],
     ];
-    if (channel.sources.includes('saved')) rows.push([Markup.button.callback('🗑 Remove Saved Role', `chmgr_delask:${id}`)]);
-    if (channel.sources.includes('livefeed')) rows.push([Markup.button.callback('🔕 Remove Live Feed Role', `chmgr_remlivefeed:${id}`)]);
+    rows.push([Markup.button.callback('🗑 Delete Channel', `chmgr_removeallask:${id}`)]);
     rows.push([Markup.button.callback('🔙 Channel List', 'chmgr_refresh')]);
     return ctx.reply(`📡 *Channel Detail*
 
@@ -126,6 +127,50 @@ Username: ${chat.username ? '@' + escMd(chat.username) : '—'}`, { parse_mode:'
         [Markup.button.callback('💾 Saved', 'chmgr_purpose:saved'), Markup.button.callback('❌ Cancel', 'chmgr_purpose:cancel')],
       ]) });
     } catch(e) { return ctx.reply(`❌ ${e.message}`); }
+  });
+
+  bot.action(/^chmgr_rolemenu:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const id = ctx.match[1];
+    const channel = (await getKnownChannels()).find((c) => String(c.chatId) === String(id));
+    if (!channel) return ctx.reply('❌ Channel မတွေ့တော့ပါ။');
+    const rows = channel.sources
+      .filter((role) => `chmgr_remrole:${id}:${role}`.length <= 64)
+      .map((role) => [Markup.button.callback(`➖ ${SOURCE_LABELS[role] || role}`, `chmgr_remrole:${id}:${role}`)]);
+    rows.push([Markup.button.callback('🔙 Back', `chmgr_view:${id}`)]);
+    return ctx.reply('➖ ဖယ်ချင်တဲ့ role ကိုရွေးပါ။\n\n_Channel ကိုမဖျက်ဘဲ ဒီ role ချိတ်ဆက်မှုတစ်ခုပဲ ဖယ်ပါမယ်။_', {
+      parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows),
+    });
+  });
+
+  bot.action(/^chmgr_remrole:(.+):(saved|autopost|joinbonus|announce|backup|review|game|faq|livefeed)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const id = ctx.match[1], role = ctx.match[2];
+    const ok = await removeRole(id, role, ctx.from.id);
+    if (!ok) return ctx.reply('❌ ဒီ role ကို မတွေ့တော့ပါ။');
+    await ctx.reply(`✅ ${SOURCE_LABELS[role] || role} role ကို ဖယ်ပြီးပါပြီ။`);
+    return showPanel(ctx);
+  });
+
+  bot.action(/^chmgr_removeallask:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const id = ctx.match[1];
+    const channel = (await getKnownChannels()).find((c) => String(c.chatId) === String(id));
+    if (!channel) return ctx.reply('❌ Channel မတွေ့တော့ပါ။');
+    const tags = channel.sources.map((r) => SOURCE_LABELS[r] || r).join(', ');
+    return ctx.reply(
+      `⚠️ *Delete Channel*\n\n*${escMd(channel.title)}*\nID: \`${escMd(id)}\`\nRoles: ${escMd(tags)}\n\nဒီ channel ကို Channel Manager ကနေ ဖျက်ပါမယ်။ ချိတ်ထားတဲ့ role တွေလည်း ဖြုတ်သွားပါမယ်။ သေချာပါသလား?`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('✅ Delete Channel', `chmgr_removeall:${id}`)], [Markup.button.callback('❌ Cancel', `chmgr_view:${id}`)]]) }
+    );
+  });
+
+  bot.action(/^chmgr_removeall:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Removing…');
+    const id = ctx.match[1];
+    const removed = await removeAllRoles(id, ctx.from.id);
+    if (!removed.length) return ctx.reply('❌ Channel/roles မတွေ့တော့ပါ။');
+    await ctx.reply(`✅ Channel ကို ဖျက်ပြီးပါပြီ။\nRemoved roles: ${removed.map((r) => SOURCE_LABELS[r] || r).join(', ')}`);
+    return showPanel(ctx);
   });
 
   bot.action(/^chmgr_delask:(.+)$/, adminOnly(), async (ctx) => {

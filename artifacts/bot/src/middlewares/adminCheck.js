@@ -2,7 +2,8 @@
  * adminCheck — backward-compatible admin middleware wrappers.
  *
  * adminOnly()      → OWNER only (env ADMIN_ID). Used by all legacy commands.
- * requireRole(r)   → delegates to AdminService.requireRole(); allows STAFF/MANAGER/OWNER.
+ * requireRole(r)   → role hierarchy check.
+ * requirePermission(p) → feature-level permission check.
  * isAnyAdmin(id)   → async boolean; true if the user has any active admin role.
  */
 
@@ -26,12 +27,13 @@ function superAdminOnly(allowedIds = []) {
   };
 }
 
-/** Role-aware middleware. minRole = 'STAFF' | 'MANAGER' | 'OWNER' */
+/** Role-aware middleware. minRole = SUPPORT/STAFF | MANAGER | ADMIN | OWNER */
 const requireRole = (minRole) => AdminService.requireRole(minRole);
+const requirePermission = (permission) => AdminService.requirePermission(permission);
 
 /** Async helper for text interceptors — true if telegramId has any admin role. */
 async function isAnyAdmin(telegramId) {
   return AdminService.isAdmin(telegramId);
 }
 
-module.exports = { adminOnly, superAdminOnly, requireRole, isAnyAdmin };
+module.exports = { adminOnly, superAdminOnly, requireRole, requirePermission, isAnyAdmin };

@@ -1,4 +1,4 @@
-const { adminOnly, requireRole } = require('../middlewares/adminCheck');
+const { adminOnly, requireRole, requirePermission } = require('../middlewares/adminCheck');
 const adminOrders = require('./adminOrders');
 const { fetchLiveRates, getAllRates } = require('../services/currencyService');
 const { auditLog } = require('../services/logger');
@@ -16,6 +16,7 @@ const CacheService = require('../services/CacheService');
 const AnalyticsService = require('../services/AnalyticsService');
 const { price } = require('../utils/ui');
 const { adminMenuKeyboard, adminSectionKeyboard, mainMenuKeyboard } = require('../utils/keyboard');
+const AdminService = require('../services/AdminService');
 const os = require('os');
 
 // Split a long Markdown message into <=4096-char chunks on newline boundaries.
@@ -577,7 +578,8 @@ Nav.register({
       `_Tap a button below to continue._`;
 
     // Reply keyboard only — admin uses persistent buttons, not inline
-    return { text, keyboard: adminMenuKeyboard() };
+    const role = await AdminService.getAdminRole(ctx.from.id);
+    return { text, keyboard: adminMenuKeyboard(role) };
   },
 });
 
@@ -586,7 +588,7 @@ Nav.register({
 module.exports = function registerAdmin(bot) {
 
   // ── /admin command ─────────────────────────────────────────────────────────
-  bot.command('admin', adminOnly(), async (ctx) => {
+  bot.command('admin', requireRole('SUPPORT'), async (ctx) => {
     await Nav.navigate(ctx, 'admin_main', false);
   });
 
@@ -598,17 +600,19 @@ module.exports = function registerAdmin(bot) {
     '🎁 Rewards': 'rewards', '⚙️ System': 'system',
   };
   for (const [label, section] of Object.entries(sectionButtons)) {
-    bot.hears(label, adminOnly(), async (ctx) => {
-      await ctx.reply(`${label} — feature တစ်ခုရွေးပါ။`, adminSectionKeyboard(section));
+    const permission = section === 'orders' ? 'orders' : section;
+    bot.hears(label, requirePermission(permission), async (ctx) => {
+      const role = await AdminService.getAdminRole(ctx.from.id);
+      await ctx.reply(`${label} — feature တစ်ခုရွေးပါ။`, adminSectionKeyboard(section, role));
     });
   }
-  bot.hears('🔙 Admin Menu', adminOnly(), async (ctx) => {
+  bot.hears('🔙 Admin Menu', requireRole('SUPPORT'), async (ctx) => {
     await Nav.navigate(ctx, 'admin_main', false);
   });
 
 
   // 📦 Manage Orders → inline panel
-  bot.hears('📦 Manage Orders', adminOnly(), async (ctx) => {
+  bot.hears('📦 Manage Orders', requirePermission('orders'), async (ctx) => {
     const [pending, processing] = await Promise.all([
       Order.countDocuments({ status: 'Pending' }),
       Order.countDocuments({ status: 'Processing' }),
@@ -751,7 +755,7 @@ module.exports = function registerAdmin(bot) {
   });
 
   // 🎫 Support Tickets → open + in-progress tickets
-  bot.hears('🎫 Support Tickets', adminOnly(), async (ctx) => {
+  bot.hears('🎫 Support Tickets', requirePermission('support'), async (ctx) => {
     const tickets = await SupportTicket.find({
       status: { $in: ['Open', 'InProgress'] },
       isArchived: { $ne: true },
@@ -944,11 +948,11 @@ module.exports = function registerAdmin(bot) {
   });
 
   // 📖 Admin Guide → interactive, one section per button
-  bot.hears('📖 Admin Guide', adminOnly(), async (ctx) => {
+  bot.hears('📖 Admin Guide', requirePermission('guide'), async (ctx) => {
     await ctx.reply(GUIDE_INTRO, { parse_mode: 'Markdown', ...guideMenuKeyboard() });
   });
 
-  bot.action(/^guide:(.+)$/, adminOnly(), async (ctx) => {
+  bot.action(/^guide:(.+)$/, requirePermission('guide'), async (ctx) => {
     await ctx.answerCbQuery();
     const key = ctx.match[1];
 
@@ -1465,7 +1469,7 @@ module.exports = function registerAdmin(bot) {
     // Do NOT gate this catch-all photo handler with adminOnly() middleware —
     // that would deny every non-owner who sends a photo. Pass non-owners through.
     const { config } = require('../../config/settings');
-    if (Number(ctx.from?.id) !== Number(config.bot.adminId)) return next();
+    if (!(await require('../services/AdminService').hasRole(ctx.from?.id, 'MANAGER'))) return next();
     if (!ctx.session?.photoProductId) return next();
     const productId = ctx.session.photoProductId;
     ctx.session.photoProductId = null;
