@@ -25,6 +25,15 @@ const SystemStatus = require('../models/SystemStatus');
 const { config } = require('../../config/settings');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const TELEGRAM_REQUEST_TIMEOUT = 15000;
+
+function telegramWithTimeout(promise, ms = TELEGRAM_REQUEST_TIMEOUT) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Telegram request timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/([_*`\[])/g, '\\$1');
@@ -237,16 +246,6 @@ async function buildUserView(ctx, ga) {
 
   const s = await gaStock(ga);
   const stock = s.count;
-  // Account stock-date products: the claimer inherits the next credential's
-  // remaining shelf life, not a fresh durationDays. Peek it so the view is
-  // accurate. (Shop products have no per-credential shelf life.)
-  let stockRemainingDays = null;
-  if (!isShop && p.stockDateExpiry) {
-    const nextCred = await AccountCredential.nextAvailable(p._id);
-    if (nextCred?.stockExpiresAt) {
-      stockRemainingDays = Math.ceil((new Date(nextCred.stockExpiresAt).getTime() - Date.now()) / DAY_MS);
-    }
-  }
   const already = await AccountGiveawayClaim.exists({ giveawayId: ga._id, telegramId: ctx.from.id });
   const quotaLeft = ga.maxClaims > 0 ? Math.max(0, ga.maxClaims - ga.claimedCount) : null;
   const checks = await checkRequirements(ga, ctx);
@@ -257,26 +256,13 @@ async function buildUserView(ctx, ga) {
 
   let text =
     `🎁 *${isShop ? 'အခမဲ့ လက်ဆောင်!' : 'အခမဲ့ Premium Account!'}*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-    `${meta.emoji} *${esc(meta.title)}*${meta.sub ? ` — ${esc(meta.sub)}` : ''}\n`;
-
-  if (isShop) {
-    text += `🛍 _Shop product — 100% coupon ရမယ်၊ /shop မှာ အခမဲ့ မှာယူပါ။_\n`;
-  } else {
-    text += (p.stockDateExpiry
-      ? `⏳ သက်တမ်း: *${stockRemainingDays != null ? `${stockRemainingDays} ရက်` : `${p.durationDays} ရက်`}* (stock သက်တမ်းအတိုင်း ကျန်ရက်)\n`
-      : `⏳ သက်တမ်း: *${p.durationDays} ရက်* (ရယူချိန်မှ စတွက်)\n`);
-  }
-  text += `💵 တန်ဖိုး: ~${Number(meta.price).toLocaleString()} KS~ → *အခမဲ့!*\n\n`;
+    `${meta.emoji} *${esc(meta.title)}*${meta.sub ? ` — ${esc(meta.sub)}` : ''}\n\n`;
 
   const stockDisp = stock === Infinity ? '∞' : stock;
-  if (quotaLeft !== null) text += `📦 ကျန်တဲ့ အခွင့်အရေး: *${stock === Infinity ? quotaLeft : Math.min(quotaLeft, stock)} ခု*\n`;
-  else text += `📦 လက်ကျန်: *${stockDisp} ခု*\n`;
-  if (ga.endAt) text += `⏰ နောက်ဆုံးရက်: *${fmtDate(ga.endAt)}*\n`;
-
-  if (checks.length) {
-    text += `\n*လိုအပ်ချက်များ:*\n`;
-    text += checks.map((c) => `${c.ok ? '✅' : '❌'} ${c.label}`).join('\n') + '\n';
-  }
+  const remaining = quotaLeft !== null
+    ? (stock === Infinity ? quotaLeft : Math.min(quotaLeft, stock))
+    : stockDisp;
+  text += `📦 *ကျန်အရေအတွက်: ${remaining} ခု*\n`;
 
   const rows = [];
   if (already) {
@@ -293,20 +279,20 @@ async function buildUserView(ctx, ga) {
     const channelChecks = checks.filter((c) => c.channelId);
     for (const c of channelChecks) {
       if (c.ok) {
-        rows.push([styledButton(Markup.button.callback(`✅ ${c.channelTitle}`, 'accga_joined_ok'), 'success')]);
+        rows.push([styledButton(Markup.button.callback(`✅ ${c.channelTitle} — Joined`, 'accga_joined_ok'), 'success')]);
       } else {
         const url = await channelJoinUrl(ctx, c.channelId);
-        if (url) rows.push([styledButton(Markup.button.url(`❌ ${c.channelTitle} — Join`, url), 'danger')]);
+        if (url) rows.push([styledButton(Markup.button.url(`📣 ${c.channelTitle} — Join`, url), 'danger')]);
       }
     }
     if (allOk) {
-      text += `
-_👇 ခလုတ်နှိပ်ပြီး ချက်ချင်း ရယူလိုက်ပါ!_`;
       rows.push([styledButton(Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', `accga_claim:${ga._id}`), 'success')]);
     } else {
-      text += `
-_❌ ပြထားတဲ့ လိုအပ်ချက်တွေ ပြည့်မီရင် ရယူနိုင်ပါမယ်။_`;
-      rows.push([styledButton(Markup.button.callback('🔄 Join Status ပြန်စစ်မယ်', `accga_free:${ga._id}`), 'primary')]);
+      // Keep the user-facing screen limited to stock and channel actions.
+      // Requirement checks still run server-side when the claim is submitted.
+      if (channelChecks.length) {
+        rows.push([styledButton(Markup.button.callback('🔄 Join Status ပြန်စစ်မယ်', `accga_free:${ga._id}`), 'primary')]);
+      }
     }
   }
   rows.push([
@@ -1285,21 +1271,21 @@ _(Channel အသစ်ထည့်ချင်ရင် /channels မှာ အ�
       (ga.maxClaims > 0 ? `📦 *${ga.maxClaims} ယောက်ပဲ* ရမှာမို့ မြန်မြန်လာယူပါ!\n` : '') +
       (ga.endAt ? `⏰ ${fmtDate(ga.endAt)} နောက်ဆုံး!\n` : '');
 
-    // 1. All bot users — with claim button (targets this specific giveaway)
-    const { sent, failed } = await broadcastToUsers(ctx.telegram, body, {
-      ...Markup.inlineKeyboard([[Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', `accga_free:${ga._id}`)]]),
-    });
-
-    // 2. Announcement channel — with bot deep link
+    // Post to the channel first. A slow user broadcast must not make the admin
+    // screen appear stuck at “ကြော်ငြာနေပါတယ်…”.
     let channelOk = false;
     try {
       const ss = await SystemStatus.get();
       if (ss.announcementChannelId) {
         const me = ctx.botInfo?.username || (await ctx.telegram.getMe()).username;
-        const announcement = await ctx.telegram.sendMessage(ss.announcementChannelId, body + `\n👇 Bot ထဲဝင်ပြီး ရယူလိုက်ပါ:`, {
+        const announcement = await telegramWithTimeout(ctx.telegram.sendMessage(
+          ss.announcementChannelId,
+          body + `\n👇 Bot ထဲဝင်ပြီး ရယူလိုက်ပါ:`,
+          {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([[Markup.button.url('🤖 Bot ဖွင့်မယ်', `https://t.me/${me}?start=freebie`)]]),
-        });
+          }
+        ));
         await AccountGiveaway.updateOne(
           { _id: ga._id },
           {
@@ -1316,6 +1302,36 @@ _(Channel အသစ်ထည့်ချင်ရင် /channels မှာ အ�
       }
     } catch (e) {
       console.error('[Giveaway] channel announce failed:', e.message);
+    }
+
+    // Notify bot users after the channel post. BroadcastService bounds each
+    // Telegram request and reports progress, so a stalled chat cannot stall
+    // this admin action forever.
+    let sent = 0;
+    let failed = 0;
+    try {
+      const result = await broadcastToUsers(ctx.telegram, body, {
+        ...Markup.inlineKeyboard([[Markup.button.callback('🎁 အခမဲ့ ရယူမယ်', `accga_free:${ga._id}`)]]),
+      }, {
+        onProgress: async ({ sent: currentSent, failed: currentFailed, processed }) => {
+          sent = currentSent;
+          failed = currentFailed;
+          if (processed % 25 === 0) {
+            try {
+              await ctx.telegram.editMessageText(
+                progress.chat.id, progress.message_id, undefined,
+                `📤 *ကြော်ငြာနေပါတယ်…*\n\n👥 စစ်ပြီး: ${processed} ယောက်\n✅ ရောက်: ${currentSent} ယောက်`,
+                { parse_mode: 'Markdown' }
+              );
+            } catch {}
+          }
+        },
+      });
+      sent = result.sent;
+      failed = result.failed + result.blocked;
+    } catch (e) {
+      console.error('[Giveaway] user broadcast failed:', e.message);
+      failed += 1;
     }
 
     await auditLog(ctx.from.id, 'ANNOUNCE_GIVEAWAY', ga._id.toString(), 'System', { sent, failed, channelOk });

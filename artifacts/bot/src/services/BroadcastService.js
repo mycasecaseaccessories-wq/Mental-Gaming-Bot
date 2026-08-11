@@ -184,6 +184,19 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
 const USER_BATCH_SIZE  = 25;
 const USER_BATCH_DELAY = 1100; // ms — keeps under Telegram's ~30 msg/sec global limit
 const PAGE_SIZE        = 500;  // MongoDB cursor page size — avoids loading all users at once
+const SEND_TIMEOUT      = 15000; // A stalled Telegram request must not stall the whole broadcast.
+
+function withTimeout(promise, ms = SEND_TIMEOUT) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Telegram request timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function sendMessageWithTimeout(telegram, telegramId, text, extra) {
+  return withTimeout(telegram.sendMessage(telegramId, text, { parse_mode: 'Markdown', ...extra }));
+}
 
 /**
  * Send one message, honouring Telegram's retry_after on 429.
@@ -192,7 +205,7 @@ const PAGE_SIZE        = 500;  // MongoDB cursor page size — avoids loading al
  */
 async function _sendOne(telegram, User, telegramId, text, extra) {
   try {
-    await telegram.sendMessage(telegramId, text, { parse_mode: 'Markdown', ...extra });
+    await sendMessageWithTimeout(telegram, telegramId, text, extra);
     return 'sent';
   } catch (err) {
     const code    = err.response?.error_code ?? err.code;
@@ -200,9 +213,12 @@ async function _sendOne(telegram, User, telegramId, text, extra) {
 
     // 429 Too Many Requests — wait retry_after seconds then retry once
     if (code === 429 && retryIn) {
-      await new Promise((r) => setTimeout(r, (retryIn + 1) * 1000));
+      // Do not let one Telegram rate-limit response hold an admin action
+      // forever. Retry once, but cap the wait to a reasonable amount.
+      const waitMs = Math.min((Number(retryIn) + 1) * 1000, 15000);
+      await new Promise((r) => setTimeout(r, waitMs));
       try {
-        await telegram.sendMessage(telegramId, text, { parse_mode: 'Markdown', ...extra });
+        await sendMessageWithTimeout(telegram, telegramId, text, extra);
         return 'sent';
       } catch {
         return 'failed';
@@ -232,10 +248,11 @@ async function _sendOne(telegram, User, telegramId, text, extra) {
  * Send a message to every non-blocked bot user (cursor-paginated, rate-limit safe).
  * @returns {Promise<{sent:number, blocked:number, failed:number}>}
  */
-async function broadcastToUsers(telegram, text, extra = {}) {
+async function broadcastToUsers(telegram, text, extra = {}, options = {}) {
   const User = require('../models/User');
   let sent = 0, blocked = 0, failed = 0;
   let lastId = null;
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
 
   // Cursor-based pagination: never loads the full user list into RAM
   while (true) {
@@ -261,6 +278,9 @@ async function broadcastToUsers(telegram, text, extra = {}) {
         if (r === 'sent')    sent++;
         else if (r === 'blocked') blocked++;
         else                 failed++;
+      }
+      if (onProgress) {
+        await onProgress({ sent, blocked, failed, processed: sent + blocked + failed });
       }
       if (i + USER_BATCH_SIZE < page.length) {
         await new Promise((r) => setTimeout(r, USER_BATCH_DELAY));
