@@ -109,6 +109,13 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Saved channels for one-tap coupon announcements (/gencoupon 📢 flow)',
     },
 
+    // ── Channel Manager display aliases ────────────────────────────────────────
+    channelRegistryAliases: {
+      type: [{ chatId: String, title: String }],
+      default: () => [],
+      comment: 'Admin-defined display names used by the unified /channels manager',
+    },
+
     // ── Backup Channel ─────────────────────────────────────────────────────────
     backupChannelId: {
       type:    String,

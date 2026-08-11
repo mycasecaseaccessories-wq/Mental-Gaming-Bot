@@ -12,7 +12,6 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
     [L('menu.rewards'),  L('menu.wallet')],
     [L('menu.orders'),   L('menu.referral')],
     [L('menu.promo'),    L('menu.help')],
-    ['🎁 Giveaway'],
   );
   // Show Outline VPN as a standalone shortcut only when the VPN bot is configured.
   // It is always accessible via 🛍 Store → Outline VPN regardless.
@@ -26,23 +25,47 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
 
 function adminMenuKeyboard() {
   return Markup.keyboard([
-    ['📊 Dashboard',       '📦 Manage Orders'],
-    ['🛍️ Manage Products', '👥 Manage Users'],
-    ['💱 Manage Rates',    '📢 Broadcast'],
-    ['🎟 Promotions',      '🎫 Support Tickets'],
-    ['📈 Analytics',       '🤖 AI Insights'],
-    ['🔧 System',          '📋 Audit Logs'],
-    ['📜 Global History'],
-    ['🪙 Coins & Tiers',   '🎁 Rewards Admin'],
-    ['💳 Payment Gateways', '🔐 Accounts'],
-    ['🎯 Ref Campaign',     '📣 Join Bonus Admin'],
-    ['🎁 Promo Perks',     '🎟 Coupons'],
-    ['📣 Announce',        '🎮 Game News'],
-    ['🎁 Giveaway',        '📡 Channels'],
-    ['🔑 Outline VPN'],
+    ['📊 Dashboard', '📦 Orders'],
+    ['🛍 Store', '👥 Users'],
+    ['💰 Finance', '📣 Marketing'],
+    ['🎁 Rewards', '⚙️ System'],
     ['📖 Admin Guide'],
     ['🔙 Back to Main'],
   ]).resize();
+}
+
+function adminSectionKeyboard(section) {
+  const sections = {
+    orders: [
+      ['📦 Manage Orders', '🎫 Support Tickets'],
+    ],
+    store: [
+      ['🛍️ Manage Products', '🔐 Accounts'],
+      ['🎮 Game News', '🔑 Outline VPN'],
+    ],
+    users: [
+      ['👥 Manage Users', '🪙 Coins & Tiers'],
+    ],
+    finance: [
+      ['💱 Manage Rates', '💳 Payment Gateways'],
+      ['📈 Analytics'],
+    ],
+    marketing: [
+      ['📢 Broadcast', '📣 Announce'],
+      ['🎟 Promotions', '🎟 Coupons'],
+      ['🎯 Ref Campaign', '📣 Join Bonus Admin'],
+      ['🎁 Giveaway', '📡 Channels'],
+    ],
+    rewards: [
+      ['🎁 Rewards Admin', '🎁 Promo Perks'],
+    ],
+    system: [
+      ['🔧 System', '👮 Admin Roles'],
+      ['📋 Audit Logs', '📜 Global History'],
+      ['🤖 AI Insights'],
+    ],
+  };
+  return Markup.keyboard([...(sections[section] || []), ['🔙 Admin Menu']]).resize();
 }
 
 function confirmKeyboard(confirmText = '✅ Confirm', cancelText = '❌ Cancel') {
@@ -92,6 +115,7 @@ function userActionKeyboard(telegramId, isBlocked) {
 module.exports = {
   mainMenuKeyboard,
   adminMenuKeyboard,
+  adminSectionKeyboard,
   confirmKeyboard,
   paginationKeyboard,
   rateActionKeyboard,

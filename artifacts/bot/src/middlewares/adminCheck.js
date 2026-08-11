@@ -10,17 +10,8 @@ const { config } = require('../../config/settings');
 const AdminService = require('../services/AdminService');
 
 function adminOnly() {
-  return async (ctx, next) => {
-    const userId = ctx.from?.id;
-    if (Number(userId) !== Number(config.bot.adminId)) {
-      const text = '⛔ Access denied. This command is for the bot owner only.';
-      if (ctx.callbackQuery) await ctx.answerCbQuery(text, { show_alert: true });
-      else await ctx.reply(text);
-      return;
-    }
-    ctx.adminRole = 'OWNER';
-    return next();
-  };
+  // Legacy admin panels are available to MANAGER+; owner-only operations use requireRole('OWNER').
+  return AdminService.requireRole('MANAGER');
 }
 
 function superAdminOnly(allowedIds = []) {

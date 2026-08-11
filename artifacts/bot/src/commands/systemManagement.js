@@ -42,8 +42,42 @@ module.exports = function registerSystemManagement(bot) {
   // RBAC — Admin management (OWNER only)
   // ════════════════════════════════════════════════════════════════════════════
 
+  // Admin Roles UI (OWNER only)
+  async function showAdminRoles(ctx) {
+    const admins = await AdminService.listAdmins();
+    const all = [{ telegramId: config.bot.adminId, role: 'OWNER', _envOwner: true }, ...admins];
+    const lines = all.map(fmtAdmin).join('\n');
+    const rows = [[Markup.button.callback('➕ Add Admin', 'rbac_add')]];
+    for (const a of admins) rows.push([Markup.button.callback(`${ROLE_BADGE[a.role] || '•'} ${a.telegramId} · ${a.role}`, `rbac_view:${a.telegramId}`)]);
+    rows.push([Markup.button.callback('🔄 Refresh', 'rbac_refresh')]);
+    await ctx.reply(`👮 *Admin Roles*\n\n${lines}\n\n_Owner account is protected._`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) });
+  }
+
+  bot.hears('👮 Admin Roles', requireRole('OWNER'), showAdminRoles);
+  bot.action('rbac_refresh', requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); return showAdminRoles(ctx); });
+  bot.action('rbac_add', requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); ctx.session.adminRoleMgr = { step: 'add_id' }; return ctx.reply('➕ *Add Admin*\n\nTelegram ID ကို ရိုက်ပါ:', { parse_mode: 'Markdown', ...Markup.forceReply() }); });
+  bot.action(/^rbac_view:(\d+)$/, requireRole('OWNER'), async (ctx) => {
+    await ctx.answerCbQuery(); const rec = await AdminService.getAdminRecord(Number(ctx.match[1]));
+    if (!rec || rec._envOwner) return ctx.reply('👑 Owner account ကို ပြင်လို့မရပါ။');
+    return ctx.reply(`👮 *Admin Detail*\n\nID: \`${rec.telegramId}\`\nRole: *${rec.role}*`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+      [Markup.button.callback('🛠 Manager', `rbac_role:${rec.telegramId}:MANAGER`), Markup.button.callback('🔹 Staff', `rbac_role:${rec.telegramId}:STAFF`)],
+      [Markup.button.callback('👑 Owner', `rbac_role:${rec.telegramId}:OWNER`)], [Markup.button.callback('🗑 Remove', `rbac_removeask:${rec.telegramId}`)],
+    ]) });
+  });
+  bot.action(/^rbac_role:(\d+):(OWNER|MANAGER|STAFF)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); try { await AdminService.updateAdminRole(Number(ctx.match[1]), ctx.match[2], ctx.from.id); await ctx.reply(`✅ Role ပြောင်းပြီးပါပြီ: ${ctx.match[1]} → ${ctx.match[2]}`); } catch(e) { await ctx.reply(`❌ ${e.message}`); } });
+  bot.action(/^rbac_removeask:(\d+)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); return ctx.reply(`⚠️ ${ctx.match[1]} ကို admin list က ဖယ်မှာသေချာလား?`, { ...Markup.inlineKeyboard([[Markup.button.callback('✅ Remove', `rbac_remove:${ctx.match[1]}`), Markup.button.callback('❌ Cancel', 'rbac_refresh')]]) }); });
+  bot.action(/^rbac_remove:(\d+)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); try { await AdminService.removeAdmin(Number(ctx.match[1]), ctx.from.id); await ctx.reply('✅ Admin ကိုဖယ်ပြီးပါပြီ။'); return showAdminRoles(ctx); } catch(e) { return ctx.reply(`❌ ${e.message}`); } });
+  bot.action(/^rbac_addrole:(\d+):(OWNER|MANAGER|STAFF)$/, requireRole('OWNER'), async (ctx) => { await ctx.answerCbQuery(); ctx.session.adminRoleMgr = null; try { await AdminService.addAdmin(Number(ctx.match[1]), ctx.match[2], ctx.from.id); await ctx.reply(`✅ Admin ထည့်ပြီးပါပြီ: ${ctx.match[1]} — ${ctx.match[2]}`); return showAdminRoles(ctx); } catch(e) { return ctx.reply(`❌ ${e.message}`); } });
+  bot.on('text', async (ctx, next) => {
+    const st = ctx.session?.adminRoleMgr; if (!st) return next();
+    if (Number(ctx.from.id) !== Number(config.bot.adminId)) { ctx.session.adminRoleMgr = null; return next(); }
+    const id = Number(ctx.message.text.trim()); if (!Number.isInteger(id) || id <= 0) return ctx.reply('❌ Telegram ID မှန်မှန် ရိုက်ပါ။');
+    ctx.session.adminRoleMgr = { step: 'add_role', telegramId: id };
+    return ctx.reply('Role ရွေးပါ:', { ...Markup.inlineKeyboard([[Markup.button.callback('🛠 Manager', `rbac_addrole:${id}:MANAGER`), Markup.button.callback('🔹 Staff', `rbac_addrole:${id}:STAFF`)], [Markup.button.callback('👑 Owner', `rbac_addrole:${id}:OWNER`)]]) });
+  });
+
   // /addadmin <telegramId> <ROLE>
-  bot.command('addadmin', adminOnly(), async (ctx) => {
+  bot.command('addadmin', requireRole('OWNER'), async (ctx) => {
     const args = ctx.message.text.split(/\s+/).slice(1);
     if (args.length < 2) {
       return ctx.reply(
@@ -76,7 +110,7 @@ module.exports = function registerSystemManagement(bot) {
   });
 
   // /removeadmin <telegramId>
-  bot.command('removeadmin', adminOnly(), async (ctx) => {
+  bot.command('removeadmin', requireRole('OWNER'), async (ctx) => {
     const tidStr = ctx.message.text.split(/\s+/)[1];
     if (!tidStr) return ctx.reply('Usage: `/removeadmin <telegramId>`', { parse_mode: 'Markdown' });
 
@@ -95,7 +129,7 @@ module.exports = function registerSystemManagement(bot) {
   });
 
   // /listadmins
-  bot.command('listadmins', adminOnly(), async (ctx) => {
+  bot.command('listadmins', requireRole('OWNER'), async (ctx) => {
     const admins = await AdminService.listAdmins();
     const ownerEntry = { telegramId: config.bot.adminId, role: 'OWNER', _envOwner: true };
 
@@ -112,7 +146,7 @@ module.exports = function registerSystemManagement(bot) {
   });
 
   // /setrole <telegramId> <ROLE>
-  bot.command('setrole', adminOnly(), async (ctx) => {
+  bot.command('setrole', requireRole('OWNER'), async (ctx) => {
     const args = ctx.message.text.split(/\s+/).slice(1);
     if (args.length < 2) return ctx.reply('Usage: `/setrole <telegramId> <ROLE>`', { parse_mode: 'Markdown' });
 

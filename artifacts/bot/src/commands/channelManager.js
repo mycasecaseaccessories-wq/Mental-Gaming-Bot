@@ -16,7 +16,6 @@ const {
   removeLiveFeedChannel,
   SOURCE_LABELS,
 } = require('../services/ChannelRegistryService');
-const { validateAnnouncementChannel } = require('../services/BroadcastService');
 
 function escMd(s) {
   return String(s ?? '').replace(/([_*`\[\]])/g, '\\$1');
@@ -41,6 +40,10 @@ module.exports = (bot) => {
     }
 
     const rows = [[Markup.button.callback('➕ Channel ထည့်မယ်', 'chmgr_add')]];
+    for (const channel of channels) {
+      const cb = `chmgr_view:${channel.chatId}`;
+      if (cb.length <= 64) rows.push([Markup.button.callback(`⚙️ ${channel.title || channel.chatId}`, cb)]);
+    }
     const liveFeedChannels = channels.filter((channel) => channel.sources.includes('livefeed'));
     for (const channel of liveFeedChannels) {
       if (channel.link && /^https:\/\/t\.me\//.test(channel.link)) {
@@ -65,6 +68,69 @@ module.exports = (bot) => {
   bot.action('chmgr_refresh', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     await showPanel(ctx);
+  });
+
+
+  bot.action(/^chmgr_view:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const id = ctx.match[1];
+    const channel = (await getKnownChannels()).find((c) => String(c.chatId) === String(id));
+    if (!channel) return ctx.reply('❌ Channel မတွေ့တော့ပါ။');
+    const tags = channel.sources.map((x) => SOURCE_LABELS[x] || x).join(', ');
+    const rows = [
+      [Markup.button.callback('🔍 Check', `chmgr_check:${id}`), Markup.button.callback('✏️ Add/Edit Role', `chmgr_edit:${id}`)],
+      [Markup.button.callback('🧪 Test Message', `chmgr_test:${id}`)],
+    ];
+    if (channel.sources.includes('saved')) rows.push([Markup.button.callback('🗑 Remove Saved Role', `chmgr_delask:${id}`)]);
+    if (channel.sources.includes('livefeed')) rows.push([Markup.button.callback('🔕 Remove Live Feed Role', `chmgr_remlivefeed:${id}`)]);
+    rows.push([Markup.button.callback('🔙 Channel List', 'chmgr_refresh')]);
+    return ctx.reply(`📡 *Channel Detail*
+
+*${escMd(channel.title)}*
+ID: \`${escMd(id)}\`
+Roles: ${escMd(tags)}`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) });
+  });
+
+  bot.action(/^chmgr_check:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Checking…'); const id = ctx.match[1];
+    try {
+      const chat = await ctx.telegram.getChat(id); const me = await ctx.telegram.getMe();
+      let member = null; try { member = await ctx.telegram.getChatMember(id, me.id); } catch (_) {}
+      const status = member?.status || 'unknown';
+      return ctx.reply(`✅ *Channel Check*
+
+Name: *${escMd(chat.title || id)}*
+ID: \`${escMd(id)}\`
+Type: ${chat.type}
+Bot status: *${escMd(status)}*
+Username: ${chat.username ? '@' + escMd(chat.username) : '—'}`, { parse_mode:'Markdown' });
+    } catch(e) { return ctx.reply(`❌ Channel check failed: ${escMd(e.message)}`, {parse_mode:'Markdown'}); }
+  });
+
+  bot.action(/^chmgr_test:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Sending…');
+    try { await ctx.telegram.sendMessage(ctx.match[1], '🧪 Mental Gaming Bot — Channel Manager test message.'); return ctx.reply('✅ Test message ပို့ပြီးပါပြီ။'); }
+    catch(e) { return ctx.reply(`❌ Test မအောင်မြင်ပါ: ${e.message}`); }
+  });
+
+  bot.action(/^chmgr_edit:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    try {
+      const chat = await ctx.telegram.getChat(ctx.match[1]);
+      ctx.session.adminChannelMgr = { step:'purpose', chat:{ id:String(chat.id), title:chat.title || String(chat.id), username:chat.username || '', invite_link:chat.invite_link || '' } };
+      return ctx.reply('✏️ ဒီ channel အတွက် ထည့်/ပြောင်းချင်တဲ့ role ကိုရွေးပါ:', { ...Markup.inlineKeyboard([
+        [Markup.button.callback('📅 Auto-post', 'chmgr_purpose:autopost'), Markup.button.callback('📣 Join Bonus', 'chmgr_purpose:joinbonus')],
+        [Markup.button.callback('📢 Announcement', 'chmgr_purpose:announce'), Markup.button.callback('🔐 Backup', 'chmgr_purpose:backup')],
+        [Markup.button.callback('⭐ Review', 'chmgr_purpose:review'), Markup.button.callback('🎮 Game Update', 'chmgr_purpose:game')],
+        [Markup.button.callback('📖 FAQ', 'chmgr_purpose:faq'), Markup.button.callback('📡 Live Feed', 'chmgr_purpose:livefeed')],
+        [Markup.button.callback('💾 Saved', 'chmgr_purpose:saved'), Markup.button.callback('❌ Cancel', 'chmgr_purpose:cancel')],
+      ]) });
+    } catch(e) { return ctx.reply(`❌ ${e.message}`); }
+  });
+
+  bot.action(/^chmgr_delask:(.+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery(); const id=ctx.match[1];
+    return ctx.reply('⚠️ Saved role ကို ဖယ်မှာသေချာလား?', { ...Markup.inlineKeyboard([[Markup.button.callback('✅ Remove', `chmgr_del:${id}`), Markup.button.callback('❌ Cancel', `chmgr_view:${id}`)]]) });
   });
 
   bot.action(/^chmgr_testlivefeed:(.+)$/, adminOnly(), async (ctx) => {
@@ -133,15 +199,6 @@ module.exports = (bot) => {
     }
 
     if (purpose === 'announce') {
-      const check = await validateAnnouncementChannel(ctx.telegram, chat.id);
-      if (!check.ok) {
-        return ctx.reply(
-          `❌ *ကြေညာချက် channel အဖြစ် မသတ်မှတ်နိုင်ပါ*\n\n` +
-          `${escMd(check.message)}\n\n` +
-          `Bot ကို channel admin ထည့်ပြီး *Post Messages* permission ဖွင့်ထားကြောင်း စစ်ပြီး ထပ်လုပ်ပါ။`,
-          { parse_mode: 'Markdown' }
-        );
-      }
       const st = await SystemStatus.get();
       await SystemStatus.updateOne(
         { _id: st._id },
@@ -149,7 +206,6 @@ module.exports = (bot) => {
       );
       await ctx.reply(
         `✅ *${escMd(chat.title)}* ကို 📢 *ကြေညာချက် channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
-          `✅ Bot admin + post permission စစ်ပြီးပါပြီ။\n` +
           `Product/flash sale ကြေညာချက်တွေ ဒီ channel ကို ပို့ပါမယ်။`,
         { parse_mode: 'Markdown' }
       );
@@ -296,7 +352,9 @@ module.exports = (bot) => {
   // Text input: channel @username/ID for the add wizard
   bot.on('text', async (ctx, next) => {
     const state = ctx.session?.adminChannelMgr;
-    if (!state || state.step !== 'awaiting_channel' || ctx.from.id !== config.bot.adminId) return next();
+    if (!state || state.step !== 'awaiting_channel') return next();
+    const { isAnyAdmin } = require('../middlewares/adminCheck');
+    if (!(await isAnyAdmin(ctx.from.id))) return next();
     const input = ctx.message.text.trim();
     if (input.startsWith('/')) { ctx.session.adminChannelMgr = null; return next(); }
     if (/^cancel$/i.test(input)) {
