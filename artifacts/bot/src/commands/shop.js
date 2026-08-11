@@ -218,6 +218,7 @@ module.exports = function registerShop(bot) {
   // Store hub → Shop entry
   bot.action('store_shop', async (ctx) => {
     await ctx.answerCbQuery();
+    Nav.clearHistory(ctx);
     await Nav.navigate(ctx, 'shop');
   });
 
@@ -282,11 +283,21 @@ module.exports = function registerShop(bot) {
         ? withStyle(Markup.button.callback(t(ctx, 'shop.order_now'), `order_start:${product._id}`), 'success')
         : withStyle(Markup.button.callback('📦 Out of Stock', 'shop_out_of_stock'), 'danger');
 
+      // Product cards are not navigation folders, so generic nav:back would pop
+      // the current shop/category folder and could reveal an older Profile page.
+      // Return explicitly to the folder the user was browsing instead.
+      const history = ctx.session?.nav?.history || [];
+      const currentFolder = history[history.length - 1];
+      const shopReturnFolder = currentFolder === 'shop' || String(currentFolder || '').startsWith('cat:')
+        ? currentFolder
+        : 'shop';
+      const productBackRow = [withStyle(Markup.button.callback('🔙 Back', `nav:go:${shopReturnFolder}`), 'danger')];
+
       await resolveMessage(ctx, ref, text, {
         ...Markup.inlineKeyboard([
           [orderButton],
           ...(shareUrl ? [[withStyle(Markup.button.url('📤 Share', shareUrl), 'primary')]] : []),
-          backRow(),
+          productBackRow,
         ]),
       });
     } catch (err) {

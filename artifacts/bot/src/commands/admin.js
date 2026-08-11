@@ -15,7 +15,7 @@ const SystemStatus = require('../models/SystemStatus');
 const CacheService = require('../services/CacheService');
 const AnalyticsService = require('../services/AnalyticsService');
 const { price } = require('../utils/ui');
-const { adminMenuKeyboard, adminSectionKeyboard, mainMenuKeyboard } = require('../utils/keyboard');
+const { adminMenuKeyboard, adminSectionKeyboard } = require('../utils/keyboard');
 const AdminService = require('../services/AdminService');
 const os = require('os');
 
@@ -595,9 +595,9 @@ module.exports = function registerAdmin(bot) {
   // ── Reply-keyboard handlers for admin menu buttons ─────────────────────────
   // ── Clean two-level Admin UI ───────────────────────────────────────────────
   const sectionButtons = {
-    '📦 Orders': 'orders', '🛍 Store': 'store', '👥 Users': 'users',
-    '💰 Finance': 'finance', '📣 Marketing': 'marketing',
-    '🎁 Rewards': 'rewards', '⚙️ System': 'system',
+    '📦 Admin Orders': 'orders', '🛍 Admin Store': 'store', '👥 Admin Users': 'users',
+    '💰 Admin Finance': 'finance', '📣 Admin Marketing': 'marketing',
+    '🎁 Admin Rewards': 'rewards', '⚙️ Admin System': 'system',
   };
   for (const [label, section] of Object.entries(sectionButtons)) {
     const permission = section === 'orders' ? 'orders' : section;
@@ -607,6 +607,10 @@ module.exports = function registerAdmin(bot) {
     });
   }
   bot.hears('🔙 Admin Menu', requireRole('SUPPORT'), async (ctx) => {
+    await Nav.navigate(ctx, 'admin_main', false);
+  });
+  bot.hears('🏠 Admin Home', requireRole('SUPPORT'), async (ctx) => {
+    Nav.clearHistory(ctx);
     await Nav.navigate(ctx, 'admin_main', false);
   });
 
@@ -983,9 +987,10 @@ module.exports = function registerAdmin(bot) {
     }
   });
 
-  // 🔙 Back to Main → switch reply keyboard back to user main menu
-  bot.hears('🔙 Back to Main', async (ctx) => {
-    await ctx.reply('🏠 Back to main menu.', mainMenuKeyboard(ctx));
+  // Legacy button from older keyboards: keep admins inside the Admin UI.
+  // Never switch an admin session to the customer/store keyboard.
+  bot.hears('🔙 Back to Main', requireRole('SUPPORT'), async (ctx) => {
+    await Nav.navigate(ctx, 'admin_main', false);
   });
 
   // ── Admin inline nav action handlers ──────────────────────────────────────

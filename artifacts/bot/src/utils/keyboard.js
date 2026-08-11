@@ -27,20 +27,20 @@ function adminMenuKeyboard(role = 'OWNER') {
   const r = role === 'STAFF' ? 'SUPPORT' : role;
   if (r === 'SUPPORT') {
     return Markup.keyboard([
-      ['📦 Orders'],
+      ['📦 Admin Orders'],
       ['📖 Admin Guide'],
-      ['🔙 Back to Main'],
+      ['🏠 Admin Home'],
     ]).resize();
   }
   const rows = [
-    ['📊 Dashboard', '📦 Orders'],
-    ['🛍 Store', '👥 Users'],
+    ['📊 Admin Dashboard', '📦 Admin Orders'],
+    ['🛍 Admin Store', '👥 Admin Users'],
   ];
-  if (r === 'OWNER' || r === 'ADMIN') rows.push(['💰 Finance', '📣 Marketing']);
-  else rows.push(['📣 Marketing', '🎁 Rewards']);
-  if (r === 'OWNER' || r === 'ADMIN') rows.push(['🎁 Rewards', '⚙️ System']);
+  if (r === 'OWNER' || r === 'ADMIN') rows.push(['💰 Admin Finance', '📣 Admin Marketing']);
+  else rows.push(['📣 Admin Marketing', '🎁 Admin Rewards']);
+  if (r === 'OWNER' || r === 'ADMIN') rows.push(['🎁 Admin Rewards', '⚙️ Admin System']);
   rows.push(['📖 Admin Guide']);
-  rows.push(['🔙 Back to Main']);
+  rows.push(['🏠 Admin Home']);
   return Markup.keyboard(rows).resize();
 }
 
@@ -53,7 +53,7 @@ function adminSectionKeyboard(section, role = 'OWNER') {
     store: [['🛍️ Manage Products', '🔐 Accounts'], ['🎮 Game News', '🔑 Outline VPN']],
     users: [['👥 Manage Users', '🪙 Coins & Tiers']],
     finance: [['💱 Manage Rates', '💳 Payment Gateways'], ['📈 Analytics']],
-    marketing: [['📢 Broadcast', '📣 Announce'], ['🎟 Promotions', '🎟 Coupons'], ['🎯 Ref Campaign', '📣 Join Bonus Admin'], ['🎁 Giveaway', '📡 Channels']],
+    marketing: [['📢 Broadcast', '📣 Announce'], ['🎟 Promotions', '🎟 Coupons'], ['🎯 Ref Campaign', '📣 Join Bonus Admin'], ['🎁 Giveaway Admin', '📡 Channels']],
     rewards: [['🎁 Rewards Admin', '🎁 Promo Perks']],
     system: r === 'OWNER'
       ? [['🔧 System', '👮 Admin Roles'], ['📋 Audit Logs', '📜 Global History'], ['🤖 AI Insights']]

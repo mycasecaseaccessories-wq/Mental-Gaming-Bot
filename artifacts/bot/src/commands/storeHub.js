@@ -9,9 +9,11 @@
 const { Markup } = require('telegraf');
 const { t } = require('../utils/i18n');
 const SystemStatus = require('../models/SystemStatus');
+const Nav = require('../services/NavigationService');
 
 module.exports = function registerStoreHub(bot) {
   bot.hears(['🛍 Store', '🛍 ဈေးဆိုင်'], async (ctx) => {
+    Nav.clearHistory(ctx);
     let status = null;
     try {
       status = await SystemStatus.get();

@@ -167,7 +167,7 @@ module.exports = function registerDashboard(bot) {
     }
   });
 
-  bot.hears('📊 Dashboard', adminOnly(), async (ctx) => {
+  bot.hears(['📊 Admin Dashboard', '📊 Dashboard'], adminOnly(), async (ctx) => {
     const ref = await pulseLoading(ctx, 'Loading Dashboard', 3, 400);
     try {
       const theme = getTheme(ctx.user);

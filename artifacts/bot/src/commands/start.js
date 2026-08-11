@@ -23,8 +23,7 @@ const StyleService            = require('../services/StyleService');
 const SystemStatus            = require('../models/SystemStatus');
 const User                    = require('../models/User');
 const Product                 = require('../models/Product');
-const { config }              = require('../../config/settings');
-const { mainMenuKeyboard, adminMenuKeyboard } = require('../utils/keyboard');
+const { mainMenuKeyboard } = require('../utils/keyboard');
 const { price }               = require('../utils/ui');
 
 // ── Attribution helper ────────────────────────────────────────────────────────
@@ -172,32 +171,29 @@ module.exports = function registerStart(bot) {
     try { sysStatus = await SystemStatus.get(); } catch (_) { sysStatus = {}; }
 
     // ── Build single welcome panel with PERSISTENT REPLY KEYBOARD ────────────
-    const isAdmin = Number(ctx.from.id) === Number(config.bot.adminId);
-
     const { t: tt } = require('../utils/i18n');
     const lang = ctx.user?.language || 'en';
-    let panel;
-    if (isAdmin) {
-      panel =
-        `🔧 *Admin Panel — Mental Gaming Store*\n` +
-        `👋 Welcome back, *${name}*!\n\n` +
-        `_Tap a button below to manage the store._`;
-    } else {
-      const balanceKS   = ctx.user?.balanceKS   || 0;
-      const balanceCoin = ctx.user?.balanceCoin || 0;
-      const greet      = lang === 'mm' ? `👋 ကြိုဆိုပါတယ်၊ *${name}*!` : `👋 Welcome, *${name}*!`;
-      const balLabel   = lang === 'mm' ? 'လက်ကျန်ငွေ' : 'Balance';
-      const coinLabel  = lang === 'mm' ? 'ဒင်္ဂါးများ'  : 'Coins';
-      const tierLabel  = lang === 'mm' ? 'အဆင့်'      : 'Tier';
-      panel =
-        `🎮 *Mental Gaming Store*\n` +
-        `━━━━━━━━━━━━━━━━━━━\n` +
-        `${greet}\n` +
-        `💰 ${balLabel}: \`${price(balanceKS)}\`\n` +
-        `💎 ${coinLabel}: \`${balanceCoin.toLocaleString()} MC\`\n` +
-        `🌟 ${tierLabel}: *${tier}*\n\n` +
-        `_${tt(ctx, 'welcome.tap_below')}_`;
-    }
+    const balanceKS   = ctx.user?.balanceKS   || 0;
+    const balanceCoin = ctx.user?.balanceCoin || 0;
+    const greet      = lang === 'mm' ? `👋 ကြိုဆိုပါတယ်၊ *${name}*!` : `👋 Welcome, *${name}*!`;
+    const balLabel   = lang === 'mm' ? 'လက်ကျန်ငွေ' : 'Balance';
+    const coinLabel  = lang === 'mm' ? 'ဒင်္ဂါးများ'  : 'Coins';
+    const tierLabel  = lang === 'mm' ? 'အဆင့်'      : 'Tier';
+    let panel =
+      `🎮 *Mental Gaming Store*
+` +
+      `━━━━━━━━━━━━━━━━━━━
+` +
+      `${greet}
+` +
+      `💰 ${balLabel}: \`${price(balanceKS)}\`
+` +
+      `💎 ${coinLabel}: \`${balanceCoin.toLocaleString()} MC\`
+` +
+      `🌟 ${tierLabel}: *${tier}*
+
+` +
+      `_${tt(ctx, 'welcome.tap_below')}_`;
 
     const notice = (extraNote || '') + (referralNotice || '');
     if (notice.trim()) {
@@ -206,7 +202,7 @@ module.exports = function registerStart(bot) {
 
     return ctx.reply(panel, {
       parse_mode: 'Markdown',
-      ...(isAdmin ? adminMenuKeyboard() : mainMenuKeyboard(ctx, buildWebAppConfig(sysStatus), sysStatus?.outlineBotUsername || null)),
+      ...mainMenuKeyboard(ctx, buildWebAppConfig(sysStatus), sysStatus?.outlineBotUsername || null),
     });
   });
 };

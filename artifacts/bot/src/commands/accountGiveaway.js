@@ -895,7 +895,7 @@ module.exports = function registerAccountGiveaway(bot) {
     await editOrReply(ctx, text, keyboard);
   });
 
-  bot.hears('🎁 Giveaway', adminOnly(), async (ctx) => {
+  bot.hears('🎁 Giveaway Admin', adminOnly(), async (ctx) => {
     const { text, keyboard } = await buildAdminList();
     await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   });
