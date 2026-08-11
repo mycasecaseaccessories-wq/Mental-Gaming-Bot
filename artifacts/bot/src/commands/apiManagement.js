@@ -26,6 +26,7 @@ const {
 const {
   announceProductEverywhere,
   announceAccountProductEverywhere,
+  validateAnnouncementChannel,
   mdEsc,
 }                  = require('../services/BroadcastService');
 const { auditLog }     = require('../services/logger');
@@ -212,12 +213,50 @@ module.exports = function registerApiManagement(bot) {
       );
     }
 
+    const check = await validateAnnouncementChannel(ctx.telegram, channelId);
+    if (!check.ok) {
+      return ctx.reply(
+        `❌ *Announcement channel မသတ်မှတ်နိုင်ပါ*\n\n` +
+        `${mdEsc(check.message)}\n\n` +
+        `စစ်ရန်:\n` +
+        `1️⃣ Bot ကို channel မှာ admin ထည့်ပါ\n` +
+        `2️⃣ *Post Messages* permission ဖွင့်ပါ\n` +
+        `3️⃣ Channel ID / @username မှန်ကြောင်း စစ်ပါ`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
     await SystemStatus.set({ announcementChannelId: channelId }, ctx.from.id);
     await auditLog(ctx.from.id, 'SET_ANNOUNCE_CHANNEL', null, 'System', { channelId });
 
     await ctx.reply(
       `✅ Announcement channel set to: *${channelId}*\n\n` +
+      `✅ Bot admin permission စစ်ပြီးပါပြီ။\n` +
       `New products and flash sales will be posted there.`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  // ── /checkannounce — verify channel config and bot posting permission ───────
+
+  bot.command('checkannounce', adminOnly(), async (ctx) => {
+    const check = await validateAnnouncementChannel(ctx.telegram);
+    if (!check.ok) {
+      return ctx.reply(
+        `❌ *Announcement channel စစ်ဆေးမှု မအောင်မြင်ပါ*\n\n` +
+        `${mdEsc(check.message)}\n\n` +
+        `ပြင်ပြီးရင် \`/checkannounce\` နဲ့ ပြန်စစ်ပါ။`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    await ctx.reply(
+      `✅ *Announcement channel အဆင်ပြေပါပြီ*\n\n` +
+      `📢 Channel: *${mdEsc(check.title)}*\n` +
+      `🆔 ID: \`${mdEsc(check.channelId)}\`\n` +
+      `👤 Bot: Admin\n` +
+      `✍️ Post Messages: ခွင့်ပြုထားပါပြီ\n\n` +
+      `အခု \`/announce\` (သို့) Admin menu → 📣 Announce နဲ့ ကြော်ငြာတင်နိုင်ပါပြီ။`,
       { parse_mode: 'Markdown' }
     );
   });
@@ -330,12 +369,12 @@ module.exports = function registerApiManagement(bot) {
     await ctx.answerCbQuery('📤 ပို့နေပါပြီ...');
     try { await ctx.editMessageText(`📤 *${mdEsc(p.serviceName)} — ${mdEsc(p.planLabel)}* ကြေညာချက် ပို့နေပါတယ်... ခဏစောင့်ပါ။`, { parse_mode: 'Markdown' }); } catch {}
 
-    const { channelOk, sent, blocked, failed } = await announceAccountProductEverywhere(p, ctx.telegram);
+    const { channelOk, channelError, sent, blocked, failed } = await announceAccountProductEverywhere(p, ctx.telegram);
     await auditLog(ctx.from.id, 'ACCOUNT_PRODUCT_ANNOUNCED', p._id.toString(), 'System', { channelOk, sent, blocked, failed });
 
     await ctx.reply(
       `✅ *ကြေညာပြီးပါပြီ!*\n\n` +
-      `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : '⚠️ မတင်နိုင်ပါ (channel မသတ်မှတ်ရသေး / bot admin မဟုတ်)'}\n` +
+      `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : `❌ မတင်နိုင်ပါ — ${mdEsc(channelError || 'Telegram error')}`}\n` +
       `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး` +
       `${blocked ? ` / 🚫 ${blocked} ယောက် (bot block လုပ်ထား — DB မှာ မှတ်ပြီး)` : ''}` +
       `${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
@@ -359,12 +398,12 @@ module.exports = function registerApiManagement(bot) {
     await ctx.answerCbQuery('📤 ပို့နေပါပြီ...');
     try { await ctx.editMessageText(`📤 *${mdEsc(product.name)}* ကြေညာချက် ပို့နေပါတယ်... ခဏစောင့်ပါ။`, { parse_mode: 'Markdown' }); } catch {}
 
-    const { channelOk, sent, blocked, failed } = await announceProductEverywhere(product, style, ctx.telegram);
+    const { channelOk, channelError, sent, blocked, failed } = await announceProductEverywhere(product, style, ctx.telegram);
     await auditLog(ctx.from.id, 'PRODUCT_ANNOUNCED', product._id.toString(), 'System', { style, channelOk, sent, blocked, failed });
 
     await ctx.reply(
       `✅ *ကြေညာပြီးပါပြီ!*\n\n` +
-      `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : '⚠️ မတင်နိုင်ပါ (channel မသတ်မှတ်ရသေး / bot admin မဟုတ်)'}\n` +
+      `📢 Channel: ${channelOk ? '✅ တင်ပြီး' : `❌ မတင်နိုင်ပါ — ${mdEsc(channelError || 'Telegram error')}`}\n` +
       `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး` +
       `${blocked ? ` / 🚫 ${blocked} ယောက် (bot block လုပ်ထား — DB မှာ မှတ်ပြီး)` : ''}` +
       `${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,

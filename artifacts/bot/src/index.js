@@ -213,6 +213,7 @@ async function registerBotCommands() {
     { command: 'setgateway',     description: '💳 Set Payment Gateway Status (Owner)' },
     { command: 'setgatewaynote', description: '📝 Set Gateway Note (Owner)' },
     { command: 'setannouncechannel', description: '📢 Set Announcement Channel (Owner)' },
+    { command: 'checkannounce',      description: '🔎 Check Announcement Channel (Owner)' },
     { command: 'announce',           description: '📣 Broadcast Product to Channel (Manager+)' },
     { command: 'webhookstats',       description: '📡 Webhook Event Stats (Owner)' },
     // ── Owner only ────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ const {
   removeLiveFeedChannel,
   SOURCE_LABELS,
 } = require('../services/ChannelRegistryService');
+const { validateAnnouncementChannel } = require('../services/BroadcastService');
 
 function escMd(s) {
   return String(s ?? '').replace(/([_*`\[\]])/g, '\\$1');
@@ -132,6 +133,15 @@ module.exports = (bot) => {
     }
 
     if (purpose === 'announce') {
+      const check = await validateAnnouncementChannel(ctx.telegram, chat.id);
+      if (!check.ok) {
+        return ctx.reply(
+          `❌ *ကြေညာချက် channel အဖြစ် မသတ်မှတ်နိုင်ပါ*\n\n` +
+          `${escMd(check.message)}\n\n` +
+          `Bot ကို channel admin ထည့်ပြီး *Post Messages* permission ဖွင့်ထားကြောင်း စစ်ပြီး ထပ်လုပ်ပါ။`,
+          { parse_mode: 'Markdown' }
+        );
+      }
       const st = await SystemStatus.get();
       await SystemStatus.updateOne(
         { _id: st._id },
@@ -139,6 +149,7 @@ module.exports = (bot) => {
       );
       await ctx.reply(
         `✅ *${escMd(chat.title)}* ကို 📢 *ကြေညာချက် channel* အဖြစ် သတ်မှတ်လိုက်ပါပြီ!\n\n` +
+          `✅ Bot admin + post permission စစ်ပြီးပါပြီ။\n` +
           `Product/flash sale ကြေညာချက်တွေ ဒီ channel ကို ပို့ပါမယ်။`,
         { parse_mode: 'Markdown' }
       );

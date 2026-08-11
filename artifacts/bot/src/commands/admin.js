@@ -181,9 +181,13 @@ const GUIDE_SECTIONS = [
       `• \`/listchannelposts\`, \`/sendchannelpost\`, \`/togglechannelpost\`, \`/delchannelpost\`\n` +
       `• \`/setseason\` — အခါသမယ theme (Thingyan/Christmas…)\n\n` +
       `🎬 *ဥပမာ — product ကြေညာနည်း:*\n` +
-      `1️⃣ menu → *📣 Announce* နှိပ် (သို့ \`/announce\` ရိုက်) → product ခလုတ်တွေထဲက တစ်ခု ရွေး\n` +
-      `2️⃣ ပုံစံရွေး — 🆕 New Product (ဒါမှမဟုတ် flash sale price သတ်မှတ်ထားရင် ⚡ Flash Sale)\n` +
-      `3️⃣ → user အားလုံး + channel မှာ "🛒 ဝယ်မယ်" ခလုတ်ပါတဲ့ ကြေညာစာ တစ်ပြိုင်နက် ရောက်မယ်\n\n` +
+      `1️⃣ ကြော်ငြာ channel မတက်သေးရင် \`/checkannounce\` ရိုက်ပြီး စစ်\n` +
+      `2️⃣ မသတ်မှတ်ရသေးရင် \`/channels\` → ➕ Channel ထည့် → 📢 ကြေညာချက် channel ရွေး (သို့ \`/setannouncechannel @channel\`)\n` +
+      `3️⃣ Bot ကို channel မှာ *Administrator* ထည့်ပြီး *Post Messages* ခွင့်ပြုထားရမယ်\n` +
+      `4️⃣ menu → *📣 Announce* နှိပ် (သို့ \`/announce\` ရိုက်) → product ခလုတ် ရွေး\n` +
+      `5️⃣ ပုံစံရွေး — 🆕 New Product (ဒါမှမဟုတ် flash sale price သတ်မှတ်ထားရင် ⚡ Flash Sale)\n` +
+      `6️⃣ → user အားလုံး + channel မှာ "🛒 ဝယ်မယ်" ခလုတ်ပါတဲ့ ကြေညာစာ ရောက်မယ်\n\n` +
+      `⚠️ *မတက်ရင်:* ကြော်ငြာပြီးနောက် bot ပြတဲ့ \`Channel\` error ကိုဖတ်ပါ — channel ID မှားခြင်း၊ bot admin မဟုတ်ခြင်း၊ Post Messages ခွင့်မရှိခြင်း၊ သို့မဟုတ် product စာသား format ပြဿနာကို bot က တိတိကျကျ ပြပေးမယ်။\n\n` +
       `🎬 *ဥပမာ ၁ — user အားလုံးဆီ message ပို့နည်း:*\n` +
       `1️⃣ menu → *📢 Broadcast* နှိပ် → ဘယ်သူဆီပို့မလဲ ရွေး (👥 All / tier / active)\n` +
       `2️⃣ ပို့မယ့် စာ (ဒါမှမဟုတ် ပုံ+စာ) ရိုက်ထည့် → *✅ Send* အတည်ပြု\n` +

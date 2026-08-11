@@ -98,6 +98,51 @@ async function getChannelId() {
   return status.announcementChannelId || null;
 }
 
+/**
+ * Validate the configured announcement channel before an admin tries to post.
+ * Telegram returns different errors for a missing channel, a bot that is not
+ * an administrator, and an administrator without post permission. Keeping the
+ * check here makes /channels, /setannouncechannel, and /announce consistent.
+ */
+async function validateAnnouncementChannel(telegram, channelId = null) {
+  const id = channelId || await getChannelId();
+  if (!id) {
+    return { ok: false, code: 'not_configured', message: 'Announcement channel မသတ်မှတ်ရသေးပါ။ /channels မှာ 📢 ကြေညာချက် channel အဖြစ် သတ်မှတ်ပါ။' };
+  }
+
+  try {
+    const chat = await telegram.getChat(id);
+    if (chat.type !== 'channel') {
+      return { ok: false, code: 'not_channel', message: `သတ်မှတ်ထားတာက channel မဟုတ်ပါ (${chat.type})။` };
+    }
+
+    const me = await telegram.getMe();
+    const member = await telegram.getChatMember(id, me.id);
+    const status = member.status;
+    if (!['administrator', 'creator'].includes(status)) {
+      return { ok: false, code: 'not_admin', message: `Bot ကို channel မှာ admin မထည့်ထားပါ (status: ${status})။` };
+    }
+    if (status === 'administrator' && member.can_post_messages === false) {
+      return { ok: false, code: 'no_post_permission', message: 'Bot က channel မှာ post တင်ခွင့် မရှိပါ။ Channel admin permissions ထဲမှာ “Post Messages” ကို ဖွင့်ပါ။' };
+    }
+
+    return {
+      ok: true,
+      channelId: String(id),
+      title: chat.title || String(id),
+      username: chat.username || null,
+    };
+  } catch (err) {
+    const code = err.response?.error_code ?? err.code;
+    const description = err.response?.description || err.message || 'Unknown Telegram error';
+    return {
+      ok: false,
+      code: code === 400 ? 'invalid_channel' : 'telegram_error',
+      message: `Channel စစ်မရပါ: ${description}`,
+    };
+  }
+}
+
 async function sendToChannel(telegram, text, productId = null, extra = {}) {
   const channelId = await getChannelId();
   if (!channelId) return null;
@@ -114,7 +159,22 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
     });
     return msg;
   } catch (err) {
-    console.error(`[BroadcastService] Channel send failed (${channelId}):`, err.message);
+    const description = String(err.response?.description || err.message || '');
+    console.error(`[BroadcastService] Channel send failed (${channelId}):`, description);
+
+    // Product names/descriptions can contain Telegram Markdown characters that
+    // are valid user text but invalid legacy Markdown. Retry as plain text so a
+    // formatting issue never prevents the actual announcement from posting.
+    if (err.response?.error_code === 400 && /parse entities|can't parse|entity/i.test(description)) {
+      try {
+        return await telegram.sendMessage(channelId, text, {
+          ...(keyboard || {}),
+          ...extra,
+        });
+      } catch (retryErr) {
+        console.error(`[BroadcastService] Plain-text channel retry failed (${channelId}):`, retryErr.message);
+      }
+    }
     return null;
   }
 }
@@ -263,7 +323,12 @@ async function announceAccountProductEverywhere(accountProduct, telegram) {
   const channelMsg = await sendToChannel(telegram, text, null, { ...keyboard });
   const { sent, failed } = await broadcastToUsers(telegram, text, { ...keyboard });
 
-  return { channelOk: !!channelMsg, sent, failed };
+  return {
+    channelOk: !!channelMsg,
+    channelError: channelMsg ? null : (await validateAnnouncementChannel(telegram)).message,
+    sent,
+    failed,
+  };
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -336,7 +401,12 @@ async function announceProductEverywhere(product, style, telegram) {
   const channelMsg = await sendToChannel(telegram, text, null, { ...keyboard });
   const { sent, failed } = await broadcastToUsers(telegram, text, { ...keyboard });
 
-  return { channelOk: !!channelMsg, sent, failed };
+  return {
+    channelOk: !!channelMsg,
+    channelError: channelMsg ? null : (await validateAnnouncementChannel(telegram)).message,
+    sent,
+    failed,
+  };
 }
 
 module.exports = {
@@ -350,4 +420,5 @@ module.exports = {
   sendStockAlert,
   productDeepLink,
   mdEsc,
+  validateAnnouncementChannel,
 };

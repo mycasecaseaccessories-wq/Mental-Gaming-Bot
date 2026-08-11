@@ -150,6 +150,7 @@ artifacts/bot/
 | `/setstalesupport <min>` | Owner | Stale-order support threshold |
 | `/setsupportcontact @username\|off` | Owner | Support direct-message contact account |
 | `/announce [productId]` | Manager+ | Product announcement → all bot users + announce channel |
+| `/checkannounce` | Owner | Check announcement channel ID, bot admin status, and Post Messages permission |
 | `/addchannelpost` `/listchannelposts` `/sendchannelpost` `/togglechannelpost` `/delchannelpost` | Owner | Channel auto-posts |
 | `/channels` | Owner | Channel registry + purpose picker |
 | `/gamenews` | Owner | Game update knowledge channel status |
@@ -166,6 +167,31 @@ artifacts/bot/
 ## Packages
 
 `telegraf` ^4.16.3 · `mongoose` ^8.4.0 · `node-cron` ^3.0.3 · `node-cache` ^5.x · `axios` ^1.7.2 · `dotenv` ^16.4.5
+
+## Project file organization
+
+The project keeps each runnable service separate and groups the Telegram bot by responsibility:
+
+```
+artifacts/
+├── bot/
+│   ├── config/       # Environment validation and runtime settings
+│   ├── src/commands/ # Telegram commands, admin panels, and callbacks
+│   ├── src/scenes/   # Multi-step user/admin wizards
+│   ├── src/services/ # Business logic, broadcasts, cron, database helpers
+│   ├── src/models/   # Mongoose schemas
+│   ├── src/utils/    # Keyboards, i18n, formatting, shared helpers
+│   ├── test/         # Node test runner tests
+│   └── docs/         # Admin and maintenance guides
+│
+├── api-server/       # Express API service
+├── landing/          # React/Vite storefront
+├── outline-bot/      # Separate Outline VPN bot
+└── mockup-sandbox/   # UI preview artifact
+```
+
+Announcement troubleshooting and the admin workflow are documented in
+`artifacts/bot/docs/ADMIN_GUIDE.md`.
 
 ---
 
