@@ -36,13 +36,11 @@ const referralSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
       unique: true,
-      index: true,
       comment: 'Each user can only be referred once',
     },
     referralCode: {
       type: String,
       required: true,
-      index: true,
     },
 
     // ── Status ───────────────────────────────────────────────────────────────

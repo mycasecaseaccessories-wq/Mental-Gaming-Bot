@@ -63,7 +63,8 @@ const refCampaignSchema = new mongoose.Schema(
       comment: 'Min first top-up (KS) the INVITED user must make for the ref to count toward this campaign (0 = off). Normal referral commission is unaffected.',
     },
 
-    isActive:  { type: Boolean, default: true, index: true },
+    // The partial unique index below also supports the active-campaign lookup.
+    isActive:  { type: Boolean, default: true },
     endedAt:   { type: Date, default: null },
     endReason: { type: String, default: null, comment: 'quota_full | manual' },
   },

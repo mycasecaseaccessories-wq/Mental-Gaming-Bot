@@ -1,13 +1,5 @@
 require('dotenv').config();
 
-// Suppress Mongoose 8.x false-positive "Duplicate schema index" warning
-// (sparse+unique on a single field triggers this cosmetic warning; it does not affect behaviour)
-const _origEmit = process.emit.bind(process);
-process.emit = function (name, ...args) {
-  if (name === 'warning' && args[0]?.message?.includes('Duplicate schema index')) return true;
-  return _origEmit(name, ...args);
-};
-
 const { Telegraf, Scenes, session } = require('telegraf');
 const path = require('path');
 const fs   = require('fs');
