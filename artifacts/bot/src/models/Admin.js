@@ -11,8 +11,10 @@
 
 const mongoose = require('mongoose');
 
-const ROLES = ['OWNER', 'MANAGER', 'STAFF'];
-const ROLE_LEVEL = { STAFF: 1, MANAGER: 2, OWNER: 3 };
+// SUPPORT/ADMIN are retained for compatibility with the existing admin UI
+// and records created by earlier versions of the bot.
+const ROLES = ['OWNER', 'ADMIN', 'MANAGER', 'STAFF', 'SUPPORT'];
+const ROLE_LEVEL = { SUPPORT: 1, STAFF: 1, MANAGER: 2, ADMIN: 2, OWNER: 3 };
 
 const adminSchema = new mongoose.Schema(
   {

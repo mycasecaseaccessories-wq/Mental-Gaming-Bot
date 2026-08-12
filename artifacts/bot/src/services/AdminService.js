@@ -14,6 +14,20 @@ const { config } = require('../../config/settings');
 
 const ROLE_LEVEL = Admin.ROLE_LEVEL;
 const ROLES      = Admin.ROLES;
+const ALL_PERMISSIONS = [
+  'dashboard', 'orders', 'support', 'store', 'users', 'finance',
+  'marketing', 'rewards', 'system', 'channels', 'admin_roles', 'guide',
+];
+
+// Keep feature access in one place so reply-keyboard handlers and slash
+// commands enforce the same RBAC rules.
+const ROLE_PERMISSIONS = {
+  OWNER: ALL_PERMISSIONS,
+  ADMIN: ALL_PERMISSIONS.filter((permission) => permission !== 'admin_roles'),
+  MANAGER: ALL_PERMISSIONS.filter((permission) => permission !== 'admin_roles'),
+  STAFF: ['orders', 'support', 'guide'],
+  SUPPORT: ['orders', 'support', 'guide'],
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -53,6 +67,15 @@ async function hasRole(telegramId, minRole) {
   const role = await getAdminRole(telegramId);
   if (!role) return false;
   return roleLevel(role) >= roleLevel(minRole);
+}
+
+function getPermissionsForRole(role) {
+  return [...(ROLE_PERMISSIONS[role] || [])];
+}
+
+async function hasPermission(telegramId, permission) {
+  const role = await getAdminRole(telegramId);
+  return getPermissionsForRole(role).includes(permission);
 }
 
 // ── Mutations (OWNER-only callers should be enforced at command level) ────────
@@ -138,6 +161,27 @@ function requireRole(minRole = 'STAFF') {
   };
 }
 
+/**
+ * Feature-level middleware used by the admin reply keyboard.
+ * It intentionally checks the role's explicit permission list instead of
+ * relying on a missing/implicit role-level comparison.
+ */
+function requirePermission(permission) {
+  return async (ctx, next) => {
+    const ok = await hasPermission(ctx.from?.id, permission);
+    if (!ok) {
+      const text = ctx.callbackQuery
+        ? '⛔ Access denied.'
+        : '⛔ ဒီအပိုင်းကို သုံးခွင့်မရှိပါ။';
+      if (ctx.callbackQuery) await ctx.answerCbQuery(text, { show_alert: true });
+      else await ctx.reply(text);
+      return;
+    }
+    ctx.adminRole = await getAdminRole(ctx.from.id);
+    return next();
+  };
+}
+
 module.exports = {
   ROLES,
   ROLE_LEVEL,
@@ -150,5 +194,8 @@ module.exports = {
   removeAdmin,
   listAdmins,
   updateAdminRole,
+  getPermissionsForRole,
+  hasPermission,
   requireRole,
+  requirePermission,
 };

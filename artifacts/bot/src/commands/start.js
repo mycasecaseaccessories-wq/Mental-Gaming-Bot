@@ -23,7 +23,8 @@ const StyleService            = require('../services/StyleService');
 const SystemStatus            = require('../models/SystemStatus');
 const User                    = require('../models/User');
 const Product                 = require('../models/Product');
-const { mainMenuKeyboard } = require('../utils/keyboard');
+const AdminService            = require('../services/AdminService');
+const { mainMenuKeyboard, adminMenuKeyboard } = require('../utils/keyboard');
 const { price }               = require('../utils/ui');
 
 // ── Attribution helper ────────────────────────────────────────────────────────
@@ -150,7 +151,13 @@ module.exports = function registerStart(bot) {
 
     // ── Detect brand-new user for onboarding ─────────────────────────────────
     const user = ctx.user;
+    // Database-managed staff/managers must enter the admin UI from /start too.
+    // Previously only ADMIN_ID was treated as an admin, so delegated admins
+    // received the customer keyboard and could not reach their tools.
+    const isAdmin = await AdminService.isAdmin(ctx.from.id);
+    const adminRole = isAdmin ? await AdminService.getAdminRole(ctx.from.id) : null;
     const isFirstTimer = user &&
+      !isAdmin &&
       !user.onboardingDone &&
       (user.totalCheckIns   || 0) === 0 &&
       (user.totalDeposited  || 0) === 0 &&
@@ -171,6 +178,15 @@ module.exports = function registerStart(bot) {
     try { sysStatus = await SystemStatus.get(); } catch (_) { sysStatus = {}; }
 
     // ── Build single welcome panel with PERSISTENT REPLY KEYBOARD ────────────
+    if (isAdmin) {
+      return ctx.reply(
+        `🔧 *Admin Panel — Mental Gaming Store*\n\n` +
+        `👋 Welcome back, *${name}*!\n\n` +
+        `_Tap a button below to manage the store._`,
+        { parse_mode: 'Markdown', ...adminMenuKeyboard(adminRole) }
+      );
+    }
+
     const { t: tt } = require('../utils/i18n');
     const lang = ctx.user?.language || 'en';
     const balanceKS   = ctx.user?.balanceKS   || 0;

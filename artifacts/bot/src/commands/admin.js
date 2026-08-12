@@ -595,11 +595,18 @@ module.exports = function registerAdmin(bot) {
   // ── Reply-keyboard handlers for admin menu buttons ─────────────────────────
   // ── Clean two-level Admin UI ───────────────────────────────────────────────
   const sectionButtons = {
+    '📊 Admin Dashboard': 'dashboard',
     '📦 Admin Orders': 'orders', '🛍 Admin Store': 'store', '👥 Admin Users': 'users',
     '💰 Admin Finance': 'finance', '📣 Admin Marketing': 'marketing',
     '🎁 Admin Rewards': 'rewards', '⚙️ Admin System': 'system',
   };
   for (const [label, section] of Object.entries(sectionButtons)) {
+    if (section === 'dashboard') {
+      bot.hears(label, requirePermission('dashboard'), async (ctx) => {
+        await Nav.navigate(ctx, 'admin_main', false);
+      });
+      continue;
+    }
     const permission = section === 'orders' ? 'orders' : section;
     bot.hears(label, requirePermission(permission), async (ctx) => {
       const role = await AdminService.getAdminRole(ctx.from.id);
