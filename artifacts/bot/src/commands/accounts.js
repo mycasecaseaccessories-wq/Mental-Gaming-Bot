@@ -5,6 +5,7 @@
  */
 const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
+const AdminService = require('../services/AdminService');
 const { debitKS, creditKS } = require('../services/WalletService');
 const { auditLog } = require('../services/logger');
 const AccountProduct = require('../models/AccountProduct');
@@ -910,7 +911,8 @@ module.exports = function registerAccounts(bot) {
         `📥 *Stock ထည့်ရန်*\n\nAccount တွေကို တစ်ကြောင်းချင်း ဒီပုံစံနဲ့ ပို့ပါ:\n\n` +
         `\`email:password\`\n\`email2:password2\`\n\n_(တစ်ကြိမ်တည်း အများကြီး ထည့်လို့ရပါတယ်)_`;
     }
-    await ctx.reply(prompt, { parse_mode: 'Markdown', ...Markup.forceReply() });
+    const promptMessage = await ctx.reply(prompt, { parse_mode: 'Markdown', ...Markup.forceReply() });
+    ctx.session.accAdmin.promptMessageId = promptMessage.message_id;
   });
 
   bot.action(/^accad_disc:(.+)$/, adminOnly(), async (ctx) => {
@@ -1091,7 +1093,7 @@ module.exports = function registerAccounts(bot) {
   // ── Announce channel text wizard ────────────────────────────────────────────
   bot.on('text', async (ctx, next) => {
     const state = ctx.session?.accAnnounce;
-    if (!state || ctx.from.id !== config.bot.adminId) return next();
+    if (!state || !(await AdminService.hasPermission(ctx.from.id, 'store'))) return next();
     const input = ctx.message.text.trim();
 
     if (/^(\/cancel|cancel|ပယ်ဖျက်|မလုပ်တော့)$/i.test(input)) {
@@ -1141,7 +1143,18 @@ module.exports = function registerAccounts(bot) {
   // ── Admin text-input steps (wizard) ─────────────────────────────────────────
   bot.on('text', async (ctx, next) => {
     const state = ctx.session?.accAdmin;
-    if (!state || ctx.from.id !== config.bot.adminId) return next();
+    if (!state || !(await AdminService.hasPermission(ctx.from.id, 'store'))) return next();
+
+    // Consume only the reply to the stock prompt. This prevents a stale wizard
+    // flag from swallowing unrelated admin keyboard text.
+    if (
+      state.step === 'stock' &&
+      ctx.message.reply_to_message?.message_id !== state.promptMessageId
+    ) {
+      ctx.session.accAdmin = null;
+      return next();
+    }
+
     const input = ctx.message.text.trim();
 
     // ❌ Cancel — works at any wizard step (forceReply can't carry a button)
@@ -1226,12 +1239,23 @@ module.exports = function registerAccounts(bot) {
 
     // 📥 Add stock (type-aware)
     if (state.step === 'stock') {
-      ctx.session.accAdmin = null;
       const p = await AccountProduct.findById(state.productId);
-      if (!p) return ctx.reply('❌ Product မတွေ့ပါ။');
+      if (!p) {
+        ctx.session.accAdmin = null;
+        return ctx.reply('❌ Product မတွေ့ပါ။');
+      }
       const lines = input.split('\n').map((l) => l.trim()).filter(Boolean);
       const docs = [];
       const badLines = [];
+
+      if (!lines.length) {
+        const promptMessage = await ctx.reply(
+          '❌ Stock စာရင်း မတွေ့ပါ။ Account တစ်ကြောင်းစီကို `email:password` ပုံစံနဲ့ ပြန်ပို့ပါ။',
+          { parse_mode: 'Markdown', ...Markup.forceReply() }
+        );
+        state.promptMessageId = promptMessage.message_id;
+        return;
+      }
 
       // Stock-date expiry: each credential's fixed shelf life starts NOW
       // (the moment it is added to stock), not at purchase time.
@@ -1270,7 +1294,21 @@ module.exports = function registerAccounts(bot) {
         }
       }
 
-      if (docs.length) await AccountCredential.insertMany(docs);
+      if (!docs.length) {
+        const promptMessage = await ctx.reply(
+          p.accountType === 'invite'
+            ? '❌ မှန်ကန်တဲ့ invite link မတွေ့ပါ။ `https://...` နဲ့ စတဲ့ link တွေကို တစ်ကြောင်းစီ ပြန်ပို့ပါ။'
+            : '❌ မှန်ကန်တဲ့ account မတွေ့ပါ။ `email:password` ပုံစံနဲ့ တစ်ကြောင်းစီ ပြန်ပို့ပါ။',
+          { parse_mode: 'Markdown', ...Markup.forceReply() }
+        );
+        state.promptMessageId = promptMessage.message_id;
+        return;
+      }
+
+      await AccountCredential.insertMany(docs);
+      // Keep the wizard alive if parsing or persistence fails so the admin can
+      // retry instead of silently losing the stock-entry state.
+      ctx.session.accAdmin = null;
       await auditLog(ctx.from.id, 'ADD_ACCOUNT_STOCK', p._id.toString(), 'System', { added: docs.length, accountType: p.accountType });
       const avail = await freeUnits(p);
       const itemWord = p.accountType === 'invite' ? 'Link' : 'Account';
