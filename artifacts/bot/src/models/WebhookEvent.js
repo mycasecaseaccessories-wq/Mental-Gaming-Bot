@@ -27,10 +27,14 @@ const webhookEventSchema = new mongoose.Schema(
     },
 
     // ── Payload ────────────────────────────────────────────────────────────────
-    payload:     { type: mongoose.Schema.Types.Mixed, default: {} },
-    rawBody:     { type: String,  default: null, comment: 'Original raw body for signature re-verification' },
-    signature:   { type: String,  default: null },
-    ipAddress:   { type: String,  default: null },
+    payload: { type: mongoose.Schema.Types.Mixed, default: {} },
+    rawBody: {
+      type: String,
+      default: null,
+      comment: 'Original raw body for signature re-verification',
+    },
+    signature: { type: String, default: null },
+    ipAddress: { type: String, default: null },
 
     // ── Resolution ─────────────────────────────────────────────────────────────
     status: {
@@ -39,18 +43,27 @@ const webhookEventSchema = new mongoose.Schema(
       default: 'pending',
       index: true,
     },
-    orderId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null, index: true },
+    orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null, index: true },
     externalRef: { type: String, default: null, comment: 'Provider transaction ID' },
 
     // ── Processing result ──────────────────────────────────────────────────────
-    processedAt: { type: Date,   default: null },
-    error:       { type: String, default: null },
-    retryCount:  { type: Number, default: 0 },
+    processedAt: { type: Date, default: null },
+    error: { type: String, default: null },
+    retryCount: { type: Number, default: 0 },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true, versionKey: false },
 );
 
 webhookEventSchema.index({ status: 1, createdAt: 1 });
 webhookEventSchema.index({ externalRef: 1 }, { sparse: true });
+// Provider retries must not create multiple processable events for the same payment.
+webhookEventSchema.index(
+  { source: 1, eventType: 1, externalRef: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { externalRef: { $type: 'string' } },
+    name: 'uniq_provider_event_reference',
+  },
+);
 
 module.exports = mongoose.model('WebhookEvent', webhookEventSchema);
