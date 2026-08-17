@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useRoute, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ShoppingBag } from "lucide-react";
+import { Clock3, RotateCcw, ShoppingBag } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Glass } from "@/components/Glass";
 import { EmptyState, Skeleton } from "@/components/EmptyState";
@@ -162,6 +162,35 @@ function OrderDetailView({ id }: { id: string }) {
             <div className="border-t border-white/10 my-2" />
             <Row label="Paid" bold>{ks(oQ.data.amount)}</Row>
           </Glass>
+
+          {oQ.data.statusHistory && oQ.data.statusHistory.length > 0 && (
+            <Glass className="p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold mb-3">
+                <Clock3 className="h-4 w-4 text-primary" /> Order timeline
+              </div>
+              <div className="space-y-3">
+                {oQ.data.statusHistory.map((entry, index) => (
+                  <div key={`${entry.status}-${entry.at}-${index}`} className="flex items-start gap-3">
+                    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">{entry.status}</div>
+                      <div className="text-[11px] text-muted-foreground">{timeAgo(entry.at)}</div>
+                      {entry.note && <div className="text-xs text-muted-foreground mt-0.5">{entry.note}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Glass>
+          )}
+
+          {oQ.data.product && !["Pending", "Processing"].includes(oQ.data.status) && (
+            <Link
+              href={`/order/${oQ.data.product.id}?reorderFrom=${oQ.data.id}`}
+              className="pressable w-full bg-primary text-white rounded-xl px-4 py-3 flex items-center justify-center gap-2 text-sm font-semibold"
+            >
+              <RotateCcw className="h-4 w-4" /> Reorder this product
+            </Link>
+          )}
 
           {oQ.data.notes && (
             <Glass className="p-4 text-sm text-muted-foreground whitespace-pre-wrap">{oQ.data.notes}</Glass>

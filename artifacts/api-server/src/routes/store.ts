@@ -142,6 +142,7 @@ interface OrderDoc {
   quantity?: number;
   unitPrice?: number | null;
   checkoutData?: Array<{ key: string; label: string; value: string }>;
+  statusHistory?: Array<{ status: OrderDoc['status']; at: Date; note?: string | null }>;
   timestamp: Date;
   notes: string;
 }
@@ -862,6 +863,14 @@ router.get("/orders/:id", async (req: Request, res: Response) => {
     status: o.status,
     gameId: o.gameId,
     zoneId: o.zoneId,
+    checkoutData: o.checkoutData ?? [],
+    quantity: o.quantity ?? 1,
+    unitPrice: o.unitPrice ?? null,
+    statusHistory: (o.statusHistory ?? []).map((entry) => ({
+      status: entry.status,
+      at: entry.at,
+      note: entry.note ?? null,
+    })),
     timestamp: o.timestamp,
     notes: o.notes,
   });
@@ -1231,7 +1240,8 @@ router.get("/notifications", async (req: Request, res: Response) => {
     .limit(50)
     .toArray();
 
-  const unreadCount = docs.filter((n) => !n.isRead).length;
+  // Count independently from the page limit so the unread badge stays accurate.
+  const unreadCount = await notifs.countDocuments({ telegramId: u.telegramId, isRead: false });
 
   res.json({
     unreadCount,
