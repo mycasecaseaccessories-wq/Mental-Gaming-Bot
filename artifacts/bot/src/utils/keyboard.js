@@ -13,6 +13,11 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
     [L('menu.orders'),   L('menu.referral')],
     [L('menu.promo'),    L('menu.help')],
   );
+  // Keep the giveaway center as a top-level shortcut, directly above Settings.
+  // It remains available even when no active giveaway is configured so the user
+  // receives the same empty-state experience as the existing /freebie entrypoint.
+  rows.push([L('menu.freebie')]);
+
   // Show Outline VPN as a standalone shortcut only when the VPN bot is configured.
   // It is always accessible via 🛍 Store → Outline VPN regardless.
   if (outlineBotUsername) {
