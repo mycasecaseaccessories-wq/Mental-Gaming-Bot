@@ -11,6 +11,7 @@
  *   - lastSentDate !== today (MST)
  */
 
+const crypto = require('crypto');
 const ChannelAutoPost = require('../models/ChannelAutoPost');
 
 const MMT_OFFSET_MIN = 6 * 60 + 30; // UTC+6:30
@@ -39,32 +40,62 @@ function buildText(post) {
   return head + post.body;
 }
 
+async function claimPost(postId, date) {
+  const token = crypto.randomUUID();
+  const staleAt = new Date(Date.now() - 15 * 60_000);
+  const post = await ChannelAutoPost.findOneAndUpdate(
+    {
+      _id: postId,
+      isActive: true,
+      lastSentDate: { $ne: date },
+      $or: [{ sendClaimedAt: null }, { sendClaimedAt: { $lt: staleAt } }],
+    },
+    { $set: { sendClaimedAt: new Date(), sendClaimToken: token } },
+    { new: true },
+  ).lean();
+  return post ? { post, token } : null;
+}
+
+async function releaseClaim(postId, token) {
+  await ChannelAutoPost.updateOne(
+    { _id: postId, sendClaimToken: token },
+    { $unset: { sendClaimedAt: 1, sendClaimToken: 1 } },
+  );
+}
+
+async function completeClaim(postId, token, date) {
+  await ChannelAutoPost.updateOne(
+    { _id: postId, sendClaimToken: token },
+    {
+      $set: { lastSentDate: date, lastSentAt: new Date() },
+      $inc: { sendCount: 1 },
+      $unset: { sendClaimedAt: 1, sendClaimToken: 1 },
+    },
+  );
+}
+
 async function runDuePosts(telegram) {
   const t = nowInMMT();
   const candidates = await ChannelAutoPost.find({ isActive: true }).lean();
 
   let sent = 0, failed = 0;
-  for (const post of candidates) {
-    if (!isWithinWindow(post, t)) continue;
-    if (post.lastSentDate === t.date) continue;
+  for (const candidate of candidates) {
+    if (!isWithinWindow(candidate, t)) continue;
+    const claimed = await claimPost(candidate._id, t.date);
+    if (!claimed) continue; // another worker owns this scheduled post
 
     try {
-      await telegram.sendMessage(post.channelId, buildText(post), {
+      await telegram.sendMessage(claimed.post.channelId, buildText(claimed.post), {
         parse_mode: 'Markdown',
         disable_web_page_preview: false,
       });
-      await ChannelAutoPost.updateOne(
-        { _id: post._id },
-        {
-          $set: { lastSentDate: t.date, lastSentAt: new Date() },
-          $inc: { sendCount: 1 },
-        }
-      );
+      await completeClaim(claimed.post._id, claimed.token, t.date);
       sent += 1;
-      console.log(`[ChannelAutoPost] ✅ Sent to ${post.channelId} (${post.channelLabel || 'unlabeled'})`);
+      console.log(`[ChannelAutoPost] ✅ Sent to ${claimed.post.channelId} (${claimed.post.channelLabel || 'unlabeled'})`);
     } catch (err) {
+      await releaseClaim(claimed.post._id, claimed.token);
       failed += 1;
-      console.error(`[ChannelAutoPost] ❌ Failed for ${post.channelId}:`, err.message);
+      console.error(`[ChannelAutoPost] ❌ Failed for ${claimed.post.channelId}:`, err.message);
     }
   }
 
@@ -82,4 +113,4 @@ async function sendOneNow(telegram, postId) {
   return post;
 }
 
-module.exports = { runDuePosts, sendOneNow, nowInMMT };
+module.exports = { runDuePosts, sendOneNow, nowInMMT, isWithinWindow, buildText };

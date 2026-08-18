@@ -9,6 +9,7 @@
 const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
 const { config } = require('../../config/settings');
+const { checkConfiguredChannels } = require('../services/ChannelHealthService');
 const {
   getKnownChannels,
   saveChannel,
@@ -66,6 +67,26 @@ module.exports = (bot) => {
 
   bot.command('channels', adminOnly(), (ctx) => showPanel(ctx));
   bot.hears('📡 Channels', adminOnly(), (ctx) => showPanel(ctx));
+  bot.command('channelhealth', adminOnly(), async (ctx) => {
+    await ctx.reply('🔎 Channel health စစ်နေပါတယ်…');
+    try {
+      const report = await checkConfiguredChannels(ctx.telegram);
+      if (!report.checked) return ctx.reply('📡 စစ်ရန် channel မရှိသေးပါ။');
+      const lines = report.results.map((item) =>
+        `${item.ok ? '✅' : '❌'} *${escMd(item.title)}* (${escMd(item.chatId)})\n` +
+        `   ${escMd(item.code)} — ${escMd(item.detail)}`
+      );
+      return ctx.reply(
+        `🔎 *Channel Health*\n\n` +
+        `Healthy: ${report.healthy} / ${report.checked}\n\n` +
+        lines.join('\n\n'),
+        { parse_mode: 'Markdown' },
+      );
+    } catch (error) {
+      console.error('[ChannelManager] health check failed:', error.message);
+      return ctx.reply('❌ Channel health စစ်မရပါ။ Logs ကို စစ်ပါ။');
+    }
+  });
 
   bot.action('chmgr_refresh', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();

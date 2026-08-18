@@ -23,6 +23,9 @@ const channelAutoPostSchema = new mongoose.Schema(
     isActive:        { type: Boolean, default: true },
     lastSentDate:    { type: String, default: null },           // 'YYYY-MM-DD' MST
     lastSentAt:      { type: Date,   default: null },
+    // Short-lived distributed claim prevents duplicate sends across workers.
+    sendClaimedAt:   { type: Date,   default: null },
+    sendClaimToken:  { type: String, default: null },
     sendCount:       { type: Number, default: 0 },
     createdBy:       { type: Number, default: null },           // telegram id
   },

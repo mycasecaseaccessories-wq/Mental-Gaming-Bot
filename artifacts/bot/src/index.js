@@ -212,6 +212,7 @@ async function registerBotCommands() {
     { command: 'forecast',       description: '🔮 7-Day Sales Forecast (Manager+)' },
     { command: 'sentimentreport',description: '🧠 Sentiment Analysis (Manager+)' },
     { command: 'systemhealth',   description: '🖥 System Status (Manager+)' },
+    { command: 'channelhealth',  description: '📡 Channel Health (Manager+)' },
     { command: 'exportdetail',   description: '📥 Detailed CSV Export (Manager+)' },
     { command: 'sysinfo',        description: '🖥 System Info & Resources (Manager+)' },
     { command: 'runbackup',      description: '🗄 Run DB Backup Now (Owner)' },
