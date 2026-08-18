@@ -314,6 +314,10 @@ async function broadcastToUsers(telegram, text, extra = {}, options = {}) {
 
 // ── Account product announcement formatter ────────────────────────────────────
 
+function formatCompactAccountAnnouncement(p) {
+  return `${p.emoji || '🔐'} *${mdEsc(p.serviceName)} — ${mdEsc(p.planLabel)}*\n\n🛒 အောက်က button ကိုနှိပ်ပြီး ဝယ်ယူနိုင်ပါသည်။`;
+}
+
 function formatAccountAnnouncement(p, stock) {
   const fp = Math.max(0, Math.round(p.price * (1 - (p.discountPercent || 0) / 100)));
   const perUnit = p.accountType === 'shared' ? ' / device'
@@ -356,7 +360,9 @@ async function announceAccountProductEverywhere(accountProduct, telegram, option
     ? await AccountCredential.countAvailableSlots(accountProduct._id)
     : await AccountCredential.countAvailable(accountProduct._id);
 
-  const text = formatAccountAnnouncement(accountProduct, stock);
+  const text = options.compact
+    ? formatCompactAccountAnnouncement(accountProduct)
+    : formatAccountAnnouncement(accountProduct, stock);
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.url(`🔐 ${mdEsc(accountProduct.serviceName)} ဝယ်မယ်`, accountProductDeepLink(accountProduct._id))],
   ]);
@@ -433,9 +439,11 @@ async function sendStockAlert(product, telegram) {
  * @returns {Promise<{channelOk:boolean, sent:number, failed:number}>}
  */
 async function announceProductEverywhere(product, style, telegram, options = {}) {
-  const text = style === 'flash'
-    ? formatFlashSaleAnnouncement(product, product.flashSalePrice, product.flashSaleEnd)
-    : formatNewProductAnnouncement(product);
+  const text = options.compact
+    ? `📦 *${mdEsc(product.name)}*\n\n🛒 အောက်က button ကိုနှိပ်ပြီး ဝယ်ယူနိုင်ပါသည်။`
+    : style === 'flash'
+      ? formatFlashSaleAnnouncement(product, product.flashSalePrice, product.flashSaleEnd)
+      : formatNewProductAnnouncement(product);
 
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.url(`🛒 ${product.name} ဝယ်မယ်`, productDeepLink(product._id))],
