@@ -34,6 +34,8 @@ const Product          = require('../models/Product');
 const AccountProduct   = require('../models/AccountProduct');
 const WebhookEvent     = require('../models/WebhookEvent');
 const SystemStatus     = require('../models/SystemStatus');
+const AnnouncementSchedule = require('../models/AnnouncementSchedule');
+const AnnouncementAutomationService = require('../services/AnnouncementAutomationService');
 
 const PROVIDER_LABELS = {
   smileone:  '🎮 SmileOne (MLBB / Genshin / FF)',
@@ -295,6 +297,7 @@ module.exports = function registerApiManagement(bot) {
   }
 
   async function showAnnounceCategory(ctx, category) {
+    const selected = new Set((ctx.session.announceSelected || []).map((item) => `${item.type}:${item.id}`));
     if (category === 'shop') {
       const products = await Product.find({ isActive: true })
         .sort({ updatedAt: -1 })
@@ -302,9 +305,13 @@ module.exports = function registerApiManagement(bot) {
         .lean();
       if (!products.length) return ctx.reply('❌ Active Shop Product မရှိသေးပါ။');
 
-      const rows = products.map((p) => [
-        Markup.button.callback(`🛒 ${p.name} — ${Number(p.finalPrice || 0).toLocaleString()} KS`, `ann_pick_item:shop:${p._id}`),
-      ]);
+      const rows = products.map((p) => {
+        const key = `shop:${p._id}`;
+        return [Markup.button.callback(`${selected.has(key) ? '✅' : '☐'} ${p.name} — ${Number(p.finalPrice || 0).toLocaleString()} KS`, `ann_toggle:shop:${p._id}`)];
+      });
+      if (selected.size) rows.push([Markup.button.callback(`📢 Announce Selected (${selected.size})`, 'ann_bulk_confirm')]);
+      rows.push([Markup.button.callback('✅ Select All in Shop', 'ann_select_all:shop')]);
+      rows.push([Markup.button.callback('🧹 Clear Selection', 'ann_clear_selection')]);
       rows.push([Markup.button.callback('↩️ Product အမျိုးအစားများ', 'ann_categories')]);
       rows.push([Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')]);
 
@@ -322,8 +329,12 @@ module.exports = function registerApiManagement(bot) {
 
     const rows = accountProducts.map((p) => {
       const finalPrice = Math.max(0, Math.round(Number(p.price || 0) * (1 - Number(p.discountPercent || 0) / 100)));
-      return [Markup.button.callback(`${p.emoji || '🔐'} ${p.serviceName} — ${p.planLabel} (${finalPrice.toLocaleString()} KS)`, `ann_pick_item:account:${p._id}`)];
+      const key = `account:${p._id}`;
+      return [Markup.button.callback(`${selected.has(key) ? '✅' : '☐'} ${p.emoji || '🔐'} ${p.serviceName} — ${p.planLabel} (${finalPrice.toLocaleString()} KS)`, `ann_toggle:account:${p._id}`)];
     });
+    if (selected.size) rows.push([Markup.button.callback(`📢 Announce Selected (${selected.size})`, 'ann_bulk_confirm')]);
+    rows.push([Markup.button.callback('✅ Select All in Premium Accounts', 'ann_select_all:account')]);
+    rows.push([Markup.button.callback('🧹 Clear Selection', 'ann_clear_selection')]);
     rows.push([Markup.button.callback('↩️ Product အမျိုးအစားများ', 'ann_categories')]);
     rows.push([Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')]);
 
@@ -384,6 +395,78 @@ module.exports = function registerApiManagement(bot) {
     await ctx.answerCbQuery();
     try { await ctx.deleteMessage(); } catch {}
     return showAnnounceCategory(ctx, ctx.match[1]);
+  });
+
+  bot.action(/^ann_toggle:(shop|account):([a-f0-9]{24})$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const item = { type: ctx.match[1], id: ctx.match[2] };
+    const current = Array.isArray(ctx.session.announceSelected) ? ctx.session.announceSelected : [];
+    const exists = current.some((x) => x.type === item.type && String(x.id) === item.id);
+    ctx.session.announceSelected = exists
+      ? current.filter((x) => !(x.type === item.type && String(x.id) === item.id))
+      : [...current, item];
+    try { await ctx.deleteMessage(); } catch {}
+    return showAnnounceCategory(ctx, item.type);
+  });
+
+  bot.action(/^ann_select_all:(shop|account)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('ရွေးပြီးပါပြီ');
+    const type = ctx.match[1];
+    const docs = type === 'shop'
+      ? await Product.find({ isActive: true }).select('_id').lean()
+      : await AccountProduct.find({ isActive: true }).select('_id').lean();
+    const current = Array.isArray(ctx.session.announceSelected) ? ctx.session.announceSelected.filter((x) => x.type !== type) : [];
+    ctx.session.announceSelected = [...current, ...docs.map((d) => ({ type, id: String(d._id) }))];
+    try { await ctx.deleteMessage(); } catch {}
+    return showAnnounceCategory(ctx, type);
+  });
+
+  bot.action('ann_clear_selection', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('ရွေးထားတာတွေ ရှင်းပြီးပါပြီ');
+    ctx.session.announceSelected = [];
+    try { await ctx.deleteMessage(); } catch {}
+    return showAnnouncePicker(ctx);
+  });
+
+  bot.action('ann_bulk_confirm', requireRole('MANAGER'), async (ctx) => {
+    const selected = Array.isArray(ctx.session.announceSelected) ? ctx.session.announceSelected : [];
+    if (!selected.length) return ctx.answerCbQuery('Product မရွေးရသေးပါ', { show_alert: true });
+    await ctx.answerCbQuery();
+    await ctx.reply(`📢 ရွေးထားတဲ့ product ${selected.length} ခုကို bot users နဲ့ channel နှစ်ခုလုံးဆီ ပို့မလား?`, {
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('🆕 New Product ပုံစံနဲ့ ပို့မယ်', 'ann_bulk_send:new')],
+        [Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')],
+      ]),
+    });
+  });
+
+  bot.action(/^ann_bulk_send:(new)$/, requireRole('MANAGER'), async (ctx) => {
+    const selected = Array.isArray(ctx.session.announceSelected) ? ctx.session.announceSelected : [];
+    if (!selected.length) return ctx.answerCbQuery('Product မရွေးရသေးပါ', { show_alert: true });
+    await ctx.answerCbQuery('ပို့နေပါပြီ...');
+    ctx.session.announceSelected = [];
+    let sent = 0, failed = 0;
+    for (const item of selected) {
+      try {
+        if (item.type === 'shop') {
+          const product = await Product.findOne({ _id: item.id, isActive: true });
+          if (!product) { failed++; continue; }
+          const result = await announceProductEverywhere(product, 'new', ctx.telegram);
+          sent += result.sent || 0;
+          if (!result.channelOk) failed++;
+        } else {
+          const account = await AccountProduct.findOne({ _id: item.id, isActive: true });
+          if (!account) { failed++; continue; }
+          const result = await announceAccountProductEverywhere(account, ctx.telegram);
+          sent += result.sent || 0;
+          if (!result.channelOk) failed++;
+        }
+      } catch (err) {
+        failed++;
+        console.error('[Announce] bulk item failed:', err.message);
+      }
+    }
+    await ctx.reply(`✅ Bulk Announce ပြီးပါပြီ။\n👥 Bot user messages: ${sent}\n❌ Failed items/channel: ${failed}`);
   });
 
   // Unified Announce picker: Shop Products and Premium Accounts share one
@@ -460,6 +543,69 @@ module.exports = function registerApiManagement(bot) {
       `${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
       { parse_mode: 'Markdown' }
     );
+  });
+
+  // ── Announcement schedules ───────────────────────────────────────────────────
+
+  bot.command('annschedule', requireRole('MANAGER'), async (ctx) => {
+    const parts = ctx.message.text.trim().split(/\s+/);
+    const action = parts[1] || 'list';
+    if (action === 'list') {
+      const schedules = await AnnouncementSchedule.find().sort({ createdAt: -1 }).limit(50).lean();
+      if (!schedules.length) return ctx.reply('📅 Announcement schedule မရှိသေးပါ။');
+      const lines = schedules.map((s) => `${s.isActive ? '🟢' : '⏸️'} ID:${s._id} ${mdEsc(s.name)} — ${s.targetType}/${s.frequency} — ${s.retentionSeconds ? `${Math.round(s.retentionSeconds / 3600)}h delete` : 'မဖျက်'}\n   next: ${s.nextRunAt ? new Date(s.nextRunAt).toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' }) : '—'}`);
+      return ctx.reply(`📅 *Announcement Schedules*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+    }
+    if (action === 'pause' || action === 'resume' || action === 'delete' || action === 'run') {
+      const id = parts[2];
+      if (!id || !/^[a-f0-9]{24}$/i.test(id)) return ctx.reply('Usage: /annschedule pause|resume|delete|run <scheduleId>');
+      const schedule = await AnnouncementSchedule.findById(id);
+      if (!schedule) return ctx.reply('❌ Schedule မတွေ့ပါ။');
+      if (action === 'delete') {
+        await schedule.deleteOne();
+        await auditLog(ctx.from.id, 'ANNOUNCEMENT_SCHEDULE_DELETE', id, 'System', {});
+        return ctx.reply('✅ Schedule ဖျက်ပြီးပါပြီ။');
+      }
+      if (action === 'pause') {
+        schedule.isActive = false;
+        await schedule.save();
+        return ctx.reply('⏸️ Schedule pause လုပ်ပြီးပါပြီ။');
+      }
+      if (action === 'resume') {
+        schedule.isActive = true;
+        if (!schedule.nextRunAt) schedule.nextRunAt = AnnouncementAutomationService.nextRunAt(schedule);
+        await schedule.save();
+        return ctx.reply('▶️ Schedule ပြန်ဖွင့်ပြီးပါပြီ။');
+      }
+      schedule.nextRunAt = new Date();
+      await schedule.save();
+      const result = await AnnouncementAutomationService.runDueSchedules(ctx.telegram);
+      return ctx.reply(`✅ Run Now ပြီးပါပြီ။ Completed: ${result.completed}, Failed: ${result.failed}`);
+    }
+    if (action === 'add') {
+      const raw = parts.slice(2).join(' ');
+      const [name, targetType, target, frequency, time, retentionHours, destination = 'both'] = raw.split('|').map((x) => x?.trim());
+      const validTypes = ['category', 'product', 'account', 'all'];
+      const validFrequency = ['once', 'hourly', 'every_6_hours', 'daily', 'weekly', 'interval'];
+      const validDestinations = ['users', 'channel', 'both'];
+      if (!name || !validTypes.includes(targetType) || !validFrequency.includes(frequency) || !validDestinations.includes(destination)) {
+        return ctx.reply('Usage: /annschedule add Name|category|CapCut|daily|09:00|6|both\nTarget type: category/product/account/all; destination: users/channel/both; retention max 48h');
+      }
+      const [hourText, minuteText] = String(time || '09:00').split(':');
+      const localHour = Number(hourText); const localMinute = Number(minuteText);
+      if (!Number.isInteger(localHour) || localHour < 0 || localHour > 23 || !Number.isInteger(localMinute) || localMinute < 0 || localMinute > 59) return ctx.reply('Time ကို HH:MM ပုံစံသုံးပါ။');
+      const retention = Math.min(Math.max(Number(retentionHours || 0), 0), 48) * 3600;
+      const payload = { name, targetType, frequency, localHour, localMinute, retentionSeconds: retention, createdBy: ctx.from.id, destination };
+      if (targetType === 'category') payload.category = target;
+      if (targetType === 'product') { if (!/^[a-f0-9]{24}$/i.test(target || '')) return ctx.reply('Product ID မမှန်ပါ။'); payload.productIds = [target]; }
+      if (targetType === 'account') { if (!/^[a-f0-9]{24}$/i.test(target || '')) return ctx.reply('Account Product ID မမှန်ပါ။'); payload.accountProductIds = [target]; }
+      const doc = new AnnouncementSchedule(payload);
+      doc.nextRunAt = AnnouncementAutomationService.nextRunAt(doc);
+      await doc.save();
+      await auditLog(ctx.from.id, 'ANNOUNCEMENT_SCHEDULE_CREATE', doc._id.toString(), 'System', { targetType, frequency, retentionSeconds: retention });
+      return ctx.reply(`✅ Schedule ဖန်တီးပြီးပါပြီ။\nID: ${doc._id}\nNext: ${doc.nextRunAt.toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })}`);
+    }
+    return ctx.reply('Commands: /annschedule list | add | pause | resume | run | delete');
   });
 
   // ── /webhookstats — webhook event processing overview ────────────────────────

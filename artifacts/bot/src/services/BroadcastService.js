@@ -205,12 +205,12 @@ async function sendMessageWithTimeout(telegram, telegramId, text, extra) {
 /**
  * Send one message, honouring Telegram's retry_after on 429.
  * Marks the user isBlocked=true in DB on 403 (bot was blocked by user).
- * @returns {'sent'|'blocked'|'failed'}
+ * @returns {{status:'sent'|'blocked'|'failed', message?:object}}
  */
 async function _sendOne(telegram, User, telegramId, text, extra) {
   try {
-    await sendMessageWithTimeout(telegram, telegramId, text, extra);
-    return 'sent';
+    const message = await sendMessageWithTimeout(telegram, telegramId, text, extra);
+    return { status: 'sent', message };
   } catch (err) {
     const code    = err.response?.error_code ?? err.code;
     const retryIn = err.response?.parameters?.retry_after;
@@ -222,17 +222,17 @@ async function _sendOne(telegram, User, telegramId, text, extra) {
       const waitMs = Math.min((Number(retryIn) + 1) * 1000, 15000);
       await new Promise((r) => setTimeout(r, waitMs));
       try {
-        await sendMessageWithTimeout(telegram, telegramId, text, extra);
-        return 'sent';
+        const message = await sendMessageWithTimeout(telegram, telegramId, text, extra);
+        return { status: 'sent', message };
       } catch {
-        return 'failed';
+        return { status: 'failed' };
       }
     }
 
     // 403 Forbidden — user blocked the bot; mark so future broadcasts skip them
     if (code === 403) {
       User.updateOne({ telegramId }, { $set: { isBlocked: true } }).catch(() => {});
-      return 'blocked';
+      return { status: 'blocked' };
     }
 
     // 400 Bad Request with "chat not found" — stale record; mark blocked too
@@ -240,11 +240,11 @@ async function _sendOne(telegram, User, telegramId, text, extra) {
       const desc = String(err.response?.description || '').toLowerCase();
       if (desc.includes('chat not found') || desc.includes('user not found')) {
         User.updateOne({ telegramId }, { $set: { isBlocked: true } }).catch(() => {});
-        return 'blocked';
+        return { status: 'blocked' };
       }
     }
 
-    return 'failed';
+    return { status: 'failed' };
   }
 }
 
@@ -257,6 +257,11 @@ async function broadcastToUsers(telegram, text, extra = {}, options = {}) {
   let sent = 0, blocked = 0, failed = 0;
   let lastId = null;
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+  const trackDeliveries = options.trackDeliveries === true;
+  const deliveryModel = trackDeliveries ? require('../models/AnnouncementDelivery') : null;
+  const deleteAt = trackDeliveries && Number(options.retentionSeconds) > 0
+    ? new Date(Date.now() + Math.min(Number(options.retentionSeconds), 172800) * 1000)
+    : null;
 
   // Cursor-based pagination: never loads the full user list into RAM
   while (true) {
@@ -278,10 +283,22 @@ async function broadcastToUsers(telegram, text, extra = {}, options = {}) {
       const results = await Promise.all(
         batch.map((u) => _sendOne(telegram, User, u.telegramId, text, extra))
       );
-      for (const r of results) {
-        if (r === 'sent')    sent++;
-        else if (r === 'blocked') blocked++;
-        else                 failed++;
+      for (let index = 0; index < results.length; index += 1) {
+        const r = results[index];
+        if (r.status === 'sent') {
+          sent++;
+          if (deliveryModel && r.message?.message_id) {
+            await deliveryModel.create({
+              scheduleId: options.scheduleId || null,
+              runId: options.runId || null,
+              chatId: batch[index].telegramId,
+              messageId: r.message.message_id,
+              destination: 'user',
+              deleteAt,
+            }).catch((err) => console.error('[BroadcastService] delivery tracking failed:', err.message));
+          }
+        } else if (r.status === 'blocked') blocked++;
+        else failed++;
       }
       if (onProgress) {
         await onProgress({ sent, blocked, failed, processed: sent + blocked + failed });
@@ -332,7 +349,7 @@ function formatAccountAnnouncement(p, stock) {
 /**
  * Announce an AccountProduct to the announcement channel + all bot users.
  */
-async function announceAccountProductEverywhere(accountProduct, telegram) {
+async function announceAccountProductEverywhere(accountProduct, telegram, options = {}) {
   const AccountCredential = require('../models/AccountCredential');
   const isMulti = accountProduct.accountType === 'shared' || accountProduct.accountType === 'invite';
   const stock = isMulti
@@ -344,8 +361,10 @@ async function announceAccountProductEverywhere(accountProduct, telegram) {
     [Markup.button.url(`🔐 ${mdEsc(accountProduct.serviceName)} ဝယ်မယ်`, accountProductDeepLink(accountProduct._id))],
   ]);
 
-  const channelMsg = await sendToChannel(telegram, text, null, { ...keyboard });
-  const { sent, failed } = await broadcastToUsers(telegram, text, { ...keyboard });
+  const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard });
+  const { sent, failed } = options.destination === 'channel'
+    ? { sent: 0, failed: 0 }
+    : await broadcastToUsers(telegram, text, { ...keyboard }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
 
   return {
     channelOk: !!channelMsg,
@@ -413,7 +432,7 @@ async function sendStockAlert(product, telegram) {
  * @param {'new'|'flash'} style
  * @returns {Promise<{channelOk:boolean, sent:number, failed:number}>}
  */
-async function announceProductEverywhere(product, style, telegram) {
+async function announceProductEverywhere(product, style, telegram, options = {}) {
   const text = style === 'flash'
     ? formatFlashSaleAnnouncement(product, product.flashSalePrice, product.flashSaleEnd)
     : formatNewProductAnnouncement(product);
@@ -422,8 +441,10 @@ async function announceProductEverywhere(product, style, telegram) {
     [Markup.button.url(`🛒 ${product.name} ဝယ်မယ်`, productDeepLink(product._id))],
   ]);
 
-  const channelMsg = await sendToChannel(telegram, text, null, { ...keyboard });
-  const { sent, failed } = await broadcastToUsers(telegram, text, { ...keyboard });
+  const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard });
+  const { sent, failed } = options.destination === 'channel'
+    ? { sent: 0, failed: 0 }
+    : await broadcastToUsers(telegram, text, { ...keyboard }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
 
   return {
     channelOk: !!channelMsg,
