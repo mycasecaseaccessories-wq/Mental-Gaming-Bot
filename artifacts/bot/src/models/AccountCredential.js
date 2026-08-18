@@ -70,7 +70,10 @@ const accountCredentialSchema = new mongoose.Schema(
     buyerTelegramId: { type: Number, default: null, index: true },
     soldAt:          { type: Date,   default: null },
     expiresAt:       { type: Date,   default: null, index: true },
-    pricePaid:       { type: Number, default: null },
+        pricePaid:        { type: Number, default: null },
+    paymentPending:   { type: Boolean, default: false, index: true },
+    paymentPendingAt: { type: Date, default: null, index: true },
+    paymentPendingUnits: { type: Number, default: 0, min: 0 },
     serviceNameSnap: { type: String, default: null, comment: 'Snapshot so history survives product deletion' },
     planLabelSnap:   { type: String, default: null },
     durationDaysSnap:{ type: Number, default: null },
@@ -130,7 +133,7 @@ accountCredentialSchema.statics.retireExpiredStock = async function () {
  * room. Increments usedSlots and flips to 'sold' when full. Returns the updated
  * credential, or null if no single credential can fit `qty` slots.
  */
-accountCredentialSchema.statics.claimSlots = async function (productId, qty) {
+accountCredentialSchema.statics.claimSlots = async function (productId, qty, saleFields = {}) {
   const n = Math.max(1, parseInt(qty, 10) || 1);
   return this.findOneAndUpdate(
     {
@@ -140,7 +143,11 @@ accountCredentialSchema.statics.claimSlots = async function (productId, qty) {
       $expr: { $lte: [{ $add: ['$usedSlots', n] }, '$capacity'] },
     },
     [
-      { $set: { usedSlots: { $add: ['$usedSlots', n] } } },
+      { $set: {
+        usedSlots: { $add: ['$usedSlots', n] },
+        ...saleFields,
+        paymentPendingUnits: n,
+      } },
       { $set: { status: { $cond: [{ $gte: ['$usedSlots', '$capacity'] }, 'sold', 'available'] } } },
     ],
     { new: true, sort: { createdAt: 1 } }
@@ -173,7 +180,7 @@ accountCredentialSchema.statics.releaseOne = function (credentialId) {
   return this.findOneAndUpdate(
     { _id: credentialId, status: 'sold' },
     {
-      $set: { status: 'available' },
+      $set: { status: 'available', paymentPending: false, paymentPendingAt: null, paymentPendingUnits: 0 },
       $unset: { buyerUserId: '', buyerTelegramId: '', soldAt: '', expiresAt: '', pricePaid: '' },
     },
     { new: true }
@@ -190,11 +197,43 @@ accountCredentialSchema.statics.releaseSlots = async function (credentialId, qty
   return this.findOneAndUpdate(
     { _id: credentialId },
     [
-      { $set: { usedSlots: { $max: [0, { $subtract: ['$usedSlots', n] }] } } },
+      { $set: { usedSlots: { $max: [0, { $subtract: ['$usedSlots', n] }] }, paymentPending: false, paymentPendingAt: null, paymentPendingUnits: 0 } },
       { $set: { status: { $cond: [{ $lt: ['$usedSlots', '$capacity'] }, 'available', 'sold'] } } },
     ],
     { new: true }
   );
+};
+
+/**
+ * Release account claims that were marked payment-pending but abandoned.
+ * This is intentionally explicit and time-based; completed purchases clear the flag.
+ */
+accountCredentialSchema.statics.releaseStalePaymentClaims = async function ({ minutes = 15, limit = 100 } = {}) {
+  const cutoff = new Date(Date.now() - Math.max(1, minutes) * 60_000);
+  const stale = await this.find({ paymentPending: true, paymentPendingAt: { $ne: null, $lte: cutoff } })
+    .select('_id paymentPendingUnits')
+    .limit(limit)
+    .lean();
+  let released = 0;
+  for (const item of stale) {
+    const units = Math.max(1, Number(item.paymentPendingUnits) || 1);
+    const result = item.paymentPendingUnits > 0
+      ? await this.findOneAndUpdate(
+        { _id: item._id, paymentPending: true, paymentPendingAt: { $ne: null, $lte: cutoff } },
+        [
+          { $set: { usedSlots: { $max: [0, { $subtract: ['$usedSlots', units] }] }, paymentPending: false, paymentPendingAt: null, paymentPendingUnits: 0 } },
+          { $set: { status: { $cond: [{ $lt: ['$usedSlots', '$capacity'] }, 'available', 'sold'] } } },
+        ],
+        { new: true }
+      )
+      : await this.findOneAndUpdate(
+        { _id: item._id, status: 'sold', paymentPending: true, paymentPendingAt: { $ne: null, $lte: cutoff } },
+        { $set: { status: 'available', paymentPending: false, paymentPendingAt: null, paymentPendingUnits: 0 }, $unset: { buyerUserId: '', buyerTelegramId: '', soldAt: '', expiresAt: '', pricePaid: '' } },
+        { new: true }
+      );
+    if (result) released++;
+  }
+  return { scanned: stale.length, released };
 };
 
 /** Total free slots across all available credentials of a product. */

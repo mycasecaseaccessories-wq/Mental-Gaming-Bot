@@ -224,7 +224,24 @@ async function tickChannelAutoPosts(telegram) {
   }
 }
 
-// ── Job 7: Expire unpaid order reservations ────────────────────────────────────
+// ── Job 7: Release stale Premium Account payment claims ───────────────────────
+async function releaseStaleAccountClaims(telegram) {
+  try {
+    const AccountCredential = require('../models/AccountCredential');
+    const configured = Number(process.env.ACCOUNT_PAYMENT_CLAIM_TIMEOUT_MINUTES || 15);
+    const timeoutMinutes = Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 15;
+    const result = await AccountCredential.releaseStalePaymentClaims({ minutes: timeoutMinutes, limit: 100 });
+    if (result.released) {
+      console.log(`[CronService] 🔐 Released ${result.released} stale account payment claim(s)`);
+    }
+    return { ...result, enabled: true, timeoutMinutes };
+  } catch (err) {
+    console.error('[CronService] ❌ Account claim cleanup:', err.message);
+    return { scanned: 0, released: 0, error: err.message };
+  }
+}
+
+// ── Job 8: Expire unpaid order reservations ────────────────────────────────────
 async function expirePendingReservations(telegram) {
   if (!Number.isFinite(Number(process.env.ORDER_RESERVATION_MINUTES)) || Number(process.env.ORDER_RESERVATION_MINUTES) <= 0) {
     return { enabled: false, expired: 0, failed: 0, scanned: 0 };
@@ -578,6 +595,11 @@ function startCronJobs(telegram) {
     cron.schedule('*/10 * * * *', () => tickChannelAutoPosts(telegram), { timezone: 'UTC' })
   );
 
+  // Premium account claims: release claims left in payment-pending state.
+  scheduledJobs.push(
+    cron.schedule('*/5 * * * *', () => releaseStaleAccountClaims(telegram), { timezone: 'UTC' })
+  );
+
   // Unpaid orders: release stock and refund wallet after reservation expiry.
   scheduledJobs.push(
     cron.schedule('*/5 * * * *', () => expirePendingReservations(telegram), { timezone: 'UTC' })
@@ -647,5 +669,6 @@ module.exports = {
   manualGiveaways:       cleanupGiveaways,
   manualAnnouncementAutomation: tickAnnouncementAutomation,
   manualReservationExpiry: expirePendingReservations,
+  manualAccountClaimCleanup: releaseStaleAccountClaims,
   manualMonthlyReport:   sendMonthlyRevenueReport,
 };

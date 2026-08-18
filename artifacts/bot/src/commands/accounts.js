@@ -492,6 +492,9 @@ module.exports = function registerAccounts(bot) {
         soldAt: now,
         expiresAt: (p.stockDateExpiry ? null : new Date(now.getTime() + p.durationDays * DAY_MS)),
         pricePaid: 0,
+        paymentPending: true,
+        paymentPendingAt: now,
+        paymentPendingUnits: 0,
         serviceNameSnap: p.serviceName,
         planLabelSnap: p.planLabel,
         durationDaysSnap: p.durationDays,
@@ -542,6 +545,9 @@ module.exports = function registerAccounts(bot) {
     // 5. Persist actual price paid + (for stock-date products) inherited shelf
     //    life expiry (remaining days), not a fresh durationDays from now.
     cred.pricePaid = fp;
+    cred.paymentPending = false;
+    cred.paymentPendingAt = null;
+    cred.paymentPendingUnits = 0;
     cred.expiresAt = (p.stockDateExpiry && cred.stockExpiresAt)
       ? cred.stockExpiresAt
       : new Date(now.getTime() + p.durationDays * DAY_MS);
@@ -631,7 +637,10 @@ module.exports = function registerAccounts(bot) {
     //    we only ever debit the exact, correct amount once. Nothing charged yet.
     let cred;
     try {
-      cred = await AccountCredential.claimSlots(p._id, qty);
+      cred = await AccountCredential.claimSlots(p._id, qty, {
+        paymentPending: true,
+        paymentPendingAt: new Date(),
+      });
     } catch (err) {
       console.error('[Accounts] ❌ claimSlots failed:', err.message);
       await ctx.answerCbQuery();
@@ -731,6 +740,11 @@ module.exports = function registerAccounts(bot) {
       await ctx.answerCbQuery();
       return ctx.reply('❌ တစ်ခုခု မှားသွားလို့ ငွေ ပြန်အမ်းပြီးပါပြီ။ ခဏနေ ပြန်ကြိုးစားပေးပါ။');
     }
+
+    await AccountCredential.updateOne(
+      { _id: cred._id, paymentPending: true },
+      { $set: { paymentPending: false, paymentPendingAt: null, paymentPendingUnits: 0 } }
+    );
 
     await ctx.answerCbQuery('✅ ဝယ်ယူမှု အောင်မြင်ပါသည်!');
     await auditLog(ctx.from.id, 'BUY_ACCOUNT_SLOT', cred._id.toString(), 'System', {
