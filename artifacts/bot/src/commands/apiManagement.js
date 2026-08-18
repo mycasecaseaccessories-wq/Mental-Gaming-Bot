@@ -627,13 +627,13 @@ module.exports = function registerApiManagement(bot) {
         if (item.type === 'shop') {
           const product = await Product.findOne({ _id: item.id, isActive: true });
           if (!product) { failed++; continue; }
-          const result = await announceProductEverywhere(product, 'new', ctx.telegram);
+          const result = await announceProductEverywhere(product, 'new', ctx.telegram, { compact: true });
           sent += result.sent || 0;
           if (!result.channelOk) failed++;
         } else {
           const account = await AccountProduct.findOne({ _id: item.id, isActive: true });
           if (!account) { failed++; continue; }
-          const result = await announceAccountProductEverywhere(account, ctx.telegram);
+          const result = await announceAccountProductEverywhere(account, ctx.telegram, { compact: true });
           sent += result.sent || 0;
           if (!result.channelOk) failed++;
         }
