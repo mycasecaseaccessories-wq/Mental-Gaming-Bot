@@ -29,6 +29,10 @@ const { price }               = require('../utils/ui');
 
 // ── Attribution helper ────────────────────────────────────────────────────────
 
+function escapeMarkdown(value = '') {
+  return String(value).replace(/([\\_*`\[\]])/g, '\\$1');
+}
+
 async function setJoinSourceOnce(telegramId, source, ref) {
   await User.updateOne(
     { telegramId, joinSource: 'unknown' },
@@ -86,6 +90,7 @@ module.exports = function registerStart(bot) {
 
     let referralNotice = '';
     let extraNote      = '';
+    let directProduct  = null;
 
     // ── Referral deep link: ref_CODE ────────────────────────────────────────
     if (payload?.startsWith('ref_')) {
@@ -127,13 +132,13 @@ module.exports = function registerStart(bot) {
       await setJoinSourceOnce(ctx.from.id, 'share', productId);
 
       try {
-        const product = await Product.findById(productId);
+        const product = await Product.findOne({ _id: productId, isActive: true });
         if (product) {
+          directProduct = product;
           const { price: finalPrice } = product.getEffectivePrice();
           extraNote =
             `\n🎮 *You were directed here for:*\n` +
-            `📦 *${product.name}* — ${finalPrice.toLocaleString()} KS\n` +
-            `_Tap /shop to order!_\n`;
+            `📦 *${escapeMarkdown(product.name)}* — ${finalPrice.toLocaleString()} KS\n`;
         }
       } catch {}
     }
@@ -178,6 +183,29 @@ module.exports = function registerStart(bot) {
     try { sysStatus = await SystemStatus.get(); } catch (_) { sysStatus = {}; }
 
     // ── Build single welcome panel with PERSISTENT REPLY KEYBOARD ────────────
+    if (!isAdmin && directProduct) {
+      const { price: finalPrice } = directProduct.getEffectivePrice();
+      const inStock = directProduct.stockCount === -1 || Number(directProduct.stockCount) > 0;
+      const stockText = directProduct.stockCount === -1
+        ? 'Unlimited'
+        : `${directProduct.stockCount} available`;
+      const productText =
+        `🎮 *${escapeMarkdown(directProduct.name)}*\n` +
+        `━━━━━━━━━━━━━━━━━━━\n` +
+        `📂 ${escapeMarkdown(directProduct.category || 'Product')}\n` +
+        `🌍 ${escapeMarkdown(directProduct.region || '—')}\n` +
+        `💰 Price: *${finalPrice.toLocaleString()} KS*\n` +
+        `📦 Stock: *${stockText}*` +
+        (directProduct.description ? `\n\n📝 ${escapeMarkdown(directProduct.description)}` : '');
+      return ctx.reply(productText, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback(inStock ? '🛒 Buy Now' : '📦 Out of Stock', inStock ? `order_start:${directProduct._id}` : 'shop_out_of_stock')],
+          [Markup.button.callback('🛍 Browse Store', 'nav:go:shop')],
+        ]),
+      });
+    }
+
     if (isAdmin) {
       return ctx.reply(
         `🔧 *Admin Panel — Mental Gaming Store*\n\n` +
