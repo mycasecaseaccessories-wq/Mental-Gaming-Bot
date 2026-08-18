@@ -282,8 +282,8 @@ module.exports = function registerApiManagement(bot) {
 
   async function showAnnouncePicker(ctx) {
     const [products, accountProducts] = await Promise.all([
-      Product.find({ isActive: true }).sort({ updatedAt: -1 }).limit(12).select('name finalPrice').lean(),
-      AccountProduct.find({ isActive: true }).sort({ displayOrder: 1, serviceName: 1 }).limit(12).select('serviceName planLabel price discountPercent emoji').lean(),
+      Product.find({ isActive: true }).sort({ updatedAt: -1 }).select('name finalPrice').lean(),
+      AccountProduct.find({ isActive: true }).sort({ displayOrder: 1, serviceName: 1 }).select('serviceName planLabel price discountPercent emoji').lean(),
     ]);
 
     if (!products.length && !accountProducts.length) return ctx.reply('❌ Active product မရှိသေးပါ။');
