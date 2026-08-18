@@ -24,6 +24,7 @@ const rewardScene       = require('./scenes/rewardScene');
 validate();
 
 const bot   = new Telegraf(config.bot.token);
+const registeredCommandNames = new Set();
 const stage = new Scenes.Stage([
   rateManagerScene,
   orderScene,
@@ -106,6 +107,23 @@ function loadCommands(bot) {
     ...files.filter((f) => !ORDER.includes(f)),
   ];
 
+  const originalCommand = bot.command.bind(bot);
+  const originalStart = bot.start.bind(bot);
+  const originalHelp = bot.help.bind(bot);
+  bot.command = (...args) => {
+    const names = Array.isArray(args[0]) ? args[0] : [args[0]];
+    names.filter((name) => typeof name === 'string').forEach((name) => registeredCommandNames.add(name));
+    return originalCommand(...args);
+  };
+  bot.start = (...args) => {
+    registeredCommandNames.add('start');
+    return originalStart(...args);
+  };
+  bot.help = (...args) => {
+    registeredCommandNames.add('help');
+    return originalHelp(...args);
+  };
+
   for (const file of sorted) {
     try {
       const register = require(path.join(commandsDir, file));
@@ -119,10 +137,14 @@ function loadCommands(bot) {
       console.error(`[Commands] ❌ ${file}:`, err.message);
     }
   }
+
+  bot.command = originalCommand;
+  bot.start = originalStart;
+  bot.help = originalHelp;
 }
 
 async function registerBotCommands() {
-  await bot.telegram.setMyCommands([
+  const menu = [
     // ── User ──────────────────────────────────────────────────────────────────
     { command: 'start',         description: '🏠 Main Menu' },
     { command: 'shop',          description: '🛒 Browse Products' },
@@ -240,8 +262,9 @@ async function registerBotCommands() {
     { command: 'rates',         description: '💹 Current Rates (Owner)' },
     { command: 'fetchrates',    description: '🔄 Fetch Live Rates (Owner)' },
     { command: 'setmenu',       description: '🛍 Re-apply Mini App button (Owner)' },
-  ]);
-  console.log('[Bot] ✅ Command menu registered');
+  ].filter(({ command }) => registeredCommandNames.has(command));
+  await bot.telegram.setMyCommands(menu);
+  console.log(`[Bot] ✅ Command menu registered (${menu.length} commands)`);
 }
 
 function getMiniAppUrl() {
@@ -276,6 +299,7 @@ async function bootstrap() {
 
   // Owner-only: /setmenu — re-applies the Mini App menu button on demand
   const { adminOnly } = require('./middlewares/adminCheck');
+  registeredCommandNames.add('setmenu');
   bot.command('setmenu', adminOnly(), async (ctx) => {
     const url = getMiniAppUrl();
     const envDiag =

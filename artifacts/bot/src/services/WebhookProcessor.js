@@ -12,9 +12,9 @@
  */
 
 const WebhookEvent = require('../models/WebhookEvent');
-const Order        = require('../models/Order');
-const User         = require('../models/User');
-const Transaction  = require('../models/Transaction');
+const Order = require('../models/Order');
+const User = require('../models/User');
+const Transaction = require('../models/Transaction');
 
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
@@ -22,17 +22,15 @@ const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 const PROCESSORS = {
   'payment.completed': processPaymentCompleted,
-  'payment.failed':    processPaymentFailed,
-  'topup.delivered':   processTopupDelivered,
-  'topup.failed':      processTopupFailed,
+  'payment.failed': processPaymentFailed,
+  'topup.delivered': processTopupDelivered,
+  'topup.failed': processTopupFailed,
 };
 
 // ── Main poll loop ────────────────────────────────────────────────────────────
 
 async function processPendingEvents(telegram) {
-  const events = await WebhookEvent.find({ status: 'pending' })
-    .sort({ createdAt: 1 })
-    .limit(20);
+  const events = await WebhookEvent.find({ status: 'pending' }).sort({ createdAt: 1 }).limit(20);
 
   if (!events.length) return;
 
@@ -42,38 +40,50 @@ async function processPendingEvents(telegram) {
 }
 
 async function processEvent(event, telegram) {
-  // Mark as processing (prevents double-processing)
-  await WebhookEvent.findByIdAndUpdate(event._id, { status: 'processing' });
+  // Atomically claim the event so multiple bot instances cannot process it twice.
+  const claimed = await WebhookEvent.findOneAndUpdate(
+    { _id: event._id, status: 'pending' },
+    { status: 'processing' },
+    { new: true },
+  );
+  if (!claimed) return { skipped: true };
+  event = claimed;
 
   const processor = PROCESSORS[event.eventType];
 
   if (!processor) {
     await WebhookEvent.findByIdAndUpdate(event._id, {
-      status:      'ignored',
+      status: 'ignored',
       processedAt: new Date(),
-      error:       `No processor for event type: ${event.eventType}`,
+      error: `No processor for event type: ${event.eventType}`,
     });
     return;
   }
 
   try {
     const result = await processor(event, telegram);
-    await WebhookEvent.findByIdAndUpdate(event._id, {
-      status:      'processed',
-      processedAt: new Date(),
-      orderId:     result?.orderId || event.orderId,
-    });
+    await WebhookEvent.findOneAndUpdate(
+      { _id: event._id, status: 'processing' },
+      {
+        status: 'processed',
+        processedAt: new Date(),
+        orderId: result?.orderId || event.orderId,
+      },
+    );
     console.log(`[WebhookProcessor] ✅ ${event.eventType} — ${event._id}`);
   } catch (err) {
     const retryCount = (event.retryCount || 0) + 1;
     const finalStatus = retryCount >= 3 ? 'failed' : 'pending';
 
-    await WebhookEvent.findByIdAndUpdate(event._id, {
-      status:      finalStatus,
-      error:       err.message,
-      retryCount,
-      processedAt: finalStatus === 'failed' ? new Date() : null,
-    });
+    await WebhookEvent.findOneAndUpdate(
+      { _id: event._id, status: 'processing' },
+      {
+        status: finalStatus,
+        error: err.message,
+        retryCount,
+        processedAt: finalStatus === 'failed' ? new Date() : null,
+      },
+    );
     console.error(`[WebhookProcessor] ❌ ${event.eventType}:`, err.message);
   }
 }
@@ -85,11 +95,7 @@ async function processPaymentCompleted(event, telegram) {
 
   // Find pending transaction by external reference
   const transaction = await Transaction.findOne({
-    $or: [
-      { txId: externalRef },
-      { reference: externalRef },
-      { providerRef: externalRef },
-    ],
+    $or: [{ txId: externalRef }, { reference: externalRef }, { providerRef: externalRef }],
     type: 'Topup',
     status: 'Pending',
   });
@@ -119,20 +125,22 @@ async function processPaymentCompleted(event, telegram) {
       await telegram.sendMessage(
         approved.user?.telegramId || transaction.userId?.telegramId || telegramId,
         `✅ *Payment Confirmed!*\n\n` +
-        `💰 *${approved.amountKS?.toLocaleString() || '?'} KS* added to your wallet.\n` +
-        `🔖 Ref: \`${externalRef}\`\n\n` +
-        `_Approved automatically via payment gateway._`,
-        { parse_mode: 'Markdown' }
+          `💰 *${approved.amountKS?.toLocaleString() || '?'} KS* added to your wallet.\n` +
+          `🔖 Ref: \`${externalRef}\`\n\n` +
+          `_Approved automatically via payment gateway._`,
+        { parse_mode: 'Markdown' },
       );
     } catch {}
 
     // Keep the public activity feed outside the business operation. A failed
     // post must never turn a successful wallet credit into a webhook retry.
-    require('./LiveFeedService').postTopup(telegram, {
-      user: approved.user,
-      amount: approved.amountKS,
-      eventKey: `topup:${approved.txId}_approved`,
-    }).catch((error) => console.error('[WebhookProcessor] live feed:', error.message));
+    require('./LiveFeedService')
+      .postTopup(telegram, {
+        user: approved.user,
+        amount: approved.amountKS,
+        eventKey: `topup:${approved.txId}_approved`,
+      })
+      .catch((error) => console.error('[WebhookProcessor] live feed:', error.message));
   }
 
   return { orderId: null };
@@ -148,7 +156,7 @@ async function processPaymentFailed(event, telegram) {
       status: 'Pending',
     },
     { status: 'Rejected', note: 'Rejected by payment gateway webhook' },
-    { new: true }
+    { new: true },
   );
 
   if (transaction?.telegramId && telegram) {
@@ -156,10 +164,10 @@ async function processPaymentFailed(event, telegram) {
       await telegram.sendMessage(
         transaction.telegramId,
         `❌ *Payment Not Confirmed*\n\n` +
-        `Your top-up of ${transaction.amountKS?.toLocaleString() || '?'} KS could not be verified.\n` +
-        `Reference: \`${externalRef}\`\n\n` +
-        `_If you believe this is an error, contact /support with your receipt._`,
-        { parse_mode: 'Markdown' }
+          `Your top-up of ${transaction.amountKS?.toLocaleString() || '?'} KS could not be verified.\n` +
+          `Reference: \`${externalRef}\`\n\n` +
+          `_If you believe this is an error, contact /support with your receipt._`,
+        { parse_mode: 'Markdown' },
       );
     } catch {}
   }
@@ -171,21 +179,25 @@ async function processTopupDelivered(event, telegram) {
   const { externalRef, orderId: extOrderId, deliveryData } = event.payload;
 
   const order = await Order.findOne({
-    $or: [
-      { _id: event.orderId },
-      { transactionId: externalRef },
-    ],
-    status: 'Pending',
-  }).populate('userId').populate('productId');
+    $or: [{ _id: event.orderId }, { transactionId: externalRef }],
+  })
+    .populate('userId')
+    .populate('productId');
 
   if (!order) throw new Error(`Order not found for ref: ${externalRef}`);
+  if (order.status !== 'Pending') {
+    if (order.status === 'Success' && order.transactionId === externalRef) {
+      return { orderId: order._id, alreadyProcessed: true };
+    }
+    throw new Error(`Order ${order._id} is already ${order.status}`);
+  }
 
   await Order.findByIdAndUpdate(order._id, {
-    status:        'Success',
+    status: 'Success',
     deliveredData: deliveryData || 'Auto-delivered via API',
     transactionId: externalRef,
-    processedBy:   0, // 0 = system/auto
-    notes:         'Delivered automatically via provider API',
+    processedBy: 0, // 0 = system/auto
+    notes: 'Delivered automatically via provider API',
   });
 
   // Notify user with receipt
@@ -195,15 +207,17 @@ async function processTopupDelivered(event, telegram) {
       await telegram.sendMessage(
         order.userId.telegramId,
         `🧾 *Order Delivered!*\n` +
-        `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
-        `🆔 Order: \`${shortId}\`\n` +
-        `📦 *${order.productId?.name || 'Your order'}*\n` +
-        `💰 Paid: *${order.amount.toLocaleString()} KS*\n` +
-        `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
-        (deliveryData ? `📬 *Delivery:*\n\`${deliveryData}\`\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n` : '') +
-        `✅ *Status: Delivered*\n` +
-        `_Auto-delivered via API — Thank you! 🎮_`,
-        { parse_mode: 'Markdown' }
+          `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
+          `🆔 Order: \`${shortId}\`\n` +
+          `📦 *${order.productId?.name || 'Your order'}*\n` +
+          `💰 Paid: *${order.amount.toLocaleString()} KS*\n` +
+          `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
+          (deliveryData
+            ? `📬 *Delivery:*\n\`${deliveryData}\`\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n`
+            : '') +
+          `✅ *Status: Delivered*\n` +
+          `_Auto-delivered via API — Thank you! 🎮_`,
+        { parse_mode: 'Markdown' },
       );
     } catch {}
   }
@@ -215,29 +229,37 @@ async function processTopupFailed(event, telegram) {
   const { externalRef, reason } = event.payload;
 
   const order = await Order.findOne({
-    $or: [
-      { _id: event.orderId },
-      { transactionId: externalRef },
-    ],
-    status: 'Pending',
-  }).populate('userId').populate('productId');
+    $or: [{ _id: event.orderId }, { transactionId: externalRef }],
+  })
+    .populate('userId')
+    .populate('productId');
 
   if (!order) throw new Error(`Order not found for ref: ${externalRef}`);
+  if (order.status !== 'Pending') {
+    if (order.status === 'Cancelled') {
+      return { orderId: order._id, alreadyProcessed: true };
+    }
+    throw new Error(`Order ${order._id} is already ${order.status}`);
+  }
 
   // Refund the user
   const OrderService = require('./OrderService');
-  await OrderService.cancelAndRefund(order._id, 0, `Auto-cancelled: provider reported failure — ${reason || 'delivery failed'}`);
+  await OrderService.cancelAndRefund(
+    order._id,
+    0,
+    `Auto-cancelled: provider reported failure — ${reason || 'delivery failed'}`,
+  );
 
   if (order.userId?.telegramId && telegram) {
     try {
       await telegram.sendMessage(
         order.userId.telegramId,
         `❌ *Order Failed — Refunded*\n\n` +
-        `📦 *${order.productId?.name || 'Your order'}* could not be delivered.\n` +
-        `💰 *${order.amount.toLocaleString()} KS* has been returned to your wallet.\n\n` +
-        `_Reason: ${reason || 'Provider delivery failed'}_\n\n` +
-        `Contact /support if you need help.`,
-        { parse_mode: 'Markdown' }
+          `📦 *${order.productId?.name || 'Your order'}* could not be delivered.\n` +
+          `💰 *${order.amount.toLocaleString()} KS* has been returned to your wallet.\n\n` +
+          `_Reason: ${reason || 'Provider delivery failed'}_\n\n` +
+          `Contact /support if you need help.`,
+        { parse_mode: 'Markdown' },
       );
     } catch {}
   }
@@ -249,8 +271,16 @@ async function processTopupFailed(event, telegram) {
 
 function startWebhookProcessor(telegram) {
   // Initial run
-  processPendingEvents(telegram).catch((e) => console.error('[WebhookProcessor] Init error:', e.message));
-  setInterval(() => processPendingEvents(telegram).catch((e) => console.error('[WebhookProcessor] Poll error:', e.message)), POLL_INTERVAL_MS);
+  processPendingEvents(telegram).catch((e) =>
+    console.error('[WebhookProcessor] Init error:', e.message),
+  );
+  setInterval(
+    () =>
+      processPendingEvents(telegram).catch((e) =>
+        console.error('[WebhookProcessor] Poll error:', e.message),
+      ),
+    POLL_INTERVAL_MS,
+  );
   console.log('[WebhookProcessor] ✅ Webhook event processor started');
 }
 
