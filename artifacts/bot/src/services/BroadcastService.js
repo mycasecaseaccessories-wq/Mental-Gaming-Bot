@@ -257,10 +257,14 @@ async function broadcastToUsers(telegram, text, extra = {}, options = {}) {
   let sent = 0, blocked = 0, failed = 0;
   let lastId = null;
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
-  const trackDeliveries = options.trackDeliveries === true;
+  const configuredRetention = options.retentionSeconds != null
+    ? Number(options.retentionSeconds)
+    : Number((await SystemStatus.get()).broadcastRetentionMinutes || 0) * 60;
+  const retentionSeconds = Number.isFinite(configuredRetention) ? Math.max(0, configuredRetention) : 0;
+  const trackDeliveries = options.trackDeliveries === true || retentionSeconds > 0;
   const deliveryModel = trackDeliveries ? require('../models/AnnouncementDelivery') : null;
-  const deleteAt = trackDeliveries && Number(options.retentionSeconds) > 0
-    ? new Date(Date.now() + Math.min(Number(options.retentionSeconds), 172800) * 1000)
+  const deleteAt = trackDeliveries && retentionSeconds > 0
+    ? new Date(Date.now() + Math.min(retentionSeconds, 172800) * 1000)
     : null;
 
   // Cursor-based pagination: never loads the full user list into RAM
