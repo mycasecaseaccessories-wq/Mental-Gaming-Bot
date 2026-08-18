@@ -44,15 +44,19 @@ async function runHealthCheck(telegram, adminId) {
     results.db = { ok: false, ms: null, state: err.message };
   }
 
-  // 3. AI API test (minimal Gemini call)
+  // 3. AI API test — disabled AI is a valid configured state, not a runtime error.
   try {
-    const aiT0 = Date.now();
-    const { callGemini } = require('../services/aiService');
-    const response = await callGemini('Reply with exactly: OK', { maxTokens: 5 });
-    const aiMs = Date.now() - aiT0;
-    results.ai = { ok: !!response, ms: aiMs, model: 'Gemini 2.0 Flash' };
+    const { AI_ENABLED, generateProductDescription } = require('../services/aiService');
+    if (!AI_ENABLED || !process.env.GEMINI_API_KEY) {
+      results.ai = { ok: true, disabled: true, ms: null, model: 'Disabled by configuration' };
+    } else {
+      const aiT0 = Date.now();
+      const response = await generateProductDescription('Health Check', 'diagnostic', 'MM');
+      const aiMs = Date.now() - aiT0;
+      results.ai = { ok: !!response, disabled: false, ms: aiMs, model: 'Gemini 2.0 Flash' };
+    }
   } catch (err) {
-    results.ai = { ok: false, ms: null, error: err.message.slice(0, 60) };
+    results.ai = { ok: false, disabled: false, ms: null, error: err.message.slice(0, 60) };
   }
 
   // 4. Cache health
@@ -145,7 +149,7 @@ function buildReport({ results: r, totalDuration, allOk }) {
 
     `${statusIcon(r.commands.ok)} Commands loaded: *${r.commands.count}* modules\n` +
     `${statusIcon(r.db.ok)} Database: *${r.db.state}*${r.db.ms != null ? ` (${fmtMs(r.db.ms)} ping)` : ''}\n` +
-    `${statusIcon(r.ai.ok)} AI API: ${r.ai.ok ? `*${r.ai.model}* — ${fmtMs(r.ai.ms)}` : `❌ ${r.ai.error || 'Unavailable'}`}\n` +
+    `${statusIcon(r.ai.ok)} AI API: ${r.ai.disabled ? `*${r.ai.model}*` : r.ai.ok ? `*${r.ai.model}* — ${fmtMs(r.ai.ms)}` : `❌ ${r.ai.error || 'Unavailable'}`}\n` +
     `${statusIcon(r.cache.ok)} Cache: Active — Hit Rate *${r.cache.hitRate ?? 0}%* (${r.cache.keys ?? 0} keys)\n` +
     `${statusIcon(r.cron.ok)} Cron Jobs: *${r.cron.count}* scheduled\n` +
     `${statusIcon(r.backup.ok)} Last Backup: ${r.backup.ago} ${r.backup.size !== '—' ? `(${r.backup.size})` : ''}${r.backup.status && r.backup.status !== 'success' ? ` — ${r.backup.status}` : ''}\n` +
@@ -163,7 +167,7 @@ function buildReport({ results: r, totalDuration, allOk }) {
 
 // ── Module ────────────────────────────────────────────────────────────────────
 
-module.exports = function registerHealth(bot) {
+function registerHealth(bot) {
 
   bot.command('checkhealth', adminOnly(), async (ctx) => {
     const wait = await ctx.reply('🏥 _Running full health check…_\n_This may take 5–10 seconds._', { parse_mode: 'Markdown' });
@@ -215,4 +219,8 @@ module.exports = function registerHealth(bot) {
       { parse_mode: 'Markdown' }
     );
   });
-};
+}
+
+registerHealth.runHealthCheck = runHealthCheck;
+registerHealth.buildReport = buildReport;
+module.exports = registerHealth;

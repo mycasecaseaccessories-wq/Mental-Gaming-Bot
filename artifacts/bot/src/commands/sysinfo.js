@@ -165,6 +165,9 @@ module.exports = function registerSysInfo(bot) {
           [
             Markup.button.callback('📊 Monthly Report', 'sysinfo_monthly_report'),
           ],
+          [
+            Markup.button.callback('🏥 Full Health Check', 'sysinfo_health'),
+          ],
         ]),
       });
     } catch (err) {
@@ -190,10 +193,30 @@ module.exports = function registerSysInfo(bot) {
           [
             Markup.button.callback('📊 Monthly Report', 'sysinfo_monthly_report'),
           ],
+          [
+            Markup.button.callback('🏥 Full Health Check', 'sysinfo_health'),
+          ],
         ]),
       });
     } catch (err) {
       await ctx.reply(`❌ ${err.message}`);
+    }
+  });
+
+  bot.action('sysinfo_health', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Running health check…');
+    const wait = await ctx.reply('🏥 _Running full health check…_', { parse_mode: 'Markdown' });
+    try {
+      const health = require('./health');
+      const data = await health.runHealthCheck(ctx.telegram, ctx.from.id);
+      const report = health.buildReport(data);
+      await ctx.telegram.deleteMessage(wait.chat.id, wait.message_id).catch(() => {});
+      await ctx.reply(report, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('🔄 Re-check Health', 'sysinfo_health')]]),
+      });
+    } catch (err) {
+      await ctx.telegram.editMessageText(wait.chat.id, wait.message_id, undefined, `❌ Health check failed: ${err.message}`);
     }
   });
 
