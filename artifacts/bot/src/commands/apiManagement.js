@@ -378,7 +378,8 @@ module.exports = function registerApiManagement(bot) {
   async function createButtonSchedule(ctx, frequency, extra = {}) {
     const draft = ctx.session.announceScheduleDraft;
     if (!draft) return ctx.answerCbQuery('Schedule target မရှိတော့ပါ', { show_alert: true });
-    const payload = {
+    try {
+      const payload = {
       name: draft.name,
       targetType: draft.targetType,
       category: draft.category || (draft.categories || [])[0] || null,
@@ -394,13 +395,17 @@ module.exports = function registerApiManagement(bot) {
       retentionSeconds: 6 * 3600,
       destination: 'both',
       createdBy: ctx.from.id,
-      isActive: true,
-    };
-    const schedule = new AnnouncementSchedule(payload);
+        isActive: true,
+      };
+      const schedule = new AnnouncementSchedule(payload);
     schedule.nextRunAt = AnnouncementAutomationService.nextRunAt(schedule);
-    await schedule.save();
-    ctx.session.announceScheduleDraft = null;
-    return ctx.reply(`✅ Schedule ဖန်တီးပြီးပါပြီ။\n📌 ${schedule.name}\n⏰ Next: ${schedule.nextRunAt.toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })}\n🧹 Bot user message: 6h အကြာဖျက်မယ်၊ Channel post မဖျက်ပါ။`, Markup.inlineKeyboard([[Markup.button.callback('📅 Schedule Manager', 'ann_schedule_menu')]]));
+      await schedule.save();
+      ctx.session.announceScheduleDraft = null;
+      return ctx.reply(`✅ Schedule ဖန်တီးပြီးပါပြီ။\n📌 ${schedule.name}\n⏰ Next: ${schedule.nextRunAt.toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })}\n🧹 Bot user message: 6h အကြာဖျက်မယ်၊ Channel post မဖျက်ပါ။`, Markup.inlineKeyboard([[Markup.button.callback('📅 Schedule Manager', 'ann_schedule_menu')]]));
+    } catch (err) {
+      console.error('[AnnouncementSchedule] create failed:', err.message);
+      return ctx.reply(`❌ Schedule မသိမ်းနိုင်ပါ။ ${err.message.slice(0, 180)}`);
+    }
   }
 
   async function showAnnounceCategory(ctx, category) {
@@ -608,18 +613,18 @@ module.exports = function registerApiManagement(bot) {
     return showScheduleTime(ctx, 'weekly');
   });
 
-  bot.action(/^ann_sched_monthday:(\\d{1,2})$/, requireRole('MANAGER'), async (ctx) => {
+  bot.action(/^ann_sched_monthday:(\d{1,2})$/, requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery();
     ctx.session.announceScheduleDraft = { ...(ctx.session.announceScheduleDraft || {}), monthDay: Number(ctx.match[1]) };
     return showScheduleTime(ctx, 'monthly');
   });
 
-  bot.action(/^ann_sched_freq:interval:(\\d+)$/, requireRole('MANAGER'), async (ctx) => {
+  bot.action(/^ann_sched_freq:interval:(\d+)$/, requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery('Schedule ဖန်တီးနေပါပြီ...');
     return createButtonSchedule(ctx, 'interval', { intervalMinutes: Number(ctx.match[1]) });
   });
 
-  bot.action(/^ann_sched_time:(\\d{1,2}):(\\d{1,2})$/, requireRole('MANAGER'), async (ctx) => {
+  bot.action(/^ann_sched_time:(\d{1,2}):(\d{1,2})$/, requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery('Schedule ဖန်တီးနေပါပြီ...');
     return createButtonSchedule(ctx, ctx.session.announceScheduleDraft?.frequency || 'daily', { localHour: Number(ctx.match[1]), localMinute: Number(ctx.match[2]) });
   });
@@ -630,7 +635,7 @@ module.exports = function registerApiManagement(bot) {
     return ctx.reply('⌨️ MMT အချိန်ကို `HH:MM` ပုံစံနဲ့ ရိုက်ပါ။ ဥပမာ `07:30` သို့ `22:15`', { parse_mode: 'Markdown' });
   });
 
-  bot.hears(/^([01]?\\d|2[0-3]):([0-5]\\d)$/, requireRole('MANAGER'), async (ctx) => {
+  bot.hears(/^([01]?\d|2[0-3]):([0-5]\d)$/, requireRole('MANAGER'), async (ctx) => {
     if (!ctx.session.announceScheduleAwaitingTime) return;
     ctx.session.announceScheduleAwaitingTime = false;
     const hour = Number(ctx.match[1]);
