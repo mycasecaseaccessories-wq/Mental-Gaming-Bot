@@ -224,7 +224,26 @@ async function tickChannelAutoPosts(telegram) {
   }
 }
 
-// ── Job 7: Scheduled announcements and bot-message cleanup ───────────────────
+// ── Job 7: Expire unpaid order reservations ────────────────────────────────────
+async function expirePendingReservations(telegram) {
+  try {
+    const { expirePendingOrders } = require('./OrderService');
+    const result = await expirePendingOrders({ limit: 100 });
+    if (result.expired || result.failed) {
+      console.log(`[CronService] ⏳ Reservation expiry: expired=${result.expired} failed=${result.failed}`);
+    }
+    if (result.failed > 0) {
+      await safeSend(telegram, `⚠️ *Reservation expiry*
+${result.failed} order(s) failed to release/refund. Check logs.`);
+    }
+    return result;
+  } catch (err) {
+    console.error('[CronService] ❌ Reservation expiry:', err.message);
+    return { expired: 0, failed: 1, error: err.message };
+  }
+}
+
+// ── Job 8: Scheduled announcements and bot-message cleanup ───────────────────
 async function tickAnnouncementAutomation(telegram) {
   try {
     const service = require('./AnnouncementAutomationService');
@@ -555,6 +574,11 @@ function startCronJobs(telegram) {
     cron.schedule('*/10 * * * *', () => tickChannelAutoPosts(telegram), { timezone: 'UTC' })
   );
 
+  // Unpaid orders: release stock and refund wallet after reservation expiry.
+  scheduledJobs.push(
+    cron.schedule('*/5 * * * *', () => expirePendingReservations(telegram), { timezone: 'UTC' })
+  );
+
   // Scheduled announcements + bot-user retention cleanup.
   scheduledJobs.push(
     cron.schedule('*/10 * * * *', () => tickAnnouncementAutomation(telegram), { timezone: 'UTC' })
@@ -618,5 +642,6 @@ module.exports = {
   manualChannelPosts:    tickChannelAutoPosts,
   manualGiveaways:       cleanupGiveaways,
   manualAnnouncementAutomation: tickAnnouncementAutomation,
+  manualReservationExpiry: expirePendingReservations,
   manualMonthlyReport:   sendMonthlyRevenueReport,
 };

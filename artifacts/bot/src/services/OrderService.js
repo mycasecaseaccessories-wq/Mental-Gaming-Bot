@@ -21,6 +21,8 @@ const { auditLog } = require('./logger');
 const { config } = require('../../config/settings');
 
 const LOW_STOCK_THRESHOLD = 5;
+const DEFAULT_RESERVATION_MINUTES = 10;
+const RESERVATION_MINUTES = Math.max(1, Number(process.env.ORDER_RESERVATION_MINUTES || DEFAULT_RESERVATION_MINUTES));
 
 // ── Stock warning helper ─────────────────────────────────────────────────────
 async function checkStockWarning(product, telegram) {
@@ -60,7 +62,7 @@ async function checkStockWarning(product, telegram) {
 }
 
 // ── Create order (deducts wallet atomically) ─────────────────────────────────
-async function createOrder(telegramId, productId, { gameId = null, zoneId = null, gameName = null, promoCode = null, promoDiscount = 0, tierDiscount = 0, tierDiscountPct = 0, finalAmount = null, checkoutData = [] } = {}) {
+async function createOrder(telegramId, productId, { gameId = null, zoneId = null, gameName = null, promoCode = null, promoDiscount = 0, tierDiscount = 0, tierDiscountPct = 0, finalAmount = null, checkoutData = [], quantity = 1 } = {}) {
   const user = await User.findByTelegramId(telegramId);
   if (!user) throw new Error('User not found');
 
@@ -69,7 +71,12 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
   if (!product.isInStock()) throw new Error('Product is out of stock');
 
   const { price: effectivePrice } = product.getEffectivePrice();
-  const amount = finalAmount !== null ? finalAmount : effectivePrice;
+  const requestedQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
+  if (product.maxQuantity && requestedQuantity > product.maxQuantity) {
+    throw new Error(`Maximum quantity for this product is ${product.maxQuantity}`);
+  }
+  const amount = finalAmount !== null ? finalAmount : effectivePrice * requestedQuantity;
+  const reservationExpiresAt = new Date(Date.now() + RESERVATION_MINUTES * 60_000);
 
   if (user.balanceKS < amount) {
     throw new Error(`Insufficient balance. You have ${user.balanceKS.toLocaleString()} KS but need ${amount.toLocaleString()} KS.`);
@@ -102,13 +109,14 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
       }
     }
 
-    if (product.stockCount !== -1 && !usedGiveawayReservation) {
+    const reservationUnits = product.stockCount === -1 || usedGiveawayReservation ? 0 : requestedQuantity;
+    if (reservationUnits > 0) {
       const reserved = await Product.findOneAndUpdate(
-        { _id: product._id, isActive: true, stockCount: { $gte: 1 } },
-        { $inc: { stockCount: -1 } },
+        { _id: product._id, isActive: true, stockCount: { $gte: reservationUnits } },
+        { $inc: { stockCount: -reservationUnits } },
         { new: true, session }
       );
-      if (!reserved) throw new Error('Product is out of stock');
+      if (!reserved) throw new Error('Product stock changed; please retry');
     }
 
     chargedUser = await User.findOneAndUpdate(
@@ -123,7 +131,11 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
       productId: product._id,
       productType: product.productType,
       amount,
-      originalAmount: effectivePrice,
+      originalAmount: effectivePrice * requestedQuantity,
+      quantity: requestedQuantity,
+      unitPrice: effectivePrice,
+      reservationUnits,
+      reservationExpiresAt,
       promoCode,
       promoDiscount,
       tierDiscount,
@@ -254,10 +266,16 @@ async function cancelAndRefund(orderId, adminId, reason) {
   order.refundTransactionId = transaction.txId;
   await order.save();
 
-  // Restore stock if non-unlimited
-  if (order.productId && order.productId.stockCount !== -1) {
-    await Product.findByIdAndUpdate(order.productId._id, { $inc: { stockCount: 1 } });
+  // Release exactly the units reserved by this order (legacy orders default to one).
+  const releasedUnits = order.reservationUnits > 0
+    ? order.reservationUnits
+    : (order.productId && order.productId.stockCount !== -1 ? 1 : 0);
+  if (order.productId && releasedUnits > 0) {
+    await Product.findByIdAndUpdate(order.productId._id, { $inc: { stockCount: releasedUnits } });
   }
+  order.reservationReleasedAt = new Date();
+  order.reservationExpiresAt = null;
+  await order.save();
 
   await auditLog(adminId, 'ORDER_CANCELLED_REFUNDED', orderId, 'Order', { reason, refundAmount: order.amount });
 
@@ -284,6 +302,77 @@ async function cancelAndRefund(orderId, adminId, reason) {
   });
 
   return order;
+}
+
+// ── Expire stale reservations and refund unpaid orders ─────────────────────────
+async function expirePendingOrders({ limit = 100 } = {}) {
+  const cutoff = new Date();
+  const candidates = await Order.find({
+    status: 'Pending',
+    reservationExpiresAt: { $ne: null, $lte: cutoff },
+  }).select('_id').sort({ reservationExpiresAt: 1 }).limit(limit).lean();
+
+  let expired = 0;
+  let failed = 0;
+  for (const candidate of candidates) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const order = await Order.findOneAndUpdate(
+        { _id: candidate._id, status: 'Pending', reservationExpiresAt: { $ne: null, $lte: cutoff } },
+        {
+          $set: {
+            status: 'Cancelled',
+            cancelReason: 'Reservation expired before payment completion',
+            reservationReleasedAt: new Date(),
+            reservationExpiresAt: null,
+          },
+          $push: {
+            statusHistory: {
+              status: 'Cancelled',
+              at: new Date(),
+              note: 'Reservation expired before payment completion',
+            },
+          },
+        },
+        { new: true, session }
+      );
+      if (!order) {
+        await session.abortTransaction();
+        continue;
+      }
+
+      if (order.reservationUnits > 0) {
+        await Product.findOneAndUpdate(
+          { _id: order.productId },
+          { $inc: { stockCount: order.reservationUnits } },
+          { session }
+        );
+      }
+
+      if (order.amount > 0) {
+        await creditKS(order.userId, order.amount, {
+          type: 'Refund',
+          note: `Expired reservation refund for order #${order._id.toString().slice(-8).toUpperCase()}`,
+          session,
+        });
+      }
+
+      await session.commitTransaction();
+      expired++;
+      await auditLog('system', 'ORDER_RESERVATION_EXPIRED', order._id.toString(), 'Order', {
+        refundAmount: order.amount,
+        releasedUnits: order.reservationUnits,
+      });
+    } catch (err) {
+      failed++;
+      await session.abortTransaction().catch(() => {});
+      console.error(`[OrderService] reservation expiry failed for ${candidate._id}:`, err.message);
+    } finally {
+      await session.endSession();
+    }
+  }
+  return { expired, failed, scanned: candidates.length };
 }
 
 // ── Pull digital code (for preview) ──────────────────────────────────────────
@@ -315,4 +404,5 @@ module.exports = {
   checkStockWarning,
   peekDigitalStock,
   addDigitalCodes,
+  expirePendingOrders,
 };

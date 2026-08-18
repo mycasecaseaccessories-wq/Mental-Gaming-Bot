@@ -107,6 +107,11 @@ const orderSchema = new mongoose.Schema(
     refundTransactionId: { type: String, default: null },
     timestamp: { type: Date, default: Date.now },
 
+    // ── Inventory reservation ─────────────────────────────────────────────────
+    reservationUnits: { type: Number, default: 0, min: 0 },
+    reservationExpiresAt: { type: Date, default: null, index: true },
+    reservationReleasedAt: { type: Date, default: null },
+
     // ── Live Order Tracking ───────────────────────────────────────────────────
     trackingMsgId: {
       type:    Number,
@@ -129,6 +134,7 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.index({ userId: 1, status: 1 });
 orderSchema.index({ timestamp: -1 });
+orderSchema.index({ status: 1, reservationExpiresAt: 1 });
 
 orderSchema.statics.findByUser = function (userId, status = null) {
   const query = { userId };
