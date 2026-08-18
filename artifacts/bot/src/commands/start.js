@@ -23,6 +23,7 @@ const StyleService            = require('../services/StyleService');
 const SystemStatus            = require('../models/SystemStatus');
 const User                    = require('../models/User');
 const Product                 = require('../models/Product');
+const AccountProduct          = require('../models/AccountProduct');
 const AdminService            = require('../services/AdminService');
 const { mainMenuKeyboard, adminMenuKeyboard } = require('../utils/keyboard');
 const { price }               = require('../utils/ui');
@@ -89,8 +90,9 @@ module.exports = function registerStart(bot) {
     const payload = ctx.startPayload;
 
     let referralNotice = '';
-    let extraNote      = '';
-    let directProduct  = null;
+    let extraNote         = '';
+    let directProduct     = null;
+    let directAccountProduct = null;
 
     // ── Referral deep link: ref_CODE ────────────────────────────────────────
     if (payload?.startsWith('ref_')) {
@@ -140,6 +142,16 @@ module.exports = function registerStart(bot) {
             `\n🎮 *You were directed here for:*\n` +
             `📦 *${escapeMarkdown(product.name)}* — ${finalPrice.toLocaleString()} KS\n`;
         }
+      } catch {}
+    }
+
+    // ── Premium Account share link: account_ACCOUNTID ────────────────────────
+    else if (payload?.startsWith('account_')) {
+      const accountProductId = payload.slice(8);
+      await setJoinSourceOnce(ctx.from.id, 'share', accountProductId);
+
+      try {
+        directAccountProduct = await AccountProduct.findOne({ _id: accountProductId, isActive: true });
       } catch {}
     }
 
@@ -202,6 +214,25 @@ module.exports = function registerStart(bot) {
         ...Markup.inlineKeyboard([
           [Markup.button.callback(inStock ? '🛒 Buy Now' : '📦 Out of Stock', inStock ? `order_start:${directProduct._id}` : 'shop_out_of_stock')],
           [Markup.button.callback('🛍 Browse Store', 'nav:go:shop')],
+        ]),
+      });
+    }
+
+    if (!isAdmin && directAccountProduct) {
+      const finalPrice = directAccountProduct.finalPrice();
+      const isMulti = ['shared', 'invite'].includes(directAccountProduct.accountType);
+      const accountText =
+        `${directAccountProduct.emoji || '🔐'} *${escapeMarkdown(directAccountProduct.serviceName)}*\n` +
+        `━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 Plan: *${escapeMarkdown(directAccountProduct.planLabel)}*\n` +
+        `💰 Price: *${finalPrice.toLocaleString()} KS*${isMulti ? ' / unit' : ''}\n` +
+        `⏳ Duration: *${directAccountProduct.durationDays} days*` +
+        (directAccountProduct.description ? `\n\n📝 ${escapeMarkdown(directAccountProduct.description)}` : '');
+      return ctx.reply(accountText, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback(isMulti ? '🛒 Choose Quantity' : `🛒 Buy Now — ${finalPrice.toLocaleString()} KS`, isMulti ? `acc_qty:${directAccountProduct._id}` : `acc_buy:${directAccountProduct._id}`)],
+          [Markup.button.callback('🔐 Browse Premium Accounts', 'acc_hub')],
         ]),
       });
     }
