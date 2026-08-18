@@ -224,7 +224,23 @@ async function tickChannelAutoPosts(telegram) {
   }
 }
 
-// ── Job 7: Giveaway expiry and announcement cleanup ──────────────────────────
+// ── Job 7: Scheduled announcements and bot-message cleanup ───────────────────
+async function tickAnnouncementAutomation(telegram) {
+  try {
+    const service = require('./AnnouncementAutomationService');
+    const schedules = await service.runDueSchedules(telegram);
+    const deliveries = await service.cleanupDeliveries(telegram);
+    if (schedules.completed || schedules.failed || deliveries.deleted || deliveries.failed) {
+      console.log(`[CronService] 📣 AnnounceAutomation schedules=${JSON.stringify(schedules)} deliveries=${JSON.stringify(deliveries)}`);
+    }
+    return { schedules, deliveries };
+  } catch (err) {
+    console.error('[CronService] ❌ Announcement automation:', err.message);
+    return { error: err.message };
+  }
+}
+
+// ── Job 8: Giveaway expiry and announcement cleanup ──────────────────────────
 
 async function cleanupGiveaways(telegram) {
   const AccountGiveaway = require('../models/AccountGiveaway');
@@ -539,6 +555,11 @@ function startCronJobs(telegram) {
     cron.schedule('*/10 * * * *', () => tickChannelAutoPosts(telegram), { timezone: 'UTC' })
   );
 
+  // Scheduled announcements + bot-user retention cleanup.
+  scheduledJobs.push(
+    cron.schedule('*/10 * * * *', () => tickAnnouncementAutomation(telegram), { timezone: 'UTC' })
+  );
+
   // Giveaway expiry/cleanup: persisted timestamps make this restart-safe.
   scheduledJobs.push(
     cron.schedule('*/10 * * * *', () => cleanupGiveaways(telegram).catch((e) => console.error('[Cron] giveaways:', e.message)), { timezone: 'UTC' })
@@ -569,7 +590,7 @@ function startCronJobs(telegram) {
     cron.schedule('50 2 1 * *', () => sendMonthlyRevenueReport(telegram), { timezone: 'UTC' })
   );
 
-  console.log('[CronService] ✅ 12 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/Giveaways/AccountExpiry/Birthday/Winback/Leaderboard/MonthlyReport)');
+  console.log(`[CronService] ✅ 13 cron jobs scheduled (Archive/Promo/Screenshots/Cache/Backup/ChannelPosts/AnnounceAutomation/Giveaways/AccountExpiry/Birthday/Winback/Leaderboard/MonthlyReport)`);
 }
 
 function stopCronJobs() {
@@ -596,5 +617,6 @@ module.exports = {
   manualBackup:          triggerBackup,
   manualChannelPosts:    tickChannelAutoPosts,
   manualGiveaways:       cleanupGiveaways,
+  manualAnnouncementAutomation: tickAnnouncementAutomation,
   manualMonthlyReport:   sendMonthlyRevenueReport,
 };
