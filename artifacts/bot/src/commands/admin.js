@@ -194,6 +194,14 @@ const GUIDE_SECTIONS = [
       `• Bot user ဆီပို့တဲ့ announce ကို သတ်မှတ်ချိန်ရောက်ရင် auto-delete\n` +
       `• Announcement Channel post ကို အမြဲမဖျက်\n` +
       `• Telegram limitation ကြောင့် retention ကို 48 နာရီထက် မကျော်စေရ\n\n` +
+      `*🔧 System → Delivery Settings*\n` +
+      `System Info panel ထဲက button တွေနဲ့ timeout/retention ကို command မရိုက်ဘဲ ပြောင်းနိုင်ပါတယ်။\n` +
+      `• ⏳ *Payment Timeout* — Premium Account credential claim က payment မပြီးဘဲ ကျန်ရင် ဘယ်လောက်ကြာမှ release မလဲ သတ်မှတ်\n` +
+      `• ရွေးချယ်စရာ: 🚫 Disabled / 5 / 10 / 15 / 30 / 60 မိနစ်\n` +
+      `• 🧹 *Broadcast Delete* — bot-user ဆီပို့တဲ့ Broadcast copy ကို ဘယ်လောက်ကြာရင်ဖျက်မလဲ သတ်မှတ်\n` +
+      `• ရွေးချယ်စရာ: 🚫 Never Delete / 1 / 6 / 12 / 24 / 48 နာရီ\n` +
+      `• Setting မသတ်မှတ်ထားရင် auto cleanup မလုပ်ပါ။ Setting က restart ပြီးလည်း မပျောက်ပါ။\n` +
+      `• Bot-user message ကိုသာဖျက်ပြီး Announcement Channel post ကို မဖျက်ပါ။\n\n` +
       `*📜 Announcement History* — schedule run status, selected item count, user sent count နဲ့ run time ကိုကြည့်\n` +
       `*📢 Broadcast* — user အားလုံး / tier / active users ဆီ စာ သို့မဟုတ် ပုံ+စာ ပို့\n` +
       `*📡 Channels* — channel auto-post ကို စီမံ\n\n` +
@@ -202,7 +210,13 @@ const GUIDE_SECTIONS = [
       `2️⃣ ✅ Select All in Shop → 📢 Announce Selected\n` +
       `3️⃣ 📅 Schedule Manager → ➕ New Schedule → 📂 Category → 🕘 Daily 09:00\n` +
       `4️⃣ Schedule Manager မှာ ⏱ Retention ကို 6h ထား\n` +
-      `5️⃣ Channel post မဖျက်ဘဲ bot-user copy ကို 6 နာရီအကြာ auto-delete လုပ်မယ်`,
+      `5️⃣ Channel post မဖျက်ဘဲ bot-user copy ကို 6 နာရီအကြာ auto-delete လုပ်မယ်\n\n` +
+      `🎬 *System setting ဥပမာ:*\n` +
+      `1️⃣ Admin Panel → 🔧 System → 🧹 Broadcast Delete နှိပ်\n` +
+      `2️⃣ *6 နာရီ* ရွေး → ✅ Broadcast auto-delete setting သိမ်းပြီး\n` +
+      `3️⃣ နောက်ပိုင်း Manual Broadcast/Auto Broadcast တွေရဲ့ bot-user copy ကို 6 နာရီအကြာ ဖျက်မယ်\n` +
+      `4️⃣ Channel post ကတော့ အမြဲကျန်မယ်\n` +
+      `5️⃣ Premium Account claim cleanup လိုရင် 🔧 System → ⏳ Payment Timeout → *15 မိနစ်* (သို့) 🚫 Disabled ရွေး`,
   },
   {
     key: 'promotions', label: '🎟 Promotions',
