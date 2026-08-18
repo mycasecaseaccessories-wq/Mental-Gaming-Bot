@@ -384,6 +384,55 @@ async function announceAccountProductEverywhere(accountProduct, telegram, option
   };
 }
 
+// ── Grouped announcement formatters ──────────────────────────────────────────
+function groupedProductLine(product, style) {
+  const name = mdEsc(product.name);
+  const price = Number(style === 'flash' ? product.flashSalePrice : product.finalPrice);
+  if (style === 'flash' && Number(product.flashSalePrice) > 0) {
+    const original = Number(product.finalPrice || 0);
+    return `🎮 *${name}*\n   ~~${original.toLocaleString()} KS~~ → *${price.toLocaleString()} KS*`;
+  }
+  return `🎮 *${name}*\n   💰 *${price.toLocaleString()} KS*`;
+}
+
+function formatGroupedProductAnnouncement(products, style = 'new') {
+  const active = products.filter(Boolean);
+  const title = style === 'flash' ? '⚡ *FLASH SALE — Limited Time!*' : '🆕 *NEW PRODUCTS*';
+  const lines = active.map((product) => groupedProductLine(product, style));
+  const flashEnds = style === 'flash'
+    ? active.map((p) => p.flashSaleEnd).filter(Boolean).map((d) => new Date(d).getTime()).filter(Number.isFinite)
+    : [];
+  const endLine = flashEnds.length
+    ? `\n⏰ Ends at: *${new Date(Math.min(...flashEnds)).toLocaleString('en-GB', { timeZone: 'Asia/Rangoon', hour: '2-digit', minute: '2-digit' })} MMT*\n`
+    : '';
+  return `${title}\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n${lines.join('\n\n')}${endLine}\n\n_ဝယ်ယူရန် အောက်က product button ကိုနှိပ်ပါ။ Delivery အလိုအလျောက်ရပါမယ်။_\n\n🏪 Mental Gaming Store`;
+}
+
+function groupedProductKeyboard(products) {
+  return Markup.inlineKeyboard(products.map((product) => [
+    Markup.button.url(`🛒 ${String(product.name).slice(0, 45)} ဝယ်မယ်`, productDeepLink(product._id)),
+  ]));
+}
+
+/** Send a single grouped message for a category or multi-product selection. */
+async function announceProductsEverywhere(products, style, telegram, options = {}) {
+  const eligible = (products || []).filter((p) => p && p.isActive !== false && (style !== 'flash' || Number(p.flashSalePrice) > 0));
+  if (!eligible.length) return { channelOk: false, channelError: 'ကြော်ငြာရန် product မရှိပါ။', sent: 0, failed: 0, selectedCount: 0 };
+  const text = formatGroupedProductAnnouncement(eligible, style);
+  const keyboard = groupedProductKeyboard(eligible);
+  const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard });
+  const { sent, failed } = options.destination === 'channel'
+    ? { sent: 0, failed: 0 }
+    : await broadcastToUsers(telegram, text, { ...keyboard }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
+  return {
+    channelOk: !!channelMsg,
+    channelError: channelMsg ? null : (await validateAnnouncementChannel(telegram)).message,
+    sent,
+    failed,
+    selectedCount: eligible.length,
+  };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 async function announceNewProduct(product, telegram) {
@@ -471,6 +520,9 @@ module.exports = {
   announcePriceUpdate,
   announceFlashSale,
   announceProductEverywhere,
+  announceProductsEverywhere,
+  formatGroupedProductAnnouncement,
+  groupedProductKeyboard,
   announceAccountProductEverywhere,
   broadcastToUsers,
   customAnnounce,

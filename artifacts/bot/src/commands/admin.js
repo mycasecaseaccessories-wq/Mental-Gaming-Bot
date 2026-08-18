@@ -182,7 +182,10 @@ const GUIDE_SECTIONS = [
       `• 🔐 *Premium Accounts* — active account products ကိုကြည့်\n` +
       `• Product card ဘေးက ☐ ကိုနှိပ်ပြီး product အများရွေး\n` +
       `• ✅ *Select All in Shop/Premium Accounts* — category တစ်ခုလုံးရွေး\n` +
-      `• 📢 *Announce Selected (N)* — ရွေးထားတဲ့ product အများကို တစ်ခါတည်း ပို့\n\n` +
+      `• 📢 *Announce Selected (N)* — ရွေးထားတဲ့ product အများကို message တစ်စောင်တည်းထဲ စုစည်းပြီး ပို့\n` +
+      `• 🆕 *ရိုးရိုး Announce (တစ်စောင်တည်း)* — product အားလုံးကို စာတစ်စောင်ထဲပြ၊ product တစ်ခုချင်းစီအတွက် 🛒 Buy Now button ပါ\n` +
+      `• ⚡ *Flash Sale (တစ်စောင်တည်း)* — flash price ရှိတဲ့ shop products အားလုံးကို စာတစ်စောင်ထဲပြ၊ product တစ်ခုချင်းစီကို တန်းဝယ်နိုင်\n` +
+      `• Flash Sale ရွေးထားရင် Premium Account ကို grouped မလုပ်ဘဲ မပို့ပါ။\n\n` +
       `*📅 Schedule Manager UI*\n` +
       `📣 Announce → 📅 Schedule Manager → ➕ New Schedule\n` +
       `1️⃣ 🌐 All Active Products / 📦 Product တစ်ခု / 🔐 Premium Account တစ်ခု / 📂 Category အများ ရွေး\n` +
@@ -211,11 +214,13 @@ const GUIDE_SECTIONS = [
       `🎬 *Button flow ဥပမာ:*\n` +
       `1️⃣ Admin Marketing → 📣 Announce → 🛒 Shop Products\n` +
       `2️⃣ ✅ Select All in Shop → 📢 Announce Selected\n` +
-      `3️⃣ 📅 Schedule Manager → ➕ New Schedule → 📂 Category အများရွေး → ✅ ဆက်သွားမယ်\n` +
-      `4️⃣ 🗓 Monthly (သို့) 📅 Weekly ရွေး → weekday/လရက်ရွေး → MMT 09:00 (သို့) Custom HH:MM သတ်မှတ်\n` +
-      `5️⃣ Schedule Manager မှာ ⏱ Retention ကို 6h ထား\n` +
-      `6️⃣ Category အောက်က sub-category/product အားလုံးကို schedule တစ်ကြိမ် run တိုင်း တစ်ခါတည်း ကြော်ငြာမယ်\n` +
-      `7️⃣ Channel post မဖျက်ဘဲ bot-user copy ကို 6 နာရီအကြာ auto-delete လုပ်မယ်\n\n` +
+      `3️⃣ 🆕 ရိုးရိုး Announce (တစ်စောင်တည်း) သို့ ⚡ Flash Sale (တစ်စောင်တည်း) ရွေး\n` +
+      `4️⃣ → Channel နဲ့ bot-user ဆီ message တစ်စောင်ပဲ ရောက်ပြီး product တစ်ခုချင်းစီရဲ့ 🛒 button နဲ့ တိုက်ရိုက်ဝယ်နိုင်\n` +
+      `5️⃣ 📅 Schedule Manager → ➕ New Schedule → 📂 Category အများရွေး → ✅ ဆက်သွားမယ်\n` +
+      `6️⃣ 🗓 Monthly (သို့) 📅 Weekly ရွေး → weekday/လရက်ရွေး → MMT 09:00 (သို့) Custom HH:MM သတ်မှတ်\n` +
+      `7️⃣ Schedule Manager မှာ ⏱ Retention ကို 6h ထား\n` +
+      `8️⃣ Category အောက်က sub-category/product အားလုံးကို schedule တစ်ကြိမ် run တိုင်း message တစ်စောင်တည်းထဲ စုစည်းပြီး ကြော်ငြာမယ်\n` +
+      `9️⃣ Channel post မဖျက်ဘဲ bot-user copy ကို 6 နာရီအကြာ auto-delete လုပ်မယ်\n\n` +
       `🎬 *System setting ဥပမာ:*\n` +
       `1️⃣ Admin Panel → 🔧 System → 🧹 Broadcast Delete နှိပ်\n` +
       `2️⃣ *6 နာရီ* ရွေး → ✅ Broadcast auto-delete setting သိမ်းပြီး\n` +

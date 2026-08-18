@@ -123,7 +123,14 @@ async function runSchedule(schedule, token, telegram) {
   const run = await AnnouncementRun.create({ scheduleId: schedule._id, trigger: 'scheduled', fingerprint: fp, selectedCount: targets.length });
   let channelSent = 0, userSent = 0, failed = 0;
   try {
-    for (const target of targets) {
+    if (schedule.targetType === 'category') {
+      const result = await BroadcastService.announceProductsEverywhere(targets, schedule.style === 'flash' ? 'flash' : 'new', telegram, {
+        scheduleId: schedule._id, runId: run._id, retentionSeconds: schedule.retentionSeconds, destination: schedule.destination,
+      });
+      channelSent += result.channelOk ? 1 : 0;
+      userSent += result.sent || 0;
+      failed += result.failed || (result.channelOk ? 0 : 1);
+    } else for (const target of targets) {
       try {
         if (targetType(target) === 'account') {
           const result = await BroadcastService.announceAccountProductEverywhere(target, telegram, {

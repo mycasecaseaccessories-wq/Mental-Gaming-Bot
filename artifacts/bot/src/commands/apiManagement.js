@@ -25,6 +25,7 @@ const {
 }                  = require('../services/ExternalApiService');
 const {
   announceProductEverywhere,
+  announceProductsEverywhere,
   announceAccountProductEverywhere,
   validateAnnouncementChannel,
   mdEsc,
@@ -722,39 +723,52 @@ module.exports = function registerApiManagement(bot) {
     await ctx.answerCbQuery();
     await ctx.reply(`📢 ရွေးထားတဲ့ product ${selected.length} ခုကို bot users နဲ့ channel နှစ်ခုလုံးဆီ ပို့မလား?`, {
       ...Markup.inlineKeyboard([
-        [Markup.button.callback('🆕 New Product ပုံစံနဲ့ ပို့မယ်', 'ann_bulk_send:new')],
+        [Markup.button.callback('🆕 ရိုးရိုး Announce (တစ်စောင်တည်း)', 'ann_bulk_send:new')],
+        [Markup.button.callback('⚡ Flash Sale (တစ်စောင်တည်း)', 'ann_bulk_send:flash')],
         [Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')],
       ]),
     });
   });
 
-  bot.action(/^ann_bulk_send:(new)$/, requireRole('MANAGER'), async (ctx) => {
+  bot.action(/^ann_bulk_send:(new|flash)$/, requireRole('MANAGER'), async (ctx) => {
     const selected = Array.isArray(ctx.session.announceSelected) ? ctx.session.announceSelected : [];
     if (!selected.length) return ctx.answerCbQuery('Product မရွေးရသေးပါ', { show_alert: true });
+    const style = ctx.match[1];
     await ctx.answerCbQuery('ပို့နေပါပြီ...');
     ctx.session.announceSelected = [];
-    let sent = 0, failed = 0;
-    for (const item of selected) {
-      try {
-        if (item.type === 'shop') {
-          const product = await Product.findOne({ _id: item.id, isActive: true });
-          if (!product) { failed++; continue; }
-          const result = await announceProductEverywhere(product, 'new', ctx.telegram, { compact: true });
-          sent += result.sent || 0;
-          if (!result.channelOk) failed++;
-        } else {
+    const shopIds = selected.filter((item) => item.type === 'shop').map((item) => item.id);
+    const accounts = selected.filter((item) => item.type === 'account');
+    let sent = 0, failed = 0, channelOk = true, selectedCount = 0;
+    try {
+      const products = await Product.find({ _id: { $in: shopIds }, isActive: true }).sort({ updatedAt: -1 });
+      const result = await announceProductsEverywhere(products, style, ctx.telegram);
+      sent += result.sent || 0;
+      selectedCount += result.selectedCount || 0;
+      channelOk = channelOk && result.channelOk;
+      failed += result.channelOk ? 0 : 1;
+    } catch (err) {
+      failed += 1;
+      channelOk = false;
+      console.error('[Announce] grouped shop announcement failed:', err.message);
+    }
+    if (style === 'flash' && accounts.length) {
+      failed += accounts.length;
+      await ctx.reply('⚠️ Flash Sale က Shop Products အတွက်ပဲ grouped ပို့ထားပါတယ်။ Premium Account တွေကို ဒီရွေးချယ်မှုမှာ မပို့ပါ။');
+    } else {
+      for (const item of accounts) {
+        try {
           const account = await AccountProduct.findOne({ _id: item.id, isActive: true });
           if (!account) { failed++; continue; }
           const result = await announceAccountProductEverywhere(account, ctx.telegram, { compact: true });
           sent += result.sent || 0;
-          if (!result.channelOk) failed++;
+          channelOk = channelOk && result.channelOk;
+        } catch (err) {
+          failed++;
+          console.error('[Announce] account item failed:', err.message);
         }
-      } catch (err) {
-        failed++;
-        console.error('[Announce] bulk item failed:', err.message);
       }
     }
-    await ctx.reply(`✅ Bulk Announce ပြီးပါပြီ။\n👥 Bot user messages: ${sent}\n❌ Failed items/channel: ${failed}`);
+    await ctx.reply(`✅ Grouped ${style === 'flash' ? 'Flash Sale' : 'Announce'} ပြီးပါပြီ။\n📦 Product တစ်စောင်တည်းထဲ စုစည်းထားသော items: ${selectedCount}\n👥 Bot user messages: ${sent}\n📢 Channel: ${channelOk ? '✅' : '❌'}\n❌ Failed: ${failed}`);
   });
 
   // Unified Announce picker: Shop Products and Premium Accounts share one
