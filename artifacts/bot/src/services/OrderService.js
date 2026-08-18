@@ -21,8 +21,12 @@ const { auditLog } = require('./logger');
 const { config } = require('../../config/settings');
 
 const LOW_STOCK_THRESHOLD = 5;
-const DEFAULT_RESERVATION_MINUTES = 10;
-const RESERVATION_MINUTES = Math.max(1, Number(process.env.ORDER_RESERVATION_MINUTES || DEFAULT_RESERVATION_MINUTES));
+// Auto-expiry is intentionally disabled until an admin configures it.
+// Set ORDER_RESERVATION_MINUTES to a positive integer only when expiry is enabled.
+const configuredReservationMinutes = Number(process.env.ORDER_RESERVATION_MINUTES);
+const RESERVATION_MINUTES = Number.isFinite(configuredReservationMinutes) && configuredReservationMinutes > 0
+  ? Math.floor(configuredReservationMinutes)
+  : null;
 
 // ── Stock warning helper ─────────────────────────────────────────────────────
 async function checkStockWarning(product, telegram) {
@@ -76,7 +80,9 @@ async function createOrder(telegramId, productId, { gameId = null, zoneId = null
     throw new Error(`Maximum quantity for this product is ${product.maxQuantity}`);
   }
   const amount = finalAmount !== null ? finalAmount : effectivePrice * requestedQuantity;
-  const reservationExpiresAt = new Date(Date.now() + RESERVATION_MINUTES * 60_000);
+  const reservationExpiresAt = RESERVATION_MINUTES
+    ? new Date(Date.now() + RESERVATION_MINUTES * 60_000)
+    : null;
 
   if (user.balanceKS < amount) {
     throw new Error(`Insufficient balance. You have ${user.balanceKS.toLocaleString()} KS but need ${amount.toLocaleString()} KS.`);

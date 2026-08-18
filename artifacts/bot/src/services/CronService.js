@@ -226,9 +226,13 @@ async function tickChannelAutoPosts(telegram) {
 
 // ── Job 7: Expire unpaid order reservations ────────────────────────────────────
 async function expirePendingReservations(telegram) {
+  if (!Number.isFinite(Number(process.env.ORDER_RESERVATION_MINUTES)) || Number(process.env.ORDER_RESERVATION_MINUTES) <= 0) {
+    return { enabled: false, expired: 0, failed: 0, scanned: 0 };
+  }
   try {
     const { expirePendingOrders } = require('./OrderService');
     const result = await expirePendingOrders({ limit: 100 });
+    result.enabled = true;
     if (result.expired || result.failed) {
       console.log(`[CronService] ⏳ Reservation expiry: expired=${result.expired} failed=${result.failed}`);
     }
