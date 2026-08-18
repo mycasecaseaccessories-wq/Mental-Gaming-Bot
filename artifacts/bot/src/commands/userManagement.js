@@ -11,7 +11,7 @@
 const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
 const {
-  warnUser, unwarnUser, banUser, unbanUser,
+  warnUser, unwarnUser, banUser, unbanUser, bulkUnbanUsers,
   restrictUser, unrestrictUser,
   getUserInfo, listUsers, listBannedUsers, searchUsers,
   adjustBalance, resolveUser, ALL_RIGHTS,
@@ -735,11 +735,14 @@ module.exports = function registerUserManagement(bot) {
       return edit ? ctx.editMessageText(msg).catch(() => ctx.reply(msg)) : ctx.reply(msg);
     }
 
+    const selectedIds = new Set((ctx.session?.bulkUnbanIds || []).map(String));
     const rows = users.map((u) => {
       const name = u.username ? `@${u.username}` : (u.first_name || `ID:${u.telegramId}`);
-      const label = `🚫 ${name.slice(0, 22)} — ⚠️${u.warningsCount || 0}`;
+      const selected = selectedIds.has(String(u.telegramId));
+      const label = `${selected ? '✅' : '🚫'} ${name.slice(0, 22)} — ⚠️${u.warningsCount || 0}`;
       return [
         Markup.button.callback(label, `um_view:${u.telegramId}`),
+        Markup.button.callback(selected ? '☑️ Selected' : '☐ Select', `bans_select:${u.telegramId}:${page}`),
         Markup.button.callback('🔓 Unban', `bans_unban:${u.telegramId}`),
       ];
     });
@@ -749,8 +752,13 @@ module.exports = function registerUserManagement(bot) {
     navBtns.push(Markup.button.callback(`${page}/${totalPages}`, 'bans_noop'));
     if (page < totalPages) navBtns.push(Markup.button.callback(`${page + 1} ›`, `bans_page:${page + 1}`));
 
-    const keyboard = Markup.inlineKeyboard([...rows, navBtns]);
-    const header = `🚫 *Banned Users (${total} ဦး)* — Page ${page}/${totalPages}\n\n_ကြည့်ရန် နာမည်နှိပ်၊ ဖြုတ်ရန် 🔓 နှိပ်ပါ_`;
+    const bulkRows = [];
+    if (selectedIds.size) {
+      bulkRows.push([Markup.button.callback(`🔓 Unban Selected (${selectedIds.size})`, 'bans_unban_selected_confirm')]);
+    }
+    bulkRows.push([Markup.button.callback(`⚠️ Unban All (${total})`, 'bans_unban_all_confirm')]);
+    const keyboard = Markup.inlineKeyboard([...rows, ...bulkRows, navBtns]);
+    const header = `🚫 *Banned Users (${total} ဦး)* — Page ${page}/${totalPages}\n\n_နာမည်နှိပ် = အသေးစိတ်၊ Select = အများဖြုတ်ရန်၊ 🔓 = တစ်ယောက်ချင်းဖြုတ်ရန်_`;
 
     if (edit) {
       return ctx.editMessageText(header, { parse_mode: 'Markdown', ...keyboard }).catch(() => {});
@@ -771,6 +779,62 @@ module.exports = function registerUserManagement(bot) {
 
   bot.action('bans_noop', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
+  });
+
+  bot.action(/^bans_select:(\d+):(\d+)$/, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const uid = String(ctx.match[1]);
+    const page = Math.max(1, parseInt(ctx.match[2], 10) || 1);
+    const selected = new Set((ctx.session.bulkUnbanIds || []).map(String));
+    if (selected.has(uid)) selected.delete(uid);
+    else selected.add(uid);
+    ctx.session.bulkUnbanIds = [...selected];
+    await sendBannedList(ctx, page, true);
+  });
+
+  bot.action('bans_unban_selected_confirm', adminOnly(), async (ctx) => {
+    const count = (ctx.session.bulkUnbanIds || []).length;
+    if (!count) return ctx.answerCbQuery('ရွေးထားတဲ့ user မရှိပါ', { show_alert: true });
+    await ctx.answerCbQuery();
+    await ctx.reply(`⚠️ ရွေးထားတဲ့ user ${count} ယောက်ကို Unban လုပ်မလား?`, {
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Confirm Unban', 'bans_unban_selected')],
+        [Markup.button.callback('❌ Cancel', 'bans_bulk_cancel')],
+      ]),
+    });
+  });
+
+  bot.action('bans_unban_all_confirm', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const { total } = await listBannedUsers({ page: 1, limit: 1 });
+    if (!total) return ctx.reply('✅ Banned user မရှိပါ။');
+    await ctx.reply(`⚠️ Banned user အားလုံး (${total} ယောက်) ကို Unban လုပ်မလား?`, {
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Confirm Unban All', 'bans_unban_all')],
+        [Markup.button.callback('❌ Cancel', 'bans_bulk_cancel')],
+      ]),
+    });
+  });
+
+  bot.action('bans_unban_selected', adminOnly(), async (ctx) => {
+    const ids = [...new Set((ctx.session.bulkUnbanIds || []).map(Number).filter(Number.isSafeInteger))];
+    await ctx.answerCbQuery('လုပ်နေပါပြီ...');
+    const result = await bulkUnbanUsers({ telegramIds: ids, adminId: ctx.from.id });
+    ctx.session.bulkUnbanIds = [];
+    await ctx.reply(`✅ ရွေးထားတဲ့ user ${result.count} ယောက်ကို Unban လုပ်ပြီးပါပြီ။`);
+    await sendBannedList(ctx, 1, false);
+  });
+
+  bot.action('bans_unban_all', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('လုပ်နေပါပြီ...');
+    const result = await bulkUnbanUsers({ adminId: ctx.from.id });
+    ctx.session.bulkUnbanIds = [];
+    await ctx.reply(`✅ Banned user အားလုံးကို Unban လုပ်ပြီးပါပြီ။ (${result.count} ယောက်)`);
+    await sendBannedList(ctx, 1, false);
+  });
+
+  bot.action('bans_bulk_cancel', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('ပယ်ဖျက်ပြီးပါပြီ');
   });
 
   bot.action(/^bans_unban:(\d+)$/, adminOnly(), async (ctx) => {

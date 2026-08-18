@@ -93,6 +93,28 @@ async function unbanUser(targetIdentifier, adminId) {
   return user;
 }
 
+// ── Bulk unban ────────────────────────────────────────────────────────────────
+async function bulkUnbanUsers({ telegramIds = null, adminId }) {
+  const ids = Array.isArray(telegramIds)
+    ? [...new Set(telegramIds.map((id) => Number(id)).filter(Number.isSafeInteger))]
+    : null;
+  const filter = ids ? { isBlocked: true, telegramId: { $in: ids } } : { isBlocked: true };
+  const users = await User.find(filter).select('telegramId username first_name').lean();
+  if (!users.length) return { count: 0, users: [] };
+
+  const result = await User.updateMany(
+    filter,
+    { $set: { isBlocked: false, warningsCount: 0 } }
+  );
+  const count = Number(result.modifiedCount || 0);
+  await auditLog(adminId, 'BULK_UNBAN_USERS', String(adminId), 'User', {
+    scope: ids ? 'selected' : 'all',
+    requested: ids ? ids.length : 'all',
+    count,
+  });
+  return { count, users };
+}
+
 // ── List banned users (paginated) ────────────────────────────────────────────
 async function listBannedUsers({ page = 1, limit = 10 } = {}) {
   const skip = (page - 1) * limit;
@@ -216,6 +238,7 @@ module.exports = {
   unwarnUser,
   banUser,
   unbanUser,
+  bulkUnbanUsers,
   restrictUser,
   unrestrictUser,
   getUserInfo,
