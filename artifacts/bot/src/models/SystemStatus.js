@@ -165,6 +165,22 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Minutes a Pending/Processing order must wait before the [Contact Support] button appears on the tracking card',
     },
 
+    // ── Admin-controlled delivery retention ───────────────────────────────────
+    accountPaymentClaimTimeoutMinutes: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 48 * 60,
+      comment: 'Minutes before an abandoned Premium Account payment claim is released; null disables cleanup',
+    },
+    broadcastRetentionMinutes: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 48 * 60,
+      comment: 'Minutes before bot-user broadcast copies are deleted; null keeps them permanently',
+    },
+
     // ── Referral Tier System ──────────────────────────────────────────────────
     referralTiers: {
       type: [{

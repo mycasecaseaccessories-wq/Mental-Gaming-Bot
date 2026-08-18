@@ -15,6 +15,7 @@ const BackupService   = require('../services/BackupService');
 const SystemStatus    = require('../models/SystemStatus');
 const Order           = require('../models/Order');
 const { config }      = require('../../config/settings');
+const { auditLog }    = require('../services/logger');
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,11 @@ async function buildSysInfo() {
   const backupLine = lastBackupAt
     ? `🗄 Last Backup: *${new Date(lastBackupAt).toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT* (${lastBackupSize})`
     : `🗄 Last Backup: _None this session_`;
+  const claimTimeout = Number(status.accountPaymentClaimTimeoutMinutes || 0);
+  const broadcastRetention = Number(status.broadcastRetentionMinutes || 0);
+  const deliverySettings = `⚙️ *Delivery Settings*\n` +
+    `  🔐 Account payment cleanup: *${claimTimeout > 0 ? `${claimTimeout} min` : 'Disabled'}*\n` +
+    `  🧹 Broadcast auto-delete: *${broadcastRetention > 0 ? `${broadcastRetention} min` : 'Disabled'}*`;
 
   // ── Stuck users (pending orders > 30 min) ──────────────────────────────────
   const stuckCutoff = new Date(Date.now() - 30 * 60_000);
@@ -127,6 +133,7 @@ async function buildSysInfo() {
     `  Hit Rate: *${cache.hitRate}%*\n\n` +
 
     `${backupLine}\n\n` +
+    `${deliverySettings}\n\n` +
 
     `📦 *Orders*\n` +
     `  🟡 Pending: *${pendingOrders}*` +
@@ -168,6 +175,10 @@ module.exports = function registerSysInfo(bot) {
           [
             Markup.button.callback('🏥 Full Health Check', 'sysinfo_health'),
           ],
+          [
+            Markup.button.callback('⏳ Payment Timeout', 'sysinfo_claim_timeout'),
+            Markup.button.callback('🧹 Broadcast Delete', 'sysinfo_broadcast_retention'),
+          ],
         ]),
       });
     } catch (err) {
@@ -196,6 +207,10 @@ module.exports = function registerSysInfo(bot) {
           [
             Markup.button.callback('🏥 Full Health Check', 'sysinfo_health'),
           ],
+          [
+            Markup.button.callback('⏳ Payment Timeout', 'sysinfo_claim_timeout'),
+            Markup.button.callback('🧹 Broadcast Delete', 'sysinfo_broadcast_retention'),
+          ],
         ]),
       });
     } catch (err) {
@@ -218,6 +233,64 @@ module.exports = function registerSysInfo(bot) {
     } catch (err) {
       await ctx.telegram.editMessageText(wait.chat.id, wait.message_id, undefined, `❌ Health check failed: ${err.message}`);
     }
+  });
+
+  bot.action('sysinfo_claim_timeout', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    const current = Number(status.accountPaymentClaimTimeoutMinutes || 0);
+    await ctx.editMessageText(
+      `⏳ *Premium Account Payment Timeout*\n\n` +
+      `အခု setting: *${current > 0 ? `${current} မိနစ်` : 'Disabled'}*\n` +
+      `_မသတ်မှတ်ထားရင် abandoned credential claim ကို auto-release မလုပ်ပါ။_`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+        [Markup.button.callback('🚫 Disabled', 'syssetting_claim_timeout:0')],
+        [Markup.button.callback('5 မိနစ်', 'syssetting_claim_timeout:5'), Markup.button.callback('10 မိနစ်', 'syssetting_claim_timeout:10')],
+        [Markup.button.callback('15 မိနစ်', 'syssetting_claim_timeout:15'), Markup.button.callback('30 မိနစ်', 'syssetting_claim_timeout:30')],
+        [Markup.button.callback('60 မိနစ်', 'syssetting_claim_timeout:60')],
+        [Markup.button.callback('↩️ System Info', 'sysinfo_refresh')],
+      ]) }
+    );
+  });
+
+  bot.action(/^syssetting_claim_timeout:(\\d+)$/, adminOnly(), async (ctx) => {
+    const minutes = Number(ctx.match[1]);
+    await SystemStatus.set({ accountPaymentClaimTimeoutMinutes: minutes > 0 ? minutes : null }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_ACCOUNT_PAYMENT_TIMEOUT', null, 'System', { minutes });
+    await ctx.answerCbQuery(minutes > 0 ? `Set to ${minutes} minutes` : 'Disabled');
+    await ctx.editMessageText(`✅ Premium Account payment timeout: *${minutes > 0 ? `${minutes} မိနစ်` : 'Disabled'}*`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([[Markup.button.callback('↩️ System Info', 'sysinfo_refresh')]]),
+    });
+  });
+
+  bot.action('sysinfo_broadcast_retention', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    const current = Number(status.broadcastRetentionMinutes || 0);
+    await ctx.editMessageText(
+      `🧹 *Broadcast Auto-delete*\n\n` +
+      `အခု setting: *${current > 0 ? `${current} မိနစ်` : 'Disabled'}*\n` +
+      `_Bot users ဆီပို့တဲ့ copy ကိုပဲ ဖျက်ပါမယ်။ Channel post ကို မဖျက်ပါ။_`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+        [Markup.button.callback('🚫 Never Delete', 'syssetting_broadcast_retention:0')],
+        [Markup.button.callback('1 နာရီ', 'syssetting_broadcast_retention:60'), Markup.button.callback('6 နာရီ', 'syssetting_broadcast_retention:360')],
+        [Markup.button.callback('12 နာရီ', 'syssetting_broadcast_retention:720'), Markup.button.callback('24 နာရီ', 'syssetting_broadcast_retention:1440')],
+        [Markup.button.callback('48 နာရီ', 'syssetting_broadcast_retention:2880')],
+        [Markup.button.callback('↩️ System Info', 'sysinfo_refresh')],
+      ]) }
+    );
+  });
+
+  bot.action(/^syssetting_broadcast_retention:(\\d+)$/, adminOnly(), async (ctx) => {
+    const minutes = Number(ctx.match[1]);
+    await SystemStatus.set({ broadcastRetentionMinutes: minutes > 0 ? minutes : null }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_BROADCAST_RETENTION', null, 'System', { minutes });
+    await ctx.answerCbQuery(minutes > 0 ? `Set to ${minutes} minutes` : 'Disabled');
+    await ctx.editMessageText(`✅ Broadcast auto-delete: *${minutes > 0 ? `${minutes} မိနစ်` : 'Disabled'}*`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([[Markup.button.callback('↩️ System Info', 'sysinfo_refresh')]]),
+    });
   });
 
   bot.action('sysinfo_flush_cache', requireRole('MANAGER'), async (ctx) => {

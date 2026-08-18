@@ -8,6 +8,8 @@
 
 const { Scenes, Markup } = require('telegraf');
 const User = require('../models/User');
+const SystemStatus = require('../models/SystemStatus');
+const AnnouncementDelivery = require('../models/AnnouncementDelivery');
 const { auditLog } = require('../services/logger');
 const { config } = require('../../config/settings');
 const { adminMenuKeyboard } = require('../utils/keyboard');
@@ -22,21 +24,21 @@ async function sleep(ms) {
 async function sendToUser(ctx, telegramId, broadcastData) {
   try {
     if (broadcastData.type === 'text') {
-      await ctx.telegram.sendMessage(telegramId, broadcastData.text, {
+      return await ctx.telegram.sendMessage(telegramId, broadcastData.text, {
         parse_mode: 'Markdown',
         disable_web_page_preview: true,
       });
     } else if (broadcastData.type === 'photo') {
-      await ctx.telegram.sendPhoto(telegramId, broadcastData.fileId, {
+      return await ctx.telegram.sendPhoto(telegramId, broadcastData.fileId, {
         caption: broadcastData.caption || '',
         parse_mode: 'Markdown',
       });
     } else if (broadcastData.type === 'forward') {
-      await ctx.telegram.forwardMessage(telegramId, broadcastData.fromChatId, broadcastData.messageId);
+      return await ctx.telegram.forwardMessage(telegramId, broadcastData.fromChatId, broadcastData.messageId);
     }
-    return true;
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -122,9 +124,16 @@ broadcastScene.action('broadcast_confirm', async (ctx) => {
   }
 
   // Progress message
+  const status = await SystemStatus.get();
+  const retentionMinutes = Number(status.broadcastRetentionMinutes || 0);
+  const deleteAt = retentionMinutes > 0
+    ? new Date(Date.now() + Math.min(retentionMinutes, 48 * 60) * 60_000)
+    : null;
+
   const progressMsg = await ctx.reply(
     `📡 *Broadcasting...*\n\n` +
     `📤 Sent: 0 / ${total}\n` +
+    `🧹 Auto-delete: ${retentionMinutes > 0 ? `${retentionMinutes} minutes` : 'disabled'}\n` +
     `❌ Failed: 0\n` +
     `⏳ Progress: 0%`
   );
@@ -141,8 +150,16 @@ broadcastScene.action('broadcast_confirm', async (ctx) => {
     await Promise.all(
       batch.map(async (u) => {
         if (u.telegramId === config.bot.adminId) return;
-        const ok = await sendToUser(ctx, u.telegramId, data);
-        ok ? sent++ : failed++;
+        const message = await sendToUser(ctx, u.telegramId, data);
+        if (message?.message_id && deleteAt) {
+          await AnnouncementDelivery.create({
+            chatId: u.telegramId,
+            messageId: message.message_id,
+            destination: 'user',
+            deleteAt,
+          }).catch((err) => console.error('[BroadcastScene] delivery tracking failed:', err.message));
+        }
+        message ? sent++ : failed++;
       })
     );
 

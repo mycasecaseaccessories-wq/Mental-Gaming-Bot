@@ -228,8 +228,13 @@ async function tickChannelAutoPosts(telegram) {
 async function releaseStaleAccountClaims(telegram) {
   try {
     const AccountCredential = require('../models/AccountCredential');
-    const configured = Number(process.env.ACCOUNT_PAYMENT_CLAIM_TIMEOUT_MINUTES || 15);
-    const timeoutMinutes = Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 15;
+    const SystemStatus = require('../models/SystemStatus');
+    const status = await SystemStatus.get();
+    const configured = Number(status.accountPaymentClaimTimeoutMinutes);
+    if (!Number.isFinite(configured) || configured <= 0) {
+      return { enabled: false, scanned: 0, released: 0 };
+    }
+    const timeoutMinutes = Math.floor(configured);
     const result = await AccountCredential.releaseStalePaymentClaims({ minutes: timeoutMinutes, limit: 100 });
     if (result.released) {
       console.log(`[CronService] 🔐 Released ${result.released} stale account payment claim(s)`);
