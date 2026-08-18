@@ -281,33 +281,54 @@ module.exports = function registerApiManagement(bot) {
   }
 
   async function showAnnouncePicker(ctx) {
-    const [products, accountProducts] = await Promise.all([
-      Product.find({ isActive: true }).sort({ updatedAt: -1 }).select('name finalPrice').lean(),
-      AccountProduct.find({ isActive: true }).sort({ displayOrder: 1, serviceName: 1 }).select('serviceName planLabel price discountPercent emoji').lean(),
-    ]);
+    await ctx.reply(
+      `📣 *Product ကြေညာချက်*\n\nဘယ် product အမျိုးအစားကို ကြေညာမလဲ အရင်ရွေးပါ။\nပြီးရင် ရွေးထားတဲ့အမျိုးအစားထဲက active product အားလုံးကို ပြပေးပါမယ်။`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🛒 Shop Products', 'ann_category:shop')],
+          [Markup.button.callback('🔐 Premium Accounts', 'ann_category:account')],
+          [Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')],
+        ]),
+      }
+    );
+  }
 
-    if (!products.length && !accountProducts.length) return ctx.reply('❌ Active product မရှိသေးပါ။');
+  async function showAnnounceCategory(ctx, category) {
+    if (category === 'shop') {
+      const products = await Product.find({ isActive: true })
+        .sort({ updatedAt: -1 })
+        .select('name finalPrice')
+        .lean();
+      if (!products.length) return ctx.reply('❌ Active Shop Product မရှိသေးပါ။');
 
-    const announceable = [
-      ...products.map((p) => ({
-        type: 'shop',
-        id: p._id,
-        label: `🛒 ${p.name} — ${p.finalPrice.toLocaleString()} KS`,
-      })),
-      ...accountProducts.map((p) => ({
-        type: 'account',
-        id: p._id,
-        label: `${p.emoji || '🔐'} ${p.serviceName} — ${p.planLabel} (${Math.max(0, Math.round(p.price * (1 - (p.discountPercent || 0) / 100))).toLocaleString()} KS)`,
-      })),
-    ];
+      const rows = products.map((p) => [
+        Markup.button.callback(`🛒 ${p.name} — ${Number(p.finalPrice || 0).toLocaleString()} KS`, `ann_pick_item:shop:${p._id}`),
+      ]);
+      rows.push([Markup.button.callback('↩️ Product အမျိုးအစားများ', 'ann_categories')]);
+      rows.push([Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')]);
 
-    const rows = announceable.map((item) => [
-      Markup.button.callback(item.label, `ann_pick_item:${item.type}:${item.id}`),
-    ]);
+      return ctx.reply(
+        `🛒 *Shop Products*\n\nActive Shop Product အားလုံး (${products.length} ခု) — ကြေညာမယ့် product ကို ရွေးပါ:`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+      );
+    }
+
+    const accountProducts = await AccountProduct.find({ isActive: true })
+      .sort({ displayOrder: 1, serviceName: 1 })
+      .select('serviceName planLabel price discountPercent emoji')
+      .lean();
+    if (!accountProducts.length) return ctx.reply('❌ Active Premium Account မရှိသေးပါ။');
+
+    const rows = accountProducts.map((p) => {
+      const finalPrice = Math.max(0, Math.round(Number(p.price || 0) * (1 - Number(p.discountPercent || 0) / 100)));
+      return [Markup.button.callback(`${p.emoji || '🔐'} ${p.serviceName} — ${p.planLabel} (${finalPrice.toLocaleString()} KS)`, `ann_pick_item:account:${p._id}`)];
+    });
+    rows.push([Markup.button.callback('↩️ Product အမျိုးအစားများ', 'ann_categories')]);
     rows.push([Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')]);
 
-    await ctx.reply(
-      `📣 *Product ကြေညာချက်*\n\nShop Products နဲ့ Premium Accounts ထဲက ဘယ် product ကို ကြေညာမလဲ ရွေးပါ:\n_(အားလုံးကို unified product list အဖြစ် ပြထားပြီး bot users + channel နှစ်ခုလုံး ပို့ပါမယ်)_`,
+    return ctx.reply(
+      `🔐 *Premium Accounts*\n\nActive Premium Account အားလုံး (${accountProducts.length} ခု) — ကြေညာမယ့် product ကို ရွေးပါ:`,
       { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
     );
   }
@@ -351,6 +372,18 @@ module.exports = function registerApiManagement(bot) {
 
   bot.action('ann_noop', requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery();
+  });
+
+  bot.action('ann_categories', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    try { await ctx.deleteMessage(); } catch {}
+    return showAnnouncePicker(ctx);
+  });
+
+  bot.action(/^ann_category:(shop|account)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    try { await ctx.deleteMessage(); } catch {}
+    return showAnnounceCategory(ctx, ctx.match[1]);
   });
 
   // Unified Announce picker: Shop Products and Premium Accounts share one
