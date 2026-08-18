@@ -185,11 +185,14 @@ const GUIDE_SECTIONS = [
       `• 📢 *Announce Selected (N)* — ရွေးထားတဲ့ product အများကို တစ်ခါတည်း ပို့\n\n` +
       `*📅 Schedule Manager UI*\n` +
       `📣 Announce → 📅 Schedule Manager → ➕ New Schedule\n` +
-      `1️⃣ 🌐 All Active Products / 📦 Product တစ်ခု / 📂 Category တစ်ခု ရွေး\n` +
-      `2️⃣ 🕘 Daily 09:00 / ⏱ Every 1 hour / ⏱ Every 6 hours ရွေး\n` +
-      `3️⃣ Schedule ဖန်တီးပြီးရင် 🟢 Active အဖြစ် run မယ်\n` +
-      `4️⃣ Schedule တစ်ခုချင်းစီမှာ ⏸️ Pause/▶️ Resume, ▶️ Run Now, 🗑 Delete button တွေရှိမယ်\n` +
-      `5️⃣ ⏱ Retention button ကိုနှိပ်ပြီး bot-user message ကို မဖျက် / 1h / 6h / 12h / 24h လှည့်ပြောင်း\n\n` +
+      `1️⃣ 🌐 All Active Products / 📦 Product တစ်ခု / 🔐 Premium Account တစ်ခု / 📂 Category အများ ရွေး\n` +
+      `2️⃣ 📂 Category အများရွေးရာမှာ ၂ ခု၊ ၃ ခု သို့ ၁၀ ခုအထိ ရွေးနိုင်ပြီး parent category တစ်ခုရွေးတာနဲ့ အောက်က sub-category နဲ့ product အားလုံး auto ပါမယ်\n` +
+      `3️⃣ 🕘 Daily / 📅 Weekly / 🗓 Monthly ရွေးပြီး MMT နာရီ/မိနစ်ကို ရွေး\n` +
+      `4️⃣ Weekly မှာ weekday ရွေး၊ Monthly မှာ လရက် (၁/၅/၁၀/၁၅/၂၀/၂၅/၂၈) ရွေး၊ Custom time မှာ HH:MM ရိုက်\n` +
+      `5️⃣ ⏱ Every 1 hour / 6 hours / 12 hours လို interval schedule လည်း ရွေးနိုင်\n` +
+      `6️⃣ Schedule ဖန်တီးပြီးရင် 🟢 Active အဖြစ် run မယ်\n` +
+      `7️⃣ Schedule တစ်ခုချင်းစီမှာ ⏸️ Pause/▶️ Resume, ▶️ Run Now, 🗑 Delete button တွေရှိမယ်\n` +
+      `8️⃣ ⏱ Retention button ကိုနှိပ်ပြီး bot-user message ကို မဖျက် / 1h / 6h / 12h / 24h လှည့်ပြောင်း\n\n` +
       `*Message Retention Rule*\n` +
       `• Bot user ဆီပို့တဲ့ announce ကို သတ်မှတ်ချိန်ရောက်ရင် auto-delete\n` +
       `• Announcement Channel post ကို အမြဲမဖျက်\n` +
@@ -208,9 +211,11 @@ const GUIDE_SECTIONS = [
       `🎬 *Button flow ဥပမာ:*\n` +
       `1️⃣ Admin Marketing → 📣 Announce → 🛒 Shop Products\n` +
       `2️⃣ ✅ Select All in Shop → 📢 Announce Selected\n` +
-      `3️⃣ 📅 Schedule Manager → ➕ New Schedule → 📂 Category → 🕘 Daily 09:00\n` +
-      `4️⃣ Schedule Manager မှာ ⏱ Retention ကို 6h ထား\n` +
-      `5️⃣ Channel post မဖျက်ဘဲ bot-user copy ကို 6 နာရီအကြာ auto-delete လုပ်မယ်\n\n` +
+      `3️⃣ 📅 Schedule Manager → ➕ New Schedule → 📂 Category အများရွေး → ✅ ဆက်သွားမယ်\n` +
+      `4️⃣ 🗓 Monthly (သို့) 📅 Weekly ရွေး → weekday/လရက်ရွေး → MMT 09:00 (သို့) Custom HH:MM သတ်မှတ်\n` +
+      `5️⃣ Schedule Manager မှာ ⏱ Retention ကို 6h ထား\n` +
+      `6️⃣ Category အောက်က sub-category/product အားလုံးကို schedule တစ်ကြိမ် run တိုင်း တစ်ခါတည်း ကြော်ငြာမယ်\n` +
+      `7️⃣ Channel post မဖျက်ဘဲ bot-user copy ကို 6 နာရီအကြာ auto-delete လုပ်မယ်\n\n` +
       `🎬 *System setting ဥပမာ:*\n` +
       `1️⃣ Admin Panel → 🔧 System → 🧹 Broadcast Delete နှိပ်\n` +
       `2️⃣ *6 နာရီ* ရွေး → ✅ Broadcast auto-delete setting သိမ်းပြီး\n` +

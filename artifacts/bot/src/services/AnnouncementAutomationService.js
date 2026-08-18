@@ -3,6 +3,7 @@ const AnnouncementSchedule = require('../models/AnnouncementSchedule');
 const AnnouncementRun = require('../models/AnnouncementRun');
 const AnnouncementDelivery = require('../models/AnnouncementDelivery');
 const Product = require('../models/Product');
+const Catalog = require('../models/Catalog');
 const AccountProduct = require('../models/AccountProduct');
 const BroadcastService = require('./BroadcastService');
 
@@ -25,13 +26,16 @@ function nextRunAt(schedule, from = new Date()) {
   if (schedule.frequency === 'once') return schedule.runAt || null;
   const local = localParts(from);
   const offsetMs = 6.5 * 60 * 60_000;
-  if (schedule.frequency === 'daily' || schedule.frequency === 'weekly') {
+  if (schedule.frequency === 'daily' || schedule.frequency === 'weekly' || schedule.frequency === 'monthly') {
     const candidate = new Date(Date.UTC(local.year, local.month - 1, local.day, Number(schedule.localHour ?? 9), Number(schedule.localMinute || 0)));
-    for (let days = 0; days <= 8; days += 1) {
+    const maxDays = schedule.frequency === 'monthly' ? 370 : 8;
+    for (let days = 0; days <= maxDays; days += 1) {
       const weekday = candidate.getUTCDay();
       const weekdayOk = schedule.frequency !== 'weekly'
         || !Array.isArray(schedule.weekdays) || !schedule.weekdays.length || schedule.weekdays.includes(weekday);
-      if (weekdayOk && candidate.getTime() > Date.now() + offsetMs) return new Date(candidate.getTime() - offsetMs);
+      const monthDayOk = schedule.frequency !== 'monthly'
+        || candidate.getUTCDate() === Number(schedule.monthDay || 1);
+      if (weekdayOk && monthDayOk && candidate.getTime() > Date.now() + offsetMs) return new Date(candidate.getTime() - offsetMs);
       candidate.setUTCDate(candidate.getUTCDate() + 1);
     }
   }
@@ -44,7 +48,34 @@ function nextRunAt(schedule, from = new Date()) {
 async function resolveTargets(schedule) {
   if (schedule.targetType === 'product') return Product.find({ _id: { $in: schedule.productIds || [] }, isActive: true });
   if (schedule.targetType === 'account') return AccountProduct.find({ _id: { $in: schedule.accountProductIds || [] }, isActive: true });
-  if (schedule.targetType === 'category') return Product.find({ category: schedule.category, isActive: true }).sort({ updatedAt: -1 });
+  if (schedule.targetType === 'category') {
+    const requested = (Array.isArray(schedule.categories) && schedule.categories.length)
+      ? schedule.categories.filter(Boolean)
+      : [schedule.category].filter(Boolean);
+    const catalogs = await Catalog.find({ isActive: true, name: { $in: requested } }).select('_id name').lean();
+    const catalogIds = new Set(catalogs.map((c) => String(c._id)));
+    const catalogNames = new Set(requested);
+    let frontier = [...catalogIds];
+    while (frontier.length) {
+      const children = await Catalog.find({ isActive: true, parentCategory: { $in: frontier } }).select('_id name').lean();
+      frontier = [];
+      for (const child of children) {
+        const id = String(child._id);
+        if (!catalogIds.has(id)) {
+          catalogIds.add(id);
+          catalogNames.add(child.name);
+          frontier.push(id);
+        }
+      }
+    }
+    return Product.find({
+      isActive: true,
+      $or: [
+        { catalogId: { $in: [...catalogIds] } },
+        { category: { $in: [...catalogNames] } },
+      ],
+    }).sort({ updatedAt: -1 });
+  }
   const [products, accounts] = await Promise.all([
     Product.find({ isActive: true }).sort({ updatedAt: -1 }),
     AccountProduct.find({ isActive: true }).sort({ displayOrder: 1, serviceName: 1 }),

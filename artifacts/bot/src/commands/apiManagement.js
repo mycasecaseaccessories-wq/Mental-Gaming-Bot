@@ -31,6 +31,7 @@ const {
 }                  = require('../services/BroadcastService');
 const { auditLog }     = require('../services/logger');
 const Product          = require('../models/Product');
+const Catalog           = require('../models/Catalog');
 const AccountProduct   = require('../models/AccountProduct');
 const WebhookEvent     = require('../models/WebhookEvent');
 const SystemStatus     = require('../models/SystemStatus');
@@ -318,15 +319,25 @@ module.exports = function registerApiManagement(bot) {
   }
 
   async function showScheduleTarget(ctx) {
-    const categories = await Product.distinct('category', { isActive: true });
     const rows = [
       [Markup.button.callback('🌐 All Active Products', 'ann_sched_target:all')],
       [Markup.button.callback('📦 Shop Product တစ်ခု', 'ann_sched_target:product')],
       [Markup.button.callback('🔐 Premium Account တစ်ခု', 'ann_sched_target:account')],
+      [Markup.button.callback('📂 Category အများရွေးမယ်', 'ann_sched_categories')],
     ];
-    rows.push(...categories.filter(Boolean).slice(0, 40).map((category) => [Markup.button.callback(`📂 ${String(category).slice(0, 35)}`, `ann_sched_cat:${encodeURIComponent(category).slice(0, 45)}`)]));
     rows.push([Markup.button.callback('❌ Cancel', 'ann_cancel')]);
-    return ctx.reply('📅 Schedule target ကို ရွေးပါ။', Markup.inlineKeyboard(rows));
+    return ctx.reply('📅 Schedule target ကို ရွေးပါ။\n\n📂 Category အများရွေးရင် parent အောက်က sub-category နဲ့ product အားလုံးကို auto include လုပ်ပါမယ်။', Markup.inlineKeyboard(rows));
+  }
+
+  async function showScheduleCategories(ctx) {
+    const catalogRows = await Catalog.find({ isActive: true }).select('name parentCategory sortOrder').sort({ sortOrder: 1, name: 1 }).lean();
+    const legacy = await Product.distinct('category', { isActive: true });
+    const names = [...new Set([...catalogRows.map((c) => c.name), ...legacy.filter(Boolean)])];
+    const selected = new Set(ctx.session.announceScheduleCategories || []);
+    const rows = names.slice(0, 80).map((name) => [Markup.button.callback(`${selected.has(name) ? '✅' : '☐'} ${String(name).slice(0, 42)}`, `ann_sched_cat_toggle:${encodeURIComponent(name).slice(0, 55)}`)]);
+    if (selected.size) rows.push([Markup.button.callback(`✅ Category ${selected.size} ခု — ဆက်သွားမယ်`, 'ann_sched_cat_done')]);
+    rows.push([Markup.button.callback('🧹 Clear', 'ann_sched_cat_clear'), Markup.button.callback('❌ Cancel', 'ann_cancel')]);
+    return ctx.reply('📂 Category အများရွေးပါ။ Parent category ကိုရွေးရင် အောက်က sub-category/product အားလုံးပါဝင်ပါမယ်။', Markup.inlineKeyboard(rows));
   }
 
   async function showScheduleProducts(ctx, type = 'shop') {
@@ -343,25 +354,42 @@ module.exports = function registerApiManagement(bot) {
   }
 
   async function showScheduleFrequency(ctx) {
-    return ctx.reply('⏰ Announce အချိန်/ကြားချိန်ကို ရွေးပါ။ Default time က MMT 09:00 ဖြစ်ပါတယ်။', Markup.inlineKeyboard([
-      [Markup.button.callback('🕘 Daily 09:00', 'ann_sched_freq:daily')],
-      [Markup.button.callback('⏱ Every 1 hour', 'ann_sched_freq:hourly')],
-      [Markup.button.callback('⏱ Every 6 hours', 'ann_sched_freq:every_6_hours')],
+    return ctx.reply('⏰ Frequency ကို ရွေးပါ။ Daily/Weekly/Monthly မှာ နာရီနဲ့ မိနစ်ကို နောက်တစ်ဆင့် ရွေးနိုင်ပါတယ်။', Markup.inlineKeyboard([
+      [Markup.button.callback('🕘 Daily', 'ann_sched_freq:daily'), Markup.button.callback('📅 Weekly', 'ann_sched_freq:weekly')],
+      [Markup.button.callback('🗓 Monthly', 'ann_sched_freq:monthly')],
+      [Markup.button.callback('⏱ Every 1 hour', 'ann_sched_freq:hourly'), Markup.button.callback('⏱ Every 6 hours', 'ann_sched_freq:every_6_hours')],
+      [Markup.button.callback('⏱ Every 12 hours', 'ann_sched_freq:interval:720')],
       [Markup.button.callback('❌ Cancel', 'ann_cancel')],
     ]));
   }
 
-  async function createButtonSchedule(ctx, frequency) {
+  async function showScheduleTime(ctx, frequency) {
+    ctx.session.announceScheduleDraft = { ...(ctx.session.announceScheduleDraft || {}), frequency };
+    const rows = [
+      [Markup.button.callback('🌅 09:00', 'ann_sched_time:9:0'), Markup.button.callback('☀️ 12:00', 'ann_sched_time:12:0')],
+      [Markup.button.callback('🌆 18:00', 'ann_sched_time:18:0'), Markup.button.callback('🌙 21:00', 'ann_sched_time:21:0')],
+      [Markup.button.callback('⌨️ Custom time (HH:MM)', 'ann_sched_custom_time')],
+      [Markup.button.callback('❌ Cancel', 'ann_cancel')],
+    ];
+    return ctx.reply(`⏰ ${frequency} schedule အတွက် MMT အချိန်ရွေးပါ။`, Markup.inlineKeyboard(rows));
+  }
+
+  async function createButtonSchedule(ctx, frequency, extra = {}) {
     const draft = ctx.session.announceScheduleDraft;
     if (!draft) return ctx.answerCbQuery('Schedule target မရှိတော့ပါ', { show_alert: true });
     const payload = {
       name: draft.name,
       targetType: draft.targetType,
-      category: draft.category || null,
+      category: draft.category || (draft.categories || [])[0] || null,
+      categories: draft.categories || [],
       productIds: draft.productId ? [draft.productId] : [],
+      accountProductIds: draft.accountProductId ? [draft.accountProductId] : [],
       frequency,
-      localHour: 9,
-      localMinute: 0,
+      intervalMinutes: extra.intervalMinutes || null,
+      localHour: extra.localHour ?? draft.localHour ?? 9,
+      localMinute: extra.localMinute ?? draft.localMinute ?? 0,
+      monthDay: extra.monthDay || draft.monthDay || 1,
+      weekdays: extra.weekdays || draft.weekdays || [],
       retentionSeconds: 6 * 3600,
       destination: 'both',
       createdBy: ctx.from.id,
@@ -516,13 +544,97 @@ module.exports = function registerApiManagement(bot) {
       : await Product.findOne({ _id: ctx.match[2], isActive: true }).select('name').lean();
     if (!product) return ctx.reply('❌ Active product မတွေ့ပါ။');
     const name = isAccount ? `${product.serviceName} — ${product.planLabel}` : product.name;
-    ctx.session.announceScheduleDraft = { name, targetType: isAccount ? 'account' : 'product', productId: String(product._id) };
+    ctx.session.announceScheduleDraft = isAccount
+      ? { name, targetType: 'account', accountProductId: String(product._id) }
+      : { name, targetType: 'product', productId: String(product._id) };
     return showScheduleFrequency(ctx);
   });
 
-  bot.action(/^ann_sched_freq:(daily|hourly|every_6_hours)$/, requireRole('MANAGER'), async (ctx) => {
+  bot.action('ann_sched_categories', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.announceScheduleCategories = [];
+    return showScheduleCategories(ctx);
+  });
+
+  bot.action(/^ann_sched_cat_toggle:(.+)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const category = decodeURIComponent(ctx.match[1]);
+    const selected = new Set(ctx.session.announceScheduleCategories || []);
+    if (selected.has(category)) selected.delete(category); else selected.add(category);
+    ctx.session.announceScheduleCategories = [...selected].slice(0, 10);
+    return showScheduleCategories(ctx);
+  });
+
+  bot.action('ann_sched_cat_clear', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('Selection cleared');
+    ctx.session.announceScheduleCategories = [];
+    return showScheduleCategories(ctx);
+  });
+
+  bot.action('ann_sched_cat_done', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const categories = (ctx.session.announceScheduleCategories || []).slice(0, 10);
+    if (!categories.length) return ctx.reply('အနည်းဆုံး category တစ်ခု ရွေးပါ။');
+    ctx.session.announceScheduleDraft = { name: categories.join(', ').slice(0, 120), targetType: 'category', categories };
+    ctx.session.announceScheduleCategories = [];
+    return showScheduleFrequency(ctx);
+  });
+
+  bot.action(/^ann_sched_freq:(daily|weekly|monthly)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.match[1] === 'weekly') {
+      return ctx.reply('📅 Weekly announce လုပ်မယ့်နေ့ကို ရွေးပါ။', Markup.inlineKeyboard([
+        [Markup.button.callback('တနင်္လာ', 'ann_sched_weekday:1'), Markup.button.callback('အင်္ဂါ', 'ann_sched_weekday:2')],
+        [Markup.button.callback('ဗုဒ္ဓဟူး', 'ann_sched_weekday:3'), Markup.button.callback('ကြာသပတေး', 'ann_sched_weekday:4')],
+        [Markup.button.callback('သောကြာ', 'ann_sched_weekday:5'), Markup.button.callback('စနေ', 'ann_sched_weekday:6')],
+        [Markup.button.callback('တနင်္ဂနွေ', 'ann_sched_weekday:0')],
+      ]));
+    }
+    if (ctx.match[1] === 'monthly') {
+      return ctx.reply('🗓 Monthly announce လုပ်မယ့်ရက်ကို ရွေးပါ။', Markup.inlineKeyboard([
+        [Markup.button.callback('လ ၁ ရက်', 'ann_sched_monthday:1'), Markup.button.callback('လ ၅ ရက်', 'ann_sched_monthday:5')],
+        [Markup.button.callback('လ ၁၀ ရက်', 'ann_sched_monthday:10'), Markup.button.callback('လ ၁၅ ရက်', 'ann_sched_monthday:15')],
+        [Markup.button.callback('လ ၂၀ ရက်', 'ann_sched_monthday:20'), Markup.button.callback('လ ၂၅ ရက်', 'ann_sched_monthday:25')],
+        [Markup.button.callback('လ နောက်ဆုံးနေ့နီးပါး (၂၈)', 'ann_sched_monthday:28')],
+      ]));
+    }
+    return showScheduleTime(ctx, ctx.match[1]);
+  });
+
+  bot.action(/^ann_sched_weekday:([0-6])$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.announceScheduleDraft = { ...(ctx.session.announceScheduleDraft || {}), weekdays: [Number(ctx.match[1])] };
+    return showScheduleTime(ctx, 'weekly');
+  });
+
+  bot.action(/^ann_sched_monthday:(\\d{1,2})$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.announceScheduleDraft = { ...(ctx.session.announceScheduleDraft || {}), monthDay: Number(ctx.match[1]) };
+    return showScheduleTime(ctx, 'monthly');
+  });
+
+  bot.action(/^ann_sched_freq:interval:(\\d+)$/, requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery('Schedule ဖန်တီးနေပါပြီ...');
-    return createButtonSchedule(ctx, ctx.match[1]);
+    return createButtonSchedule(ctx, 'interval', { intervalMinutes: Number(ctx.match[1]) });
+  });
+
+  bot.action(/^ann_sched_time:(\\d{1,2}):(\\d{1,2})$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('Schedule ဖန်တီးနေပါပြီ...');
+    return createButtonSchedule(ctx, ctx.session.announceScheduleDraft?.frequency || 'daily', { localHour: Number(ctx.match[1]), localMinute: Number(ctx.match[2]) });
+  });
+
+  bot.action('ann_sched_custom_time', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.announceScheduleAwaitingTime = true;
+    return ctx.reply('⌨️ MMT အချိန်ကို `HH:MM` ပုံစံနဲ့ ရိုက်ပါ။ ဥပမာ `07:30` သို့ `22:15`', { parse_mode: 'Markdown' });
+  });
+
+  bot.hears(/^([01]?\\d|2[0-3]):([0-5]\\d)$/, requireRole('MANAGER'), async (ctx) => {
+    if (!ctx.session.announceScheduleAwaitingTime) return;
+    ctx.session.announceScheduleAwaitingTime = false;
+    const hour = Number(ctx.match[1]);
+    const minute = Number(ctx.match[2]);
+    return createButtonSchedule(ctx, ctx.session.announceScheduleDraft?.frequency || 'daily', { localHour: hour, localMinute: minute });
   });
 
   bot.action('ann_sched_noop', requireRole('MANAGER'), (ctx) => ctx.answerCbQuery());
