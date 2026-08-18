@@ -133,7 +133,13 @@ router.get("/admin/summary", telegramAuth, adminAuth, async (_req, res) => {
       orders.countDocuments({ timestamp: { $gte: startOfDay } }),
       orders.aggregate([
         { $match: { timestamp: { $gte: startOfDay }, status: "Success" } },
-        { $group: { _id: null, total: { $sum: "$amount" } } },
+        {
+          $group: {
+            _id: null,
+            // Bot orders use totalKS while Mini App orders use amount.
+            total: { $sum: { $ifNull: ["$amount", "$totalKS"] } },
+          },
+        },
       ]).toArray(),
       txs.aggregate([
         { $match: { timestamp: { $gte: startOfDay }, type: "Topup", status: "Completed" } },

@@ -26,8 +26,8 @@ async function getCoinBonusRates() {
     const GameConfig = require('../models/GameConfig');
     const cfg = await GameConfig.get();
     _ratesCache = {
-      Silver:   cfg.coinBonusRateSilver,
-      Gold:     cfg.coinBonusRateGold,
+      Silver: cfg.coinBonusRateSilver,
+      Gold: cfg.coinBonusRateGold,
       Platinum: cfg.coinBonusRatePlatinum,
     };
     _ratesCacheExpiry = Date.now() + 60_000; // 60s cache
@@ -67,11 +67,23 @@ async function ensureUniqueTxId() {
  * Credit KS to a user's wallet.
  * @returns { transaction, user }
  */
-async function creditKS(userId, amount, { type = 'AdminCredit', note = '', paymentMethod = null, screenshotUrl = null, txId = null } = {}) {
+async function creditKS(
+  userId,
+  amount,
+  {
+    type = 'AdminCredit',
+    note = '',
+    paymentMethod = null,
+    screenshotUrl = null,
+    txId = null,
+    session: externalSession = null,
+  } = {},
+) {
   if (amount <= 0) throw new Error('Credit amount must be positive');
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  const session = externalSession || (await mongoose.startSession());
+  const ownsSession = !externalSession;
+  if (ownsSession) session.startTransaction();
 
   try {
     const user = await User.findById(userId).session(session);
@@ -89,27 +101,32 @@ async function creditKS(userId, amount, { type = 'AdminCredit', note = '', payme
 
     const finalTxId = txId || (await ensureUniqueTxId());
 
-    const tx = await Transaction.create([{
-      userId: user._id,
-      type,
-      wallet: 'KS',
-      amount,
-      balanceBefore: before,
-      balanceAfter: user.balanceKS,
-      txId: finalTxId,
-      status: 'Completed',
-      paymentMethod,
-      screenshotUrl,
-      note,
-    }], { session });
+    const tx = await Transaction.create(
+      [
+        {
+          userId: user._id,
+          type,
+          wallet: 'KS',
+          amount,
+          balanceBefore: before,
+          balanceAfter: user.balanceKS,
+          txId: finalTxId,
+          status: 'Completed',
+          paymentMethod,
+          screenshotUrl,
+          note,
+        },
+      ],
+      { session },
+    );
 
-    await session.commitTransaction();
+    if (ownsSession) await session.commitTransaction();
     return { transaction: tx[0], user };
   } catch (err) {
-    await session.abortTransaction();
+    if (ownsSession) await session.abortTransaction();
     throw err;
   } finally {
-    session.endSession();
+    if (ownsSession) await session.endSession();
   }
 }
 
@@ -125,7 +142,8 @@ async function debitKS(userId, amount, { type = 'Purchase', note = '', txId = nu
   try {
     const user = await User.findById(userId).session(session);
     if (!user) throw new Error('User not found');
-    if (user.balanceKS < amount) throw new Error(`Insufficient KS balance. Have: ${user.balanceKS}, Need: ${amount}`);
+    if (user.balanceKS < amount)
+      throw new Error(`Insufficient KS balance. Have: ${user.balanceKS}, Need: ${amount}`);
 
     const before = user.balanceKS;
     user.balanceKS -= amount;
@@ -133,17 +151,22 @@ async function debitKS(userId, amount, { type = 'Purchase', note = '', txId = nu
 
     const finalTxId = txId || (await ensureUniqueTxId());
 
-    const tx = await Transaction.create([{
-      userId: user._id,
-      type,
-      wallet: 'KS',
-      amount: -amount,
-      balanceBefore: before,
-      balanceAfter: user.balanceKS,
-      txId: finalTxId,
-      status: 'Completed',
-      note,
-    }], { session });
+    const tx = await Transaction.create(
+      [
+        {
+          userId: user._id,
+          type,
+          wallet: 'KS',
+          amount: -amount,
+          balanceBefore: before,
+          balanceAfter: user.balanceKS,
+          txId: finalTxId,
+          status: 'Completed',
+          note,
+        },
+      ],
+      { session },
+    );
 
     await session.commitTransaction();
     return { transaction: tx[0], user };
@@ -158,26 +181,31 @@ async function debitKS(userId, amount, { type = 'Purchase', note = '', txId = nu
 /**
  * Credit Mental Coins to a user.
  */
-async function creditCoin(userId, amount, { type = 'Bonus', note = '' } = {}) {
+async function creditCoin(userId, amount, { type = 'Bonus', note = '', session = null } = {}) {
   if (amount <= 0) throw new Error('Coin credit must be positive');
 
-  const user = await User.findById(userId);
+  const user = await User.findById(userId).session(session || null);
   if (!user) throw new Error('User not found');
 
   const before = user.balanceCoin;
   user.balanceCoin += amount;
-  await user.save();
+  await user.save(session ? { session } : undefined);
 
-  await Transaction.create({
-    userId: user._id,
-    type,
-    wallet: 'Coin',
-    amount,
-    balanceBefore: before,
-    balanceAfter: user.balanceCoin,
-    status: 'Completed',
-    note,
-  });
+  await Transaction.create(
+    [
+      {
+        userId: user._id,
+        type,
+        wallet: 'Coin',
+        amount,
+        balanceBefore: before,
+        balanceAfter: user.balanceCoin,
+        status: 'Completed',
+        note,
+      },
+    ],
+    session ? { session } : undefined,
+  );
 
   return user;
 }
@@ -228,7 +256,10 @@ async function createPendingTopup(userId, { amountKS, paymentMethod, screenshotU
   if (!user) throw new Error('User not found');
 
   const alreadyPending = await Transaction.hasPendingTopup(userId);
-  if (alreadyPending) throw new Error('You already have a pending top-up request. Please wait for it to be processed.');
+  if (alreadyPending)
+    throw new Error(
+      'You already have a pending top-up request. Please wait for it to be processed.',
+    );
 
   const txId = await ensureUniqueTxId();
 
@@ -253,97 +284,136 @@ async function createPendingTopup(userId, { amountKS, paymentMethod, screenshotU
  * Approve a pending top-up: credit KS + award coin bonus.
  */
 async function approveTopup(txId, adminId) {
-  const tx = await Transaction.findOne({ txId, type: 'Topup', status: 'Pending' }).populate('userId');
-  if (!tx) throw new Error('Pending top-up not found');
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (await Transaction.isDuplicate(`${txId}_approved`)) {
-    throw new Error('This top-up was already approved');
-  }
+  try {
+    const tx = await Transaction.findOne({ txId, type: 'Topup', status: 'Pending' })
+      .populate('userId')
+      .session(session);
+    if (!tx) {
+      const alreadyApproved = await Transaction.exists({
+        txId: `${txId}_approved`,
+        type: 'Topup',
+        status: 'Completed',
+      }).session(session);
+      if (alreadyApproved) throw new Error('This top-up was already approved');
+      throw new Error('Pending top-up not found');
+    }
 
-  const user = tx.userId;
-  const amountKS = tx.amount;
-  const bonusCoins = await calcCoinBonus(amountKS, user.membershipTier);
+    const user = await User.findById(tx.userId._id).session(session);
+    if (!user) throw new Error('User not found');
+    const amountKS = tx.amount;
+    const bonusCoins = await calcCoinBonus(amountKS, user.membershipTier);
+    const approvedTxId = `${txId}_approved`;
+    if (await Transaction.exists({ txId: approvedTxId }).session(session)) {
+      throw new Error('This top-up was already approved');
+    }
 
-  // Mark original pending tx as Completed
-  tx.status = 'Completed';
-  tx.processedBy = adminId;
-  tx.balanceAfter = user.balanceKS + amountKS;
-  tx.note = 'Approved by admin';
-  tx.txId = `${txId}_approved`;
-  await tx.save();
+    // Keep pending-state transition, wallet credit and bonus ledger records atomic.
+    tx.status = 'Completed';
+    tx.processedBy = adminId;
+    tx.balanceAfter = user.balanceKS + amountKS;
+    tx.note = 'Approved by admin';
+    tx.txId = approvedTxId;
+    await tx.save({ session });
 
-  // Credit KS
-  const { user: updatedUser } = await creditKS(user._id, amountKS, {
-    type: 'Topup',
-    note: `Top-up approved — ${tx.paymentMethod}`,
-    paymentMethod: tx.paymentMethod,
-    screenshotUrl: tx.screenshotUrl,
-    txId,
-  });
-
-  // Award coin bonus
-  if (bonusCoins > 0) {
-    const rates = await getCoinBonusRates();
-    await creditCoin(user._id, bonusCoins, {
-      type: 'Bonus',
-      note: `Top-up bonus — ${user.membershipTier} tier (${Math.round((rates[user.membershipTier] || 0.01) * 100 * 10) / 10}%)`,
+    const { user: updatedUser } = await creditKS(user._id, amountKS, {
+      type: 'Topup',
+      note: `Top-up approved — ${tx.paymentMethod}`,
+      paymentMethod: tx.paymentMethod,
+      screenshotUrl: tx.screenshotUrl,
+      txId,
+      session,
     });
-  }
 
-  // Happy Hour extra MC bonus (lazy require to avoid circular dependency)
-  let happyHourCoins = 0;
-  let happyHourPct = 0;
-  try {
-    const { happyHourBonusMC } = require('./PromoPerksService');
-    const hh = await happyHourBonusMC(amountKS);
-    if (hh.bonus > 0) {
-      happyHourCoins = hh.bonus;
-      happyHourPct = hh.pct;
-      await creditCoin(user._id, happyHourCoins, {
+    if (bonusCoins > 0) {
+      const rates = await getCoinBonusRates();
+      await creditCoin(user._id, bonusCoins, {
         type: 'Bonus',
-        note: `Happy Hour bonus (+${hh.pct}%)`,
+        note: `Top-up bonus — ${user.membershipTier} tier (${Math.round((rates[user.membershipTier] || 0.01) * 100 * 10) / 10}%)`,
+        session,
       });
     }
-  } catch (e) {
-    console.error('[WalletService] happy hour bonus error:', e.message);
-  }
 
-  // Top-up reward coupon (lazy require to avoid circular dependency)
-  let topupCoupon = null;
-  try {
-    const SystemStatus = require('../models/SystemStatus');
-    const st = await SystemStatus.get();
-    if (st.topupCouponEnabled && amountKS >= (st.topupCouponMinKS || 0) && st.topupCouponValue > 0) {
-      const { generateCoupon } = require('./PromoService');
-      const expiryDate = new Date(Date.now() + (st.topupCouponExpiryDays || 7) * 24 * 60 * 60 * 1000);
-      topupCoupon = await generateCoupon(adminId, {
-        discountType: st.topupCouponType || 'Percentage',
-        value: st.topupCouponValue,
-        maxUses: 1,
-        perUserLimit: 1,
-        expiryDate,
-        scopeType: st.topupCouponScopeType || 'all',
-        scopeCategories: st.topupCouponScopeCategories || [],
-        scopeProducts: st.topupCouponScopeProducts || [],
-        restrictedToUserId: user._id,
-        source: 'topup',
-        description: `Top-up reward — ${amountKS.toLocaleString()} KS (${txId})`,
-        prefix: 'TU',
-      });
+    await session.commitTransaction();
+
+    // Optional promotions run after the financial transaction. A promotion
+    // failure must not roll back a successful wallet credit.
+    let happyHourCoins = 0;
+    let happyHourPct = 0;
+    try {
+      const { happyHourBonusMC } = require('./PromoPerksService');
+      const hh = await happyHourBonusMC(amountKS);
+      if (hh.bonus > 0) {
+        happyHourCoins = hh.bonus;
+        happyHourPct = hh.pct;
+        await creditCoin(user._id, happyHourCoins, {
+          type: 'Bonus',
+          note: `Happy Hour bonus (+${hh.pct}%)`,
+        });
+      }
+    } catch (e) {
+      console.error('[WalletService] happy hour bonus error:', e.message);
     }
-  } catch (e) {
-    console.error('[WalletService] topup coupon grant error:', e.message);
-  }
 
-  const finalUser = await User.findById(user._id);
-  return { user: finalUser, amountKS, bonusCoins, happyHourCoins, happyHourPct, topupCoupon, txId };
+    let topupCoupon = null;
+    try {
+      const SystemStatus = require('../models/SystemStatus');
+      const st = await SystemStatus.get();
+      if (
+        st.topupCouponEnabled &&
+        amountKS >= (st.topupCouponMinKS || 0) &&
+        st.topupCouponValue > 0
+      ) {
+        const { generateCoupon } = require('./PromoService');
+        const expiryDate = new Date(
+          Date.now() + (st.topupCouponExpiryDays || 7) * 24 * 60 * 60 * 1000,
+        );
+        topupCoupon = await generateCoupon(adminId, {
+          discountType: st.topupCouponType || 'Percentage',
+          value: st.topupCouponValue,
+          maxUses: 1,
+          perUserLimit: 1,
+          expiryDate,
+          scopeType: st.topupCouponScopeType || 'all',
+          scopeCategories: st.topupCouponScopeCategories || [],
+          scopeProducts: st.topupCouponScopeProducts || [],
+          restrictedToUserId: user._id,
+          source: 'topup',
+          description: `Top-up reward — ${amountKS.toLocaleString()} KS (${txId})`,
+          prefix: 'TU',
+        });
+      }
+    } catch (e) {
+      console.error('[WalletService] topup coupon grant error:', e.message);
+    }
+
+    const finalUser = await User.findById(user._id);
+    return {
+      user: finalUser,
+      amountKS,
+      bonusCoins,
+      happyHourCoins,
+      happyHourPct,
+      topupCoupon,
+      txId,
+    };
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    await session.endSession();
+  }
 }
 
 /**
  * Reject a pending top-up.
  */
 async function rejectTopup(txId, adminId, reason) {
-  const tx = await Transaction.findOne({ txId, type: 'Topup', status: 'Pending' }).populate('userId');
+  const tx = await Transaction.findOne({ txId, type: 'Topup', status: 'Pending' }).populate(
+    'userId',
+  );
   if (!tx) throw new Error('Pending top-up not found');
 
   tx.status = 'Rejected';

@@ -25,6 +25,10 @@ function productDeepLink(productId) {
   return `https://t.me/${BOT_USERNAME}?start=product_${productId}`;
 }
 
+function accountProductDeepLink(accountProductId) {
+  return `https://t.me/${BOT_USERNAME}?start=account_${accountProductId}`;
+}
+
 // Escape Markdown-reserved chars in user-supplied text (product names, descriptions…)
 function mdEsc(s) {
   return String(s == null ? '' : s).replace(/([_*`\[])/g, '\\$1');
@@ -337,7 +341,7 @@ async function announceAccountProductEverywhere(accountProduct, telegram) {
 
   const text = formatAccountAnnouncement(accountProduct, stock);
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.url(`🔐 ${mdEsc(accountProduct.serviceName)} ဝယ်မယ်`, `https://t.me/${BOT_USERNAME}`)],
+    [Markup.button.url(`🔐 ${mdEsc(accountProduct.serviceName)} ဝယ်မယ်`, accountProductDeepLink(accountProduct._id))],
   ]);
 
   const channelMsg = await sendToChannel(telegram, text, null, { ...keyboard });
@@ -439,6 +443,7 @@ module.exports = {
   customAnnounce,
   sendStockAlert,
   productDeepLink,
+  accountProductDeepLink,
   mdEsc,
   validateAnnouncementChannel,
 };

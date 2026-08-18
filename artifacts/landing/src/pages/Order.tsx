@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation, useRoute, Link } from "wouter";
+import { useLocation, useRoute, useSearch, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Wallet as WalletIcon, Check, Plus, Minus, Tag, X } from "lucide-react";
 import { Layout } from "@/components/Layout";
@@ -24,7 +24,9 @@ function resolveFields(product: Product): CheckoutField[] {
 export default function OrderPage() {
   const [, params] = useRoute<{ id: string }>("/order/:id");
   const [, navigate] = useLocation();
+  const search = useSearch();
   const id = params?.id || "";
+  const reorderFrom = new URLSearchParams(search).get("reorderFrom");
   const qc = useQueryClient();
 
   const pQ = useQuery({
@@ -33,6 +35,11 @@ export default function OrderPage() {
     enabled: !!id,
   });
   const meQ = useQuery({ queryKey: ["me"], queryFn: () => api.get<Me>("/me") });
+  const previousOrderQ = useQuery({
+    queryKey: ["order", reorderFrom, "reorder-source"],
+    queryFn: () => api.get<import("@/lib/api").OrderDetail>(`/orders/${reorderFrom}`),
+    enabled: !!reorderFrom,
+  });
   const addrQ = useQuery({
     queryKey: ["addresses"],
     queryFn: () => api.get<{ addresses: SavedAddress[] }>("/addresses"),
@@ -63,6 +70,22 @@ export default function OrderPage() {
       setPromoErr(null);
     }
   }, [pQ.data?.id]);
+
+  useEffect(() => {
+    const source = previousOrderQ.data;
+    if (!source || !pQ.data || source.product?.id !== pQ.data.id) return;
+    const saved = Object.fromEntries(
+      (source.checkoutData ?? []).map((entry) => [entry.key, entry.value]),
+    );
+    if (!Object.keys(saved).length && source.gameId) {
+      saved.game_id = source.gameId;
+      if (source.zoneId) saved.zone_id = source.zoneId;
+    }
+    setFieldValues((current) =>
+      Object.values(current).some((value) => value.trim()) ? current : { ...current, ...saved },
+    );
+    setQuantity(Math.max(1, Math.min(effectiveMax, source.quantity ?? 1)));
+  }, [previousOrderQ.data?.id, pQ.data?.id, effectiveMax]);
 
   const mutation = useMutation({
     mutationFn: () => {

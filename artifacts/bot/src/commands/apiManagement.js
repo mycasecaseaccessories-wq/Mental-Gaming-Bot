@@ -282,33 +282,32 @@ module.exports = function registerApiManagement(bot) {
 
   async function showAnnouncePicker(ctx) {
     const [products, accountProducts] = await Promise.all([
-      Product.find({ isActive: true }).sort({ updatedAt: -1 }).limit(12).select('name finalPrice').lean(),
-      AccountProduct.find({ isActive: true }).sort({ displayOrder: 1, serviceName: 1 }).limit(12).select('serviceName planLabel price discountPercent emoji').lean(),
+      Product.find({ isActive: true }).sort({ updatedAt: -1 }).select('name finalPrice').lean(),
+      AccountProduct.find({ isActive: true }).sort({ displayOrder: 1, serviceName: 1 }).select('serviceName planLabel price discountPercent emoji').lean(),
     ]);
 
     if (!products.length && !accountProducts.length) return ctx.reply('❌ Active product မရှိသေးပါ။');
 
-    const rows = [];
+    const announceable = [
+      ...products.map((p) => ({
+        type: 'shop',
+        id: p._id,
+        label: `🛒 ${p.name} — ${p.finalPrice.toLocaleString()} KS`,
+      })),
+      ...accountProducts.map((p) => ({
+        type: 'account',
+        id: p._id,
+        label: `${p.emoji || '🔐'} ${p.serviceName} — ${p.planLabel} (${Math.max(0, Math.round(p.price * (1 - (p.discountPercent || 0) / 100))).toLocaleString()} KS)`,
+      })),
+    ];
 
-    if (products.length) {
-      rows.push([Markup.button.callback('─── 🛒 Shop Products ───', 'ann_noop')]);
-      products.forEach((p) => {
-        rows.push([Markup.button.callback(`${p.name} — ${p.finalPrice.toLocaleString()} KS`, `ann_pick:${p._id}`)]);
-      });
-    }
-
-    if (accountProducts.length) {
-      rows.push([Markup.button.callback('─── 🔐 Premium Accounts ───', 'ann_noop')]);
-      accountProducts.forEach((p) => {
-        const fp = Math.max(0, Math.round(p.price * (1 - (p.discountPercent || 0) / 100)));
-        rows.push([Markup.button.callback(`${p.emoji || '🔐'} ${p.serviceName} — ${p.planLabel} (${fp.toLocaleString()} KS)`, `ann_pick_acc:${p._id}`)]);
-      });
-    }
-
+    const rows = announceable.map((item) => [
+      Markup.button.callback(item.label, `ann_pick_item:${item.type}:${item.id}`),
+    ]);
     rows.push([Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')]);
 
     await ctx.reply(
-      `📣 *Product ကြေညာချက်*\n\nဘယ် product ကို ကြေညာမလဲ ရွေးပါ:\n_(bot user အားလုံး + channel နှစ်ခုလုံး ပို့ပါမယ်)_`,
+      `📣 *Product ကြေညာချက်*\n\nShop Products နဲ့ Premium Accounts ထဲက ဘယ် product ကို ကြေညာမလဲ ရွေးပါ:\n_(အားလုံးကို unified product list အဖြစ် ပြထားပြီး bot users + channel နှစ်ခုလုံး ပို့ပါမယ်)_`,
       { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
     );
   }
@@ -352,6 +351,25 @@ module.exports = function registerApiManagement(bot) {
 
   bot.action('ann_noop', requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery();
+  });
+
+  // Unified Announce picker: Shop Products and Premium Accounts share one
+  // product-like selection flow while preserving their native purchase handlers.
+  bot.action(/^ann_pick_item:(shop|account):(.+)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const type = ctx.match[1];
+    const id = ctx.match[2];
+    try { await ctx.deleteMessage(); } catch {}
+
+    if (type === 'account') {
+      const accountProduct = await AccountProduct.findById(id).catch(() => null);
+      if (!accountProduct || !accountProduct.isActive) return ctx.reply('❌ Account product ရှာမတွေ့ပါ (သို့) ပိတ်ထားပြီးပါပြီ။');
+      return showAnnounceStylesAccount(ctx, accountProduct);
+    }
+
+    const product = await Product.findById(id).catch(() => null);
+    if (!product || !product.isActive) return ctx.reply('❌ Product ရှာမတွေ့ပါ (သို့) ပိတ်ထားပြီးပါပြီ။');
+    return showAnnounceStyles(ctx, product);
   });
 
   bot.action(/^ann_pick_acc:(.+)$/, requireRole('MANAGER'), async (ctx) => {

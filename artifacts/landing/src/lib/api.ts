@@ -240,6 +240,12 @@ export interface OrderSummary {
   timestamp: string;
 }
 
+export interface OrderStatusEntry {
+  status: OrderStatus;
+  at: string;
+  note?: string | null;
+}
+
 export interface OrderDetail {
   id: string;
   shortId: string;
@@ -254,6 +260,7 @@ export interface OrderDetail {
   quantity?: number;
   unitPrice?: number | null;
   catalogName?: string | null;
+  statusHistory?: OrderStatusEntry[];
   timestamp: string;
   notes: string;
 }

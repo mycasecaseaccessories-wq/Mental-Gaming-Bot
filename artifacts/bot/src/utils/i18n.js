@@ -24,6 +24,7 @@ const STRINGS = {
   'menu.support':    { en: '💬 Support',        mm: '💬 အကူအညီ' },
   'menu.help':       { en: '💬 Help',           mm: '💬 အကူအညီ' },
   'menu.settings':   { en: '⚙️ Settings',       mm: '⚙️ ဆက်တင်' },
+  'menu.freebie':    { en: '🎁 Free Accounts',   mm: '🎁 အခမဲ့ရယူမယ်' },
   'menu.accounts':   { en: '🔐 Premium Accounts', mm: '🔐 အကောင့်များ' },
   'menu.outline_vpn': { en: '🌐 Outline VPN',  mm: '🌐 Outline VPN' },
 

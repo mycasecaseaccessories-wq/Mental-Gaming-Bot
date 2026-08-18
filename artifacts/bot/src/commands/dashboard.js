@@ -21,10 +21,29 @@ function gatewayIcon(status) {
   return status === 'Online' ? '🟢' : status === 'Busy' ? '🟡' : '🔴';
 }
 
+function withTimeout(promise, ms = 15000) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Dashboard load timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function startOfMyanmarDay(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Rangoon',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  const utcMidnight = Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day));
+  return new Date(utcMidnight - (6 * 60 + 30) * 60 * 1000);
+}
+
 async function buildDashboardText(theme) {
   const now = new Date();
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDay = startOfMyanmarDay(now);
 
   const [
     ordersToday,
@@ -160,7 +179,7 @@ module.exports = function registerDashboard(bot) {
     const ref = await pulseLoading(ctx, 'Loading Dashboard', 3, 400);
     try {
       const theme = getTheme(ctx.user);
-      const text  = await buildDashboardText(theme);
+      const text  = await withTimeout(buildDashboardText(theme));
       await resolveMessage(ctx, ref, text, { ...dashboardKeyboard() });
     } catch (err) {
       await resolveMessage(ctx, ref, `❌ Dashboard error: ${err.message}`);
@@ -171,7 +190,7 @@ module.exports = function registerDashboard(bot) {
     const ref = await pulseLoading(ctx, 'Loading Dashboard', 3, 400);
     try {
       const theme = getTheme(ctx.user);
-      const text  = await buildDashboardText(theme);
+      const text  = await withTimeout(buildDashboardText(theme));
       await resolveMessage(ctx, ref, text, { ...dashboardKeyboard() });
     } catch (err) {
       await resolveMessage(ctx, ref, `❌ Dashboard error: ${err.message}`);
@@ -182,7 +201,7 @@ module.exports = function registerDashboard(bot) {
     await ctx.answerCbQuery('Refreshing...');
     try {
       const theme = getTheme(ctx.user);
-      const text  = await buildDashboardText(theme);
+      const text  = await withTimeout(buildDashboardText(theme));
       await ctx.editMessageText(text, {
         parse_mode: 'Markdown',
         ...dashboardKeyboard(),

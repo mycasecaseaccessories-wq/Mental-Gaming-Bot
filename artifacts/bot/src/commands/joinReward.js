@@ -3,6 +3,7 @@
  * Bot must be admin in the channel so membership can be verified.
  */
 const { Markup } = require('telegraf');
+const mongoose = require('mongoose');
 const { adminOnly } = require('../middlewares/adminCheck');
 const { creditCoin } = require('../services/WalletService');
 const { auditLog } = require('../services/logger');
@@ -74,14 +75,31 @@ module.exports = function registerJoinReward(bot) {
     const user = await User.findByTelegramId(ctx.from.id);
     if (!user) return ctx.answerCbQuery('❌ /start အရင်နှိပ်ပါ', { show_alert: true });
 
-    // Record claim first (unique index blocks double-claim races)
+    // Claim record, coin credit, and counter must commit together. The unique
+    // claim index still protects concurrent clicks, while the transaction
+    // prevents a claim being recorded without the corresponding coin credit.
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
-      await JoinRewardClaim.create({ rewardId: r._id, telegramId: ctx.from.id, mcGiven: r.mcReward });
+      await JoinRewardClaim.create(
+        [{ rewardId: r._id, telegramId: ctx.from.id, mcGiven: r.mcReward }],
+        { session },
+      );
+      await creditCoin(user._id, r.mcReward, {
+        type: 'Bonus',
+        note: `Join bonus: ${r.title}`,
+        session,
+      });
+      await JoinReward.updateOne({ _id: r._id }, { $inc: { claimCount: 1 } }, { session });
+      await session.commitTransaction();
     } catch (err) {
-      return ctx.answerCbQuery('✅ ရပြီးသားပါ', { show_alert: true });
+      await session.abortTransaction();
+      if (err?.code === 11000) return ctx.answerCbQuery('✅ ရပြီးသားပါ', { show_alert: true });
+      console.error('[JoinBonus] atomic claim failed:', err.message);
+      return ctx.answerCbQuery('⚠️ ဆုချီးမြှင့်မှု မအောင်မြင်ပါ။ ခဏနေ ပြန်စမ်းပါ။', { show_alert: true });
+    } finally {
+      await session.endSession();
     }
-    await creditCoin(user._id, r.mcReward, { type: 'Bonus', note: `Join bonus: ${r.title}` });
-    await JoinReward.updateOne({ _id: r._id }, { $inc: { claimCount: 1 } });
     await auditLog(ctx.from.id, 'JOIN_BONUS_CLAIMED', r._id.toString(), 'System', { mc: r.mcReward });
 
     await ctx.answerCbQuery(`🎉 ${r.mcReward} MC ရပါပြီ!`, { show_alert: true });
