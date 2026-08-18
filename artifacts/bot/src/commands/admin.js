@@ -953,6 +953,7 @@ module.exports = function registerAdmin(bot) {
           [
             Markup.button.callback('📊 Monthly Report', 'sysinfo_monthly_report'),
           ],
+          [Markup.button.callback('💬 Ordinary Text Replies', 'sysinfo_ambient_replies')],
         ]),
       });
     } catch (err) {
