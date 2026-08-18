@@ -107,6 +107,7 @@ async function post(telegram, text, {
 
 async function postPurchase(telegram, {
   user,
+  productId = null,
   productName,
   qty = 1,
   productEmoji = '📦',
@@ -114,10 +115,16 @@ async function postPurchase(telegram, {
 } = {}) {
   const key = eventKey || `purchase:${user?._id || user?.telegramId}:${productName}:${qty}`;
   const name = escapeMarkdown(maskedUser(user));
+  const button = productId
+    ? {
+        label: '🛒 Buy Now',
+        url: require('./BroadcastService').productDeepLink(productId),
+      }
+    : null;
   return post(
     telegram,
     `🛒 *New Purchase*\n👤 User: ${name}\n📦 Product: *${escapeMarkdown(productName)}*\n💵 Quantity: *${qty}* ${productEmoji}\n✅ Successful`,
-    { eventKey: key, eventType: 'PURCHASE_COMPLETED' }
+    { eventKey: key, eventType: 'PURCHASE_COMPLETED', button }
   );
 }
 

@@ -219,6 +219,7 @@ async function completeOrder(orderId, adminId, deliveredData, telegram) {
         const LiveFeedService = require('./LiveFeedService');
         await LiveFeedService.postPurchase(telegram, {
           user:        order.userId,
+          productId:  order.productId?._id,
           productName: order.productId?.name || 'Unknown',
           qty:          order.orderQuantity || 1,
           eventKey:     `purchase:${order._id}`,
