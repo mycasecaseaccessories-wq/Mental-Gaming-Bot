@@ -72,19 +72,25 @@ async function runHealthCheck(telegram, adminId) {
     results.cron = { ok: false, count: 0 };
   }
 
-  // 6. Backup info
+  // 6. Backup info — prefer persisted status so a restart cannot hide a failed delivery.
   try {
-    const { lastBackupAt, lastBackupSize } = getLastBackupInfo();
+    const SystemStatus = require('../models/SystemStatus');
+    const persisted = await SystemStatus.get();
+    const memory = getLastBackupInfo();
+    const lastBackupAt = persisted.backupLastAt || memory.lastBackupAt;
+    const lastBackupSize = persisted.backupLastSize || memory.lastBackupSize;
     const agoMin = lastBackupAt
       ? Math.round((Date.now() - new Date(lastBackupAt).getTime()) / 60_000)
       : null;
     results.backup = {
-      ok:   !!lastBackupAt,
-      ago:  agoMin !== null ? `${agoMin < 60 ? agoMin + 'm' : Math.round(agoMin / 60) + 'h'} ago` : 'None this session',
+      ok: persisted.backupLastStatus === 'success' && !!lastBackupAt,
+      status: persisted.backupLastStatus || 'never',
+      error: persisted.backupLastError || null,
+      ago: agoMin !== null ? `${agoMin < 60 ? agoMin + 'm' : Math.round(agoMin / 60) + 'h'} ago` : 'Never completed',
       size: lastBackupSize || '—',
     };
   } catch (_) {
-    results.backup = { ok: false, ago: 'Unknown', size: '—' };
+    results.backup = { ok: false, status: 'unknown', ago: 'Unknown', size: '—' };
   }
 
   // 7. Error handler active
@@ -142,7 +148,7 @@ function buildReport({ results: r, totalDuration, allOk }) {
     `${statusIcon(r.ai.ok)} AI API: ${r.ai.ok ? `*${r.ai.model}* — ${fmtMs(r.ai.ms)}` : `❌ ${r.ai.error || 'Unavailable'}`}\n` +
     `${statusIcon(r.cache.ok)} Cache: Active — Hit Rate *${r.cache.hitRate ?? 0}%* (${r.cache.keys ?? 0} keys)\n` +
     `${statusIcon(r.cron.ok)} Cron Jobs: *${r.cron.count}* scheduled\n` +
-    `${statusIcon(r.backup.ok)} Last Backup: ${r.backup.ago} ${r.backup.size !== '—' ? `(${r.backup.size})` : ''}\n` +
+    `${statusIcon(r.backup.ok)} Last Backup: ${r.backup.ago} ${r.backup.size !== '—' ? `(${r.backup.size})` : ''}${r.backup.status && r.backup.status !== 'success' ? ` — ${r.backup.status}` : ''}\n` +
     `✅ Error Handler: Active\n` +
     `${statusIcon(r.onboarding.ok)} Onboarding Scene: ${r.onboarding.ok ? `Registered (${r.onboarding.count} scenes)` : 'Missing'}\n\n` +
 

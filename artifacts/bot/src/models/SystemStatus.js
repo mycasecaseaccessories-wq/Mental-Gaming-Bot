@@ -122,6 +122,11 @@ const systemStatusSchema = new mongoose.Schema(
       default: null,
       comment: 'Private channel ID or @username to receive daily encrypted DB backups. Falls back to owner DM.',
     },
+    backupLastAt: { type: Date, default: null },
+    backupLastSize: { type: String, default: null },
+    backupLastFile: { type: String, default: null },
+    backupLastStatus: { type: String, enum: ['success', 'failed', 'running', 'never'], default: 'never' },
+    backupLastError: { type: String, default: null },
 
     // ── Seasonal Theme Engine ─────────────────────────────────────────────────
     seasonalTheme: {
