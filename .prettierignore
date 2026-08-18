@@ -1,0 +1,13 @@
+node_modules/
+**/node_modules/
+**/dist/
+**/build/
+attached_assets/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.zip
+*.map
+pnpm-lock.yaml

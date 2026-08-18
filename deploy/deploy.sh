@@ -11,7 +11,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> [1/5] Latest code ဆွဲနေသည် (git pull)..."
-git pull --ff-only || echo "   (git pull ကျော်လိုက်သည် — manual upload ဖြစ်နိုင်)"
+git pull --ff-only
 
 echo "==> [2/5] Dependencies install (pnpm)..."
 pnpm install --frozen-lockfile
@@ -26,7 +26,7 @@ pnpm --filter @workspace/landing run build
 echo "==> Frontend build ကို /var/www/mgs/landing သို့ ကူးနေသည်..."
 sudo mkdir -p /var/www/mgs/landing
 sudo rm -rf /var/www/mgs/landing/*
-sudo cp -r landing/dist/* /var/www/mgs/landing/
+sudo cp -r artifacts/landing/dist/* /var/www/mgs/landing/
 
 echo "==> [5/5] PM2 restart (bot + api-server)..."
 if pm2 describe mgs-bot > /dev/null 2>&1; then

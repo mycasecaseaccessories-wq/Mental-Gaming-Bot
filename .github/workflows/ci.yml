@@ -1,0 +1,117 @@
+name: CI / CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy the verified main branch to the VPS'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '11.20.0'
+
+jobs:
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm run format:check
+
+      - name: Typecheck all TypeScript packages
+        run: pnpm run typecheck
+
+      - name: Run bot tests
+        run: pnpm run test:bot
+
+      - name: Build all packages
+        run: pnpm run build
+
+      - name: Audit production dependencies
+        run: pnpm run audit:prod
+
+  deploy:
+    name: Deploy to VPS
+    needs: quality
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy == true && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" || { echo "Missing VPS_HOST secret" >&2; exit 1; }
+          test -n "$VPS_SSH_KEY" || { echo "Missing VPS_SSH_KEY secret" >&2; exit 1; }
+          test -n "$VPS_KNOWN_HOSTS" || { echo "Missing VPS_KNOWN_HOSTS secret" >&2; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Run server deployment script
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_USER" || { echo "Missing VPS_USER secret" >&2; exit 1; }
+          test -n "$VPS_APP_DIR" || { echo "Missing VPS_APP_DIR secret" >&2; exit 1; }
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "cd '$VPS_APP_DIR' && bash deploy/deploy.sh"
+
+      - name: Verify deployment health endpoint
+        shell: bash
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HEALTHCHECK_URL" ]; then
+            echo "HEALTHCHECK_URL is not configured; skipping HTTP health check."
+            exit 0
+          fi
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 "$HEALTHCHECK_URL"
