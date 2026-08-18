@@ -880,7 +880,7 @@ module.exports = function registerAccountGiveaway(bot) {
 
   // Main-menu Giveaway button for regular users. Let the owner fall through
   // to the existing admin Giveaway handler below.
-  bot.hears('🎁 Giveaway', async (ctx, next) => {
+  bot.hears(['🎁 Giveaway', '🎁 Free Accounts', '🎁 အခမဲ့ရယူမယ်'], async (ctx, next) => {
     if (Number(ctx.from?.id) === Number(config.bot.adminId)) return next();
     const view = await buildUserEntry(ctx);
     if (!view) return ctx.reply('😢 လက်ရှိ Giveaway မရှိသေးပါ။');
