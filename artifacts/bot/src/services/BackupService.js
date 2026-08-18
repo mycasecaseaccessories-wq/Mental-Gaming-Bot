@@ -140,14 +140,17 @@ async function runBackup(telegram) {
   const origMB   = (jsonBuf.length   / 1024 / 1024).toFixed(2);
   const duration = ((Date.now() - startedAt.getTime()) / 1000).toFixed(1);
 
-  // Update in-memory metadata
-  lastBackupAt   = now;
-  lastBackupSize = `${sizeMB} MB`;
-  lastBackupFile = filename;
-
-  // Determine where to send
+  // Persist a running state before delivery; only mark success after Telegram confirms receipt.
   const SystemStatus = require('../models/SystemStatus');
   const status       = await SystemStatus.get();
+  await SystemStatus.set({
+    backupLastStatus: 'running',
+    backupLastError: null,
+    backupLastFile: filename,
+    backupLastSize: `${sizeMB} MB`,
+  }).catch((err) => console.warn('[BackupService] status update failed:', err.message));
+
+  // Determine where to send
   const targetId     = status.backupChannelId || config.bot.adminId;
 
   const caption =
@@ -166,9 +169,25 @@ async function runBackup(telegram) {
       { source: encrypted, filename },
       { caption, parse_mode: 'Markdown' }
     );
+    lastBackupAt   = now;
+    lastBackupSize = `${sizeMB} MB`;
+    lastBackupFile = filename;
+    await SystemStatus.set({
+      backupLastAt: now,
+      backupLastSize: `${sizeMB} MB`,
+      backupLastFile: filename,
+      backupLastStatus: 'success',
+      backupLastError: null,
+    }).catch((statusErr) => console.warn('[BackupService] success status update failed:', statusErr.message));
     console.log(`[BackupService] ✅ Backup sent (${sizeMB} MB, ${totalDocs} docs, ${duration}s)`);
     return { filename, sizeMB, totalDocs, duration };
   } catch (err) {
+    await SystemStatus.set({
+      backupLastStatus: 'failed',
+      backupLastError: String(err.message).slice(0, 500),
+      backupLastFile: filename,
+      backupLastSize: `${sizeMB} MB`,
+    }).catch((statusErr) => console.warn('[BackupService] failure status update failed:', statusErr.message));
     console.error('[BackupService] ❌ Send failed:', err.message);
     // Fallback: try sending to admin directly
     if (String(targetId) !== String(config.bot.adminId)) {
