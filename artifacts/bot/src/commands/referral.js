@@ -100,6 +100,135 @@ function buildShareText(stats) {
 
 module.exports = function registerReferral(bot) {
 
+  async function sendReferralAdminPanel(ctx, edit = false) {
+    const status = await SystemStatus.get();
+    const [total, completed, active, pending, frozen, flagged] = await Promise.all([
+      Referral.countDocuments({}),
+      Referral.countDocuments({ status: 'Completed' }),
+      Referral.countDocuments({ status: 'Active' }),
+      Referral.countDocuments({ status: 'Pending' }),
+      Referral.countDocuments({ status: 'Frozen' }),
+      FraudFlag.countDocuments({ resolved: false }),
+    ]);
+    const text =
+      `🔗 *Referral Manager*\n` +
+      `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+      `Program: *${status.referralEnabled ? '🟢 Active' : '🔴 Paused'}*\n` +
+      `Commission: *${status.referralCommissionRate}%* · *${status.referralCommissionMode === 'every' ? 'Every top-up' : 'First top-up'}*\n` +
+      `Minimum top-up: *${(status.referralMinTopup || 1000).toLocaleString()} KS*\n\n` +
+      `👥 Total: *${total}*  ✅ Completed: *${completed}*\n` +
+      `🔄 Active: *${active}*  ⏳ Pending: *${pending}*\n` +
+      `🔒 Frozen: *${frozen}*  ⚠️ Fraud review: *${flagged}*`;
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('📊 Refresh Stats', 'ref_admin_panel'), Markup.button.callback(status.referralEnabled ? '🔴 Pause Referral' : '🟢 Enable Referral', 'ref_admin_toggle')],
+      [Markup.button.callback('⚙️ Commission Settings', 'ref_admin_settings')],
+      [Markup.button.callback('🏆 Tier Settings', 'ref_admin_tiers')],
+      [Markup.button.callback(`🛡 Fraud Review (${flagged})`, 'ref_admin_fraud')],
+      [Markup.button.callback('🎯 Referral Campaign', 'rc_panel')],
+      [Markup.button.callback('↩️ Admin Marketing', 'nav:go:admin_main')],
+    ]);
+    if (edit && ctx.callbackQuery?.message) return ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    return ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  }
+
+  bot.hears('🔗 Referral Manager', adminOnly(), (ctx) => sendReferralAdminPanel(ctx));
+  bot.action('ref_admin_panel', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    return sendReferralAdminPanel(ctx, true);
+  });
+
+  bot.action('ref_admin_toggle', adminOnly(), async (ctx) => {
+    const status = await SystemStatus.get();
+    const enabled = !status.referralEnabled;
+    await SystemStatus.set({ referralEnabled: enabled }, ctx.from.id);
+    await auditLog(ctx.from.id, enabled ? 'REFERRAL_ENABLED' : 'REFERRAL_DISABLED', null, 'System', {});
+    await ctx.answerCbQuery(enabled ? 'Referral enabled' : 'Referral paused');
+    return sendReferralAdminPanel(ctx, true);
+  });
+
+  bot.action('ref_admin_settings', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    return ctx.editMessageText(
+      `⚙️ *Referral Commission Settings*\n\nRate: *${status.referralCommissionRate}%*\nMode: *${status.referralCommissionMode === 'every' ? 'Every top-up' : 'First top-up'}*\nMinimum top-up: *${(status.referralMinTopup || 1000).toLocaleString()} KS*\n\nRate နဲ့ mode ကို button နဲ့ပြောင်းပါ။`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+        [1, 2, 3, 5].map((rate) => Markup.button.callback(`${rate}%`, `ref_admin_rate:${rate}`)),
+        [Markup.button.callback('🟢 First top-up', 'ref_admin_mode:first'), Markup.button.callback('🔁 Every top-up', 'ref_admin_mode:every')],
+        [Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')],
+      ]) }
+    );
+  });
+
+  bot.action(/^ref_admin_rate:(\d+(?:\.\d+)?)$/, adminOnly(), async (ctx) => {
+    const rate = Number(ctx.match[1]);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 50) return ctx.answerCbQuery('Rate must be 0–50%', { show_alert: true });
+    await SystemStatus.set({ referralCommissionRate: rate }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_COMMISSION_RATE', null, 'System', { rate });
+    await ctx.answerCbQuery(`Commission rate ${rate}%`);
+    return ctx.editMessageText(`✅ Referral commission rate: *${rate}%*`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Commission Settings', 'ref_admin_settings')]]) });
+  });
+
+  bot.action(/^ref_admin_mode:(first|every)$/, adminOnly(), async (ctx) => {
+    const mode = ctx.match[1];
+    await SystemStatus.set({ referralCommissionMode: mode }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_COMMISSION_MODE', null, 'System', { mode });
+    await ctx.answerCbQuery('Commission mode updated');
+    return ctx.editMessageText(`✅ Commission mode: *${mode === 'every' ? 'Every top-up' : 'First top-up only'}*`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Commission Settings', 'ref_admin_settings')]]) });
+  });
+
+  bot.action('ref_admin_tiers', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    const tiers = status.referralTiers?.length ? status.referralTiers : DEFAULT_TIERS;
+    const lines = tiers.map((t) => `${t.emoji} *${t.label}*: ${t.minRefs}+ refs → *${t.rate}%*`).join('\\n');
+    return ctx.editMessageText(`🏆 *Referral Tier Settings*\\n\\n${lines}\\n\\nPreset တစ်ခုရွေးပါ။`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+      [Markup.button.callback('🥉 Default 2/3/5%', 'ref_admin_tier_preset:default')],
+      [Markup.button.callback('⚡ Fast 3/5/8%', 'ref_admin_tier_preset:fast')],
+      [Markup.button.callback('💎 Premium 2/5/10%', 'ref_admin_tier_preset:premium')],
+      [Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')],
+    ]) });
+  });
+
+  bot.action(/^ref_admin_tier_preset:(default|fast|premium)$/, adminOnly(), async (ctx) => {
+    const presets = {
+      default: DEFAULT_TIERS,
+      fast: [{ minRefs: 1, rate: 3, label: 'Bronze', emoji: '🥉' }, { minRefs: 4, rate: 5, label: 'Silver', emoji: '🥈' }, { minRefs: 10, rate: 8, label: 'Gold', emoji: '🥇' }],
+      premium: [{ minRefs: 1, rate: 2, label: 'Bronze', emoji: '🥉' }, { minRefs: 5, rate: 5, label: 'Silver', emoji: '🥈' }, { minRefs: 12, rate: 10, label: 'Gold', emoji: '🥇' }],
+    };
+    const tiers = presets[ctx.match[1]];
+    await SystemStatus.set({ referralTiers: tiers }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_REFERRAL_TIERS', null, 'System', { preset: ctx.match[1], tiers });
+    await ctx.answerCbQuery('Tier preset saved');
+    return ctx.editMessageText(`✅ Referral tier preset saved: *${ctx.match[1]}*`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Tier Settings', 'ref_admin_tiers')]]) });
+  });
+
+  async function sendFraudReview(ctx, edit = false) {
+    const flags = await FraudFlag.find({ resolved: false }).sort({ severity: 1, createdAt: -1 }).limit(15).lean();
+    if (!flags.length) {
+      const empty = '✅ *Fraud Review*\\n\\nUnresolved fraud flag မရှိပါ။';
+      return edit ? ctx.editMessageText(empty, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')]]) }) : ctx.reply(empty, { parse_mode: 'Markdown' });
+    }
+    const icons = { HIGH: '🔴', MEDIUM: '🟠', LOW: '🟡' };
+    const rows = [];
+    for (const flag of flags) {
+      rows.push([Markup.button.callback(`${icons[flag.severity] || '⚪'} ${flag.type} #${String(flag._id).slice(-5)}`, 'ref_fraud_noop')]);
+      rows.push([
+        Markup.button.callback('🚫 Block Referrer', `fraud_block:${flag.referrerTid}`),
+        Markup.button.callback('🚫 Block Referee', `fraud_block:${flag.refereeTid}`),
+      ]);
+      rows.push([Markup.button.callback('✅ Dismiss', `fraud_dismiss:${flag._id}`)]);
+    }
+    rows.push([Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')]);
+    const text = `🛡 *Fraud Review*\\n\\n${flags.map((f) => `${icons[f.severity] || '⚪'} *${f.type}*\\nReferrer: \`${f.referrerTid}\` → Referee: \`${f.refereeTid}\``).join('\\n\\n')}`;
+    return edit ? ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }) : ctx.reply(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) });
+  }
+
+  bot.action('ref_admin_fraud', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    return sendFraudReview(ctx, true);
+  });
+  bot.action('ref_fraud_noop', requireRole('MANAGER'), (ctx) => ctx.answerCbQuery('ရွေးထားသော fraud flag ကို အောက်က action နဲ့ စီမံပါ။'));
+
   const referralHandler = async (ctx) => {
     try {
       const stats = await getStats(ctx.from.id);
@@ -529,20 +658,7 @@ module.exports = function registerReferral(bot) {
 
   bot.action('ref_fraud_list', requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery();
-    const flags = await FraudFlag.find({ resolved: false }).sort({ severity: 1 }).limit(10);
-
-    if (!flags.length) return ctx.reply('✅ No unresolved fraud flags!');
-
-    const severityIcon = { HIGH: '🔴', MEDIUM: '🟠', LOW: '🟡' };
-    const lines = flags.map((f) => {
-      const icon = severityIcon[f.severity] || '⚪';
-      return `${icon} *${f.type}*\n  Referrer \`${f.referrerTid}\` → Referee \`${f.refereeTid}\``;
-    });
-
-    await ctx.reply(
-      `⚠️ *Fraud Flags*\n\n${lines.join('\n\n')}`,
-      { parse_mode: 'Markdown' }
-    );
+    return sendFraudReview(ctx);
   });
 
   // ── Register fraud action handlers (block / dismiss buttons) ─────────────────

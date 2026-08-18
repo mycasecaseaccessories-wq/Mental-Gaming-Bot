@@ -302,18 +302,25 @@ const GUIDE_SECTIONS = [
       `⚠️ *Reward policy:* Gamification ဆု (Spin / Daily Check-in / Referral) အားလုံးကို *Mental Coin (MC)* နဲ့သာ ပေးပါတယ်။ Refund / Top-up / Admin manual credit တွေကတော့ KS အတိုင်း ဆက်ရှိပါတယ်။\n\n` +
       `*Spin Wheel:* \`/dashboard → 🎰 Spin\` ကနေ custom ဆု (coin/cash/free spin) ထည့်နိုင်\n` +
       `_(\`cash\` အမျိုးအစား ဆုကိုတောင် MC အဖြစ်ပဲ ပေးပါတယ်။)_\n\n` +
-      `*Referral:*\n` +
-      `• \`/setreftiers 1:2 6:3 16:5\` — commission tier\n` +
-      `• \`/reftiers\` — ကြည့်\n` +
-      `• \`/togglereferral\` — ရပ်/ဖွင့်\n` +
-      `• \`/reffraud\` — fraud စစ်\n\n` +
+      `*Referral Manager (Button UI):*\n` +
+      `• Admin Menu → 📣 Admin Marketing → 🔗 *Referral Manager*\n` +
+      `• 📊 *Refresh Stats* — Active/Paused status, total/completed/active/pending/frozen referral နဲ့ fraud count ကြည့်\n` +
+      `• 🔴/🟢 *Pause/Enable Referral* — referral program ကို button နဲ့ ရပ်/ဖွင့်\n` +
+      `• ⚙️ *Commission Settings* — 1% / 2% / 3% / 5% rate နဲ့ First/Every top-up mode ရွေး\n` +
+      `• 🏆 *Tier Settings* — Default / Fast / Premium tier preset ရွေး\n` +
+      `• 🛡 *Fraud Review* — flag တစ်ခုချင်းစီအတွက် 🚫 Block Referrer, 🚫 Block Referee, ✅ Dismiss button သုံး\n` +
+      `• 🎯 *Referral Campaign* — campaign wizard ဆက်ဖွင့်\n` +
+      `• Legacy command များ: \`/setreftiers\`, \`/reftiers\`, \`/togglereferral\`, \`/reffraud\` ကိုလည်း ဆက်သုံးနိုင်\n\n` +
       `🎬 *ဥပမာ ၁ — Spin ဆု အသစ် ထည့်နည်း:*\n` +
       `1️⃣ \`/dashboard\` → *🎰 Spin* → *➕ Add Custom Reward*\n` +
       `2️⃣ label ("50 MC") → amount (50) → weight (probability) ထည့်\n` +
       `3️⃣ → ဝယ်သူ spin လှည့်ရင် အဲ့ဆု ပါလာနိုင်\n\n` +
-      `🎬 *ဥပမာ ၂ — referral commission သတ်မှတ်နည်း:*\n` +
-      `1️⃣ \`/setreftiers 1:2 6:3 16:5\` ရိုက် → Bronze 2%, Silver 3%, Gold 5%\n` +
-      `2️⃣ \`/reftiers\` နဲ့ ပြန်စစ် → referral ဖိတ်တဲ့သူဆီ commission ကို *MC* နဲ့ ပေးမယ်`,
+      `🎬 *ဥပမာ ၂ — Referral button flow:*\n` +
+      `1️⃣ Admin Menu → 📣 Admin Marketing → 🔗 Referral Manager\n` +
+      `2️⃣ ⚙️ Commission Settings → 3% → 🔁 Every top-up (သို့) 🟢 First top-up\n` +
+      `3️⃣ 🏆 Tier Settings → Default 2/3/5% (သို့) Fast/Premium preset\n` +
+      `4️⃣ 🛡 Fraud Review → flag ကို စစ် → user ကို block သို့မဟုတ် flag ကို dismiss\n` +
+      `5️⃣ Referral commission ကို policy အရ *Mental Coin (MC)* နဲ့ ပေးမယ်`,
   },
   {
     key: 'coins', label: '🪙 Coins & Tiers',

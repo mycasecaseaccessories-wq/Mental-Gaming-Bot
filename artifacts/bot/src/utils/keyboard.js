@@ -58,7 +58,7 @@ function adminSectionKeyboard(section, role = 'OWNER') {
     store: [['🛍️ Manage Products', '🔐 Accounts'], ['🎮 Game News', '🔑 Outline VPN']],
     users: [['👥 Manage Users', '🪙 Coins & Tiers']],
     finance: [['💱 Manage Rates', '💳 Payment Gateways'], ['📈 Analytics']],
-    marketing: [['📢 Broadcast', '📣 Announce'], ['🎟 Promotions', '🎟 Coupons'], ['🎯 Ref Campaign', '📣 Join Bonus Admin'], ['🎁 Giveaway Admin', '📡 Channels']],
+    marketing: [['📢 Broadcast', '📣 Announce'], ['🔗 Referral Manager', '🎟 Promotions'], ['🎟 Coupons', '🎯 Ref Campaign'], ['🎁 Giveaway Admin', '📡 Channels']],
     rewards: [['🎁 Rewards Admin', '🎁 Promo Perks']],
     system: r === 'OWNER'
       ? [['🔧 System', '👮 Admin Roles'], ['📋 Audit Logs', '📜 Global History'], ['🤖 AI Insights']]
