@@ -36,6 +36,7 @@ const WebhookEvent     = require('../models/WebhookEvent');
 const SystemStatus     = require('../models/SystemStatus');
 const AnnouncementSchedule = require('../models/AnnouncementSchedule');
 const AnnouncementAutomationService = require('../services/AnnouncementAutomationService');
+const AnnouncementRun = require('../models/AnnouncementRun');
 
 const PROVIDER_LABELS = {
   smileone:  '🎮 SmileOne (MLBB / Genshin / FF)',
@@ -290,10 +291,87 @@ module.exports = function registerApiManagement(bot) {
         ...Markup.inlineKeyboard([
           [Markup.button.callback('🛒 Shop Products', 'ann_category:shop')],
           [Markup.button.callback('🔐 Premium Accounts', 'ann_category:account')],
+          [Markup.button.callback('📅 Schedule Manager', 'ann_schedule_menu')],
+          [Markup.button.callback('📜 Announcement History', 'ann_history')],
           [Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')],
         ]),
       }
     );
+  }
+
+  async function showScheduleMenu(ctx) {
+    const schedules = await AnnouncementSchedule.find().sort({ createdAt: -1 }).limit(20).lean();
+    const rows = [[Markup.button.callback('➕ New Schedule', 'ann_schedule_new')]];
+    for (const s of schedules) {
+      const retention = s.retentionSeconds ? `${Math.round(s.retentionSeconds / 3600)}h` : 'မဖျက်';
+      rows.push([Markup.button.callback(`${s.isActive ? '🟢' : '⏸️'} ${s.name.slice(0, 28)} · ${retention}`, 'ann_sched_noop')]);
+      rows.push([
+        Markup.button.callback(s.isActive ? '⏸️ Pause' : '▶️ Resume', `ann_sched_toggle:${s._id}`),
+        Markup.button.callback('▶️ Run Now', `ann_sched_run:${s._id}`),
+        Markup.button.callback('🗑 Delete', `ann_sched_delete:${s._id}`),
+      ]);
+      rows.push([Markup.button.callback(`⏱ Retention: ${retention}`, `ann_sched_ret:${s._id}`)]);
+    }
+    rows.push([Markup.button.callback('📜 Run History', 'ann_history')]);
+    rows.push([Markup.button.callback('↩️ Announce', 'ann_categories')]);
+    return ctx.reply('📅 *Announcement Schedule Manager*\n\nButton နဲ့ schedule ဖန်တီး၊ pause/resume၊ run now၊ delete နဲ့ retention ပြောင်းနိုင်ပါတယ်။', { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) });
+  }
+
+  async function showScheduleTarget(ctx) {
+    const categories = await Product.distinct('category', { isActive: true });
+    const rows = [
+      [Markup.button.callback('🌐 All Active Products', 'ann_sched_target:all')],
+      [Markup.button.callback('📦 Shop Product တစ်ခု', 'ann_sched_target:product')],
+      [Markup.button.callback('🔐 Premium Account တစ်ခု', 'ann_sched_target:account')],
+    ];
+    rows.push(...categories.filter(Boolean).slice(0, 40).map((category) => [Markup.button.callback(`📂 ${String(category).slice(0, 35)}`, `ann_sched_cat:${encodeURIComponent(category).slice(0, 45)}`)]));
+    rows.push([Markup.button.callback('❌ Cancel', 'ann_cancel')]);
+    return ctx.reply('📅 Schedule target ကို ရွေးပါ။', Markup.inlineKeyboard(rows));
+  }
+
+  async function showScheduleProducts(ctx, type = 'shop') {
+    const isAccount = type === 'account';
+    const products = isAccount
+      ? await AccountProduct.find({ isActive: true }).sort({ displayOrder: 1, serviceName: 1 }).limit(50).select('serviceName planLabel').lean()
+      : await Product.find({ isActive: true }).sort({ updatedAt: -1 }).limit(50).select('name').lean();
+    const rows = products.map((p) => [Markup.button.callback(
+      `${isAccount ? '🔐' : '📦'} ${String(isAccount ? `${p.serviceName} — ${p.planLabel}` : p.name).slice(0, 45)}`,
+      `ann_sched_product:${isAccount ? 'account' : 'shop'}:${p._id}`
+    )]);
+    rows.push([Markup.button.callback('↩️ Target ပြန်ရွေး', 'ann_schedule_new')]);
+    return ctx.reply(`${isAccount ? '🔐 Premium Account' : '📦 Shop Product'} schedule လုပ်မယ့် item ကိုရွေးပါ။`, Markup.inlineKeyboard(rows));
+  }
+
+  async function showScheduleFrequency(ctx) {
+    return ctx.reply('⏰ Announce အချိန်/ကြားချိန်ကို ရွေးပါ။ Default time က MMT 09:00 ဖြစ်ပါတယ်။', Markup.inlineKeyboard([
+      [Markup.button.callback('🕘 Daily 09:00', 'ann_sched_freq:daily')],
+      [Markup.button.callback('⏱ Every 1 hour', 'ann_sched_freq:hourly')],
+      [Markup.button.callback('⏱ Every 6 hours', 'ann_sched_freq:every_6_hours')],
+      [Markup.button.callback('❌ Cancel', 'ann_cancel')],
+    ]));
+  }
+
+  async function createButtonSchedule(ctx, frequency) {
+    const draft = ctx.session.announceScheduleDraft;
+    if (!draft) return ctx.answerCbQuery('Schedule target မရှိတော့ပါ', { show_alert: true });
+    const payload = {
+      name: draft.name,
+      targetType: draft.targetType,
+      category: draft.category || null,
+      productIds: draft.productId ? [draft.productId] : [],
+      frequency,
+      localHour: 9,
+      localMinute: 0,
+      retentionSeconds: 6 * 3600,
+      destination: 'both',
+      createdBy: ctx.from.id,
+      isActive: true,
+    };
+    const schedule = new AnnouncementSchedule(payload);
+    schedule.nextRunAt = AnnouncementAutomationService.nextRunAt(schedule);
+    await schedule.save();
+    ctx.session.announceScheduleDraft = null;
+    return ctx.reply(`✅ Schedule ဖန်တီးပြီးပါပြီ။\n📌 ${schedule.name}\n⏰ Next: ${schedule.nextRunAt.toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })}\n🧹 Bot user message: 6h အကြာဖျက်မယ်၊ Channel post မဖျက်ပါ။`, Markup.inlineKeyboard([[Markup.button.callback('📅 Schedule Manager', 'ann_schedule_menu')]]));
   }
 
   async function showAnnounceCategory(ctx, category) {
@@ -395,6 +473,104 @@ module.exports = function registerApiManagement(bot) {
     await ctx.answerCbQuery();
     try { await ctx.deleteMessage(); } catch {}
     return showAnnounceCategory(ctx, ctx.match[1]);
+  });
+
+  bot.action('ann_schedule_menu', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    return showScheduleMenu(ctx);
+  });
+
+  bot.action('ann_schedule_new', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    return showScheduleTarget(ctx);
+  });
+
+  bot.action('ann_sched_target:all', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.announceScheduleDraft = { name: 'All Active Products', targetType: 'all' };
+    return showScheduleFrequency(ctx);
+  });
+
+  bot.action('ann_sched_target:product', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    return showScheduleProducts(ctx, 'shop');
+  });
+
+  bot.action('ann_sched_target:account', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    return showScheduleProducts(ctx, 'account');
+  });
+
+  bot.action(/^ann_sched_cat:(.+)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const category = decodeURIComponent(ctx.match[1]);
+    ctx.session.announceScheduleDraft = { name: `${category} Category`, targetType: 'category', category };
+    return showScheduleFrequency(ctx);
+  });
+
+  bot.action(/^ann_sched_product:(shop|account):([a-f0-9]{24})$/i, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const isAccount = ctx.match[1] === 'account';
+    const product = isAccount
+      ? await AccountProduct.findOne({ _id: ctx.match[2], isActive: true }).select('serviceName planLabel').lean()
+      : await Product.findOne({ _id: ctx.match[2], isActive: true }).select('name').lean();
+    if (!product) return ctx.reply('❌ Active product မတွေ့ပါ။');
+    const name = isAccount ? `${product.serviceName} — ${product.planLabel}` : product.name;
+    ctx.session.announceScheduleDraft = { name, targetType: isAccount ? 'account' : 'product', productId: String(product._id) };
+    return showScheduleFrequency(ctx);
+  });
+
+  bot.action(/^ann_sched_freq:(daily|hourly|every_6_hours)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('Schedule ဖန်တီးနေပါပြီ...');
+    return createButtonSchedule(ctx, ctx.match[1]);
+  });
+
+  bot.action('ann_sched_noop', requireRole('MANAGER'), (ctx) => ctx.answerCbQuery());
+
+  bot.action(/^ann_sched_toggle:([a-f0-9]{24})$/i, requireRole('MANAGER'), async (ctx) => {
+    const schedule = await AnnouncementSchedule.findById(ctx.match[1]);
+    if (!schedule) return ctx.answerCbQuery('Schedule မတွေ့ပါ', { show_alert: true });
+    schedule.isActive = !schedule.isActive;
+    if (schedule.isActive && !schedule.nextRunAt) schedule.nextRunAt = AnnouncementAutomationService.nextRunAt(schedule);
+    await schedule.save();
+    await ctx.answerCbQuery(schedule.isActive ? 'ပြန်ဖွင့်ပြီးပါပြီ' : 'Pause လုပ်ပြီးပါပြီ');
+    return showScheduleMenu(ctx);
+  });
+
+  bot.action(/^ann_sched_run:([a-f0-9]{24})$/i, requireRole('MANAGER'), async (ctx) => {
+    const schedule = await AnnouncementSchedule.findById(ctx.match[1]);
+    if (!schedule) return ctx.answerCbQuery('Schedule မတွေ့ပါ', { show_alert: true });
+    schedule.isActive = true; schedule.nextRunAt = new Date(); await schedule.save();
+    await ctx.answerCbQuery('Run Now စတင်ပါပြီ');
+    const result = await AnnouncementAutomationService.runDueSchedules(ctx.telegram);
+    await ctx.reply(`✅ Run Now ပြီးပါပြီ။ Completed: ${result.completed}, Failed: ${result.failed}`);
+    return showScheduleMenu(ctx);
+  });
+
+  bot.action(/^ann_sched_delete:([a-f0-9]{24})$/i, requireRole('MANAGER'), async (ctx) => {
+    const deleted = await AnnouncementSchedule.findByIdAndDelete(ctx.match[1]);
+    await ctx.answerCbQuery(deleted ? 'ဖျက်ပြီးပါပြီ' : 'Schedule မတွေ့ပါ');
+    return showScheduleMenu(ctx);
+  });
+
+  bot.action(/^ann_sched_ret:([a-f0-9]{24})$/i, requireRole('MANAGER'), async (ctx) => {
+    const schedule = await AnnouncementSchedule.findById(ctx.match[1]);
+    if (!schedule) return ctx.answerCbQuery('Schedule မတွေ့ပါ', { show_alert: true });
+    const options = [0, 3600, 21600, 43200, 86400];
+    const index = options.indexOf(Number(schedule.retentionSeconds || 0));
+    schedule.retentionSeconds = options[(index + 1) % options.length];
+    await schedule.save();
+    await ctx.answerCbQuery(`Retention ${schedule.retentionSeconds ? `${schedule.retentionSeconds / 3600}h` : 'မဖျက်'} ထားပါပြီ`);
+    return showScheduleMenu(ctx);
+  });
+
+  bot.action('ann_history', requireRole('MANAGER'), async (ctx) => {
+    const runs = await AnnouncementRun.find().sort({ startedAt: -1 }).limit(15).lean();
+    const lines = runs.length
+      ? runs.map((r) => `${r.status === 'completed' ? '✅' : r.status === 'skipped_duplicate' ? '⏭️' : '❌'} ${r.trigger} · ${r.selectedCount} items · users ${r.userSent} · ${new Date(r.startedAt).toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })}`)
+      : ['History မရှိသေးပါ။'];
+    await ctx.answerCbQuery();
+    return ctx.reply(`📜 *Announcement History*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('📅 Schedule Manager', 'ann_schedule_menu'), Markup.button.callback('↩️ Announce', 'ann_categories')]]) });
   });
 
   bot.action(/^ann_toggle:(shop|account):([a-f0-9]{24})$/, requireRole('MANAGER'), async (ctx) => {
