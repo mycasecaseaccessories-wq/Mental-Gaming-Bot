@@ -206,6 +206,9 @@ const GUIDE_SECTIONS = [
       `• ရွေးချယ်စရာ: 🚫 Disabled / 5 / 10 / 15 / 30 / 60 မိနစ်\n` +
       `• 🧹 *Broadcast Delete* — bot-user ဆီပို့တဲ့ Broadcast copy ကို ဘယ်လောက်ကြာရင်ဖျက်မလဲ သတ်မှတ်\n` +
       `• ရွေးချယ်စရာ: 🚫 Never Delete / 1 / 6 / 12 / 24 / 48 နာရီ\n` +
+      `• 💬 *Ordinary Text Replies* — user က သာမန်စာရိုက်ရင် game news/AI auto reply ပြန်မပြန် သတ်မှတ်\n` +
+      `• System Info → 💬 Ordinary Text Replies → 🔴 Disable ကိုနှိပ်ရင် ပိတ်နိုင်\n` +
+      `• ဒီ setting က schedule custom HH:MM နဲ့ admin wizard input တွေကို မပိတ်ပါ။\n` +
       `• Setting မသတ်မှတ်ထားရင် auto cleanup မလုပ်ပါ။ Setting က restart ပြီးလည်း မပျောက်ပါ။\n` +
       `• Bot-user message ကိုသာဖျက်ပြီး Announcement Channel post ကို မဖျက်ပါ။\n\n` +
       `*📜 Announcement History* — schedule run status, selected item count, user sent count နဲ့ run time ကိုကြည့်\n` +

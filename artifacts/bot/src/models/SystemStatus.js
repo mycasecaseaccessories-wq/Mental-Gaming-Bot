@@ -197,6 +197,13 @@ const systemStatusSchema = new mongoose.Schema(
       comment: 'Escalating commission rates based on number of successful referrals',
     },
 
+    // ── Ambient Text Reply / AI Chat ──────────────────────────────────────────
+    ambientRepliesEnabled: {
+      type: Boolean,
+      default: true,
+      comment: 'Master switch for unsolicited replies to ordinary user text; wizard inputs remain unaffected',
+    },
+
     // ── Mini App Reply-Keyboard Button ────────────────────────────────────────
     miniAppButtonEnabled: {
       type:    Boolean,

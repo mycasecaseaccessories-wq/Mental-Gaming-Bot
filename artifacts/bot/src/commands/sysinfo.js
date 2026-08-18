@@ -85,9 +85,11 @@ async function buildSysInfo() {
     : `🗄 Last Backup: _None this session_`;
   const claimTimeout = Number(status.accountPaymentClaimTimeoutMinutes || 0);
   const broadcastRetention = Number(status.broadcastRetentionMinutes || 0);
+  const ambientReplies = status.ambientRepliesEnabled !== false;
   const deliverySettings = `⚙️ *Delivery Settings*\n` +
     `  🔐 Account payment cleanup: *${claimTimeout > 0 ? `${claimTimeout} min` : 'Disabled'}*\n` +
-    `  🧹 Broadcast auto-delete: *${broadcastRetention > 0 ? `${broadcastRetention} min` : 'Disabled'}*`;
+    `  🧹 Broadcast auto-delete: *${broadcastRetention > 0 ? `${broadcastRetention} min` : 'Disabled'}*\n` +
+    `  💬 Ordinary text replies: *${ambientReplies ? 'Enabled' : 'Disabled'}*`;
 
   // ── Stuck users (pending orders > 30 min) ──────────────────────────────────
   const stuckCutoff = new Date(Date.now() - 30 * 60_000);
@@ -179,6 +181,7 @@ module.exports = function registerSysInfo(bot) {
             Markup.button.callback('⏳ Payment Timeout', 'sysinfo_claim_timeout'),
             Markup.button.callback('🧹 Broadcast Delete', 'sysinfo_broadcast_retention'),
           ],
+          [Markup.button.callback('💬 Ordinary Text Replies', 'sysinfo_ambient_replies')],
         ]),
       });
     } catch (err) {
@@ -211,6 +214,7 @@ module.exports = function registerSysInfo(bot) {
             Markup.button.callback('⏳ Payment Timeout', 'sysinfo_claim_timeout'),
             Markup.button.callback('🧹 Broadcast Delete', 'sysinfo_broadcast_retention'),
           ],
+          [Markup.button.callback('💬 Ordinary Text Replies', 'sysinfo_ambient_replies')],
         ]),
       });
     } catch (err) {
@@ -259,6 +263,32 @@ module.exports = function registerSysInfo(bot) {
     await auditLog(ctx.from.id, 'SET_ACCOUNT_PAYMENT_TIMEOUT', null, 'System', { minutes });
     await ctx.answerCbQuery(minutes > 0 ? `Set to ${minutes} minutes` : 'Disabled');
     await ctx.editMessageText(`✅ Premium Account payment timeout: *${minutes > 0 ? `${minutes} မိနစ်` : 'Disabled'}*`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([[Markup.button.callback('↩️ System Info', 'sysinfo_refresh')]]),
+    });
+  });
+
+  bot.action('sysinfo_ambient_replies', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    const enabled = status.ambientRepliesEnabled !== false;
+    await ctx.editMessageText(
+      `💬 *Ordinary Text Replies*\n\n` +
+      `အခု setting: *${enabled ? 'Enabled' : 'Disabled'}*\n` +
+      `_သာမန်စာရိုက်မှုအတွက် game news/AI reply ကို ထိန်းချုပ်ပါမယ်။ Schedule custom HH:MM နဲ့ admin wizard input တွေကို မပိတ်ပါ။_`,
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+        [Markup.button.callback('🟢 Enable', 'syssetting_ambient_replies:1'), Markup.button.callback('🔴 Disable', 'syssetting_ambient_replies:0')],
+        [Markup.button.callback('↩️ System Info', 'sysinfo_refresh')],
+      ]) }
+    );
+  });
+
+  bot.action(/^syssetting_ambient_replies:([01])$/, adminOnly(), async (ctx) => {
+    const enabled = ctx.match[1] === '1';
+    await SystemStatus.set({ ambientRepliesEnabled: enabled }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_AMBIENT_TEXT_REPLIES', null, 'System', { enabled });
+    await ctx.answerCbQuery(enabled ? 'Ordinary text replies enabled' : 'Ordinary text replies disabled');
+    await ctx.editMessageText(`✅ Ordinary text replies: *${enabled ? 'Enabled' : 'Disabled'}*`, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([[Markup.button.callback('↩️ System Info', 'sysinfo_refresh')]]),
     });

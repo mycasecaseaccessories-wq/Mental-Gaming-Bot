@@ -18,6 +18,7 @@
 
 const { Markup }           = require('telegraf');
 const { AI_ENABLED, answerAmbientQuery } = require('../services/aiService');
+const SystemStatus = require('../models/SystemStatus');
 
 // How long a conversation history stays valid (30 minutes)
 const HISTORY_TTL_MS = 30 * 60_000;
@@ -42,6 +43,8 @@ const ADMIN_SESSION_KEYS = [
   'catalogAction',
   'editProductField',
   'rm_manual_product',
+  // Announcement schedule custom HH:MM input must bypass ambient replies.
+  'announceScheduleAwaitingTime',
 ];
 
 // ── Typing simulation ─────────────────────────────────────────────────────────
@@ -55,6 +58,11 @@ async function showTyping(ctx) {
 module.exports = function registerAmbient(bot) {
 
   bot.on('text', async (ctx, next) => {
+    // Ordinary text replies are admin-controlled. Wizard/session inputs are
+    // allowed to continue because their keys are handled above or elsewhere.
+    const status = await SystemStatus.get().catch(() => null);
+    if (status?.ambientRepliesEnabled === false) return next();
+
     // ── No-AI game update lookup (works even while AI is disabled) ─────────
     try {
       const q = ctx.message?.text;
