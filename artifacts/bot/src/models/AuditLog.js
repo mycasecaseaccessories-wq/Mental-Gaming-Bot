@@ -20,7 +20,11 @@ const auditLogSchema = new mongoose.Schema(
     },
     targetType: {
       type: String,
-      enum: ['User', 'Product', 'Order', 'Currency', 'System', 'Catalog'],
+      enum: [
+        'User', 'Product', 'Order', 'Currency', 'System', 'Catalog',
+        'Transaction', 'CheckIn', 'Promo', 'RewardItem', 'RedeemCode',
+        'Template', 'ChannelAutoPost', 'AccountProduct', 'Campaign',
+      ],
       default: 'System',
     },
     details: {

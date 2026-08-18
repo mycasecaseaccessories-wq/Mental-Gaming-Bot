@@ -1,5 +1,9 @@
 require('dotenv').config();
 
+// Some production hosts prefer Telegram's IPv6 route even when it is unreachable.
+// Prefer IPv4 so polling and outbound channel messages do not stall on IPv6 connect timeouts.
+require('node:dns').setDefaultResultOrder('ipv4first');
+
 const { Telegraf, Scenes, session } = require('telegraf');
 const path = require('path');
 const fs   = require('fs');
