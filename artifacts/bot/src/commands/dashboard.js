@@ -21,10 +21,21 @@ function gatewayIcon(status) {
   return status === 'Online' ? '🟢' : status === 'Busy' ? '🟡' : '🔴';
 }
 
+function startOfMyanmarDay(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Rangoon',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  const utcMidnight = Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day));
+  return new Date(utcMidnight - (6 * 60 + 30) * 60 * 1000);
+}
+
 async function buildDashboardText(theme) {
   const now = new Date();
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDay = startOfMyanmarDay(now);
 
   const [
     ordersToday,

@@ -1234,18 +1234,25 @@ router.get("/banners", async (_req: Request, res: Response) => {
 router.get("/notifications", async (req: Request, res: Response) => {
   const u = asUser(req);
   const notifs = await getCollection<NotificationDoc>("notifications");
+  const requestedLimit = Number(req.query["limit"]);
+  const limit = Number.isInteger(requestedLimit)
+    ? Math.min(100, Math.max(1, requestedLimit))
+    : 50;
   const docs = await notifs
     .find({ telegramId: u.telegramId })
-    .sort({ createdAt: -1 })
-    .limit(50)
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(limit + 1)
     .toArray();
+  const hasMore = docs.length > limit;
+  const page = hasMore ? docs.slice(0, limit) : docs;
 
   // Count independently from the page limit so the unread badge stays accurate.
   const unreadCount = await notifs.countDocuments({ telegramId: u.telegramId, isRead: false });
 
   res.json({
     unreadCount,
-    notifications: docs.map((n) => ({
+    hasMore,
+    notifications: page.map((n) => ({
       id: n._id.toString(),
       type: n.type,
       title: n.title,
@@ -1267,10 +1274,14 @@ router.patch("/notifications/:id/read", async (req: Request, res: Response) => {
   if (!id) { res.status(400).json({ error: "Bad id" }); return; }
 
   const notifs = await getCollection<NotificationDoc>("notifications");
-  await notifs.updateOne(
+  const result = await notifs.updateOne(
     { _id: id, telegramId: u.telegramId },
     { $set: { isRead: true, readAt: new Date() } }
   );
+  if (!result.matchedCount) {
+    res.status(404).json({ error: "Notification not found" });
+    return;
+  }
   res.json({ ok: true });
 });
 
