@@ -175,23 +175,34 @@ const GUIDE_SECTIONS = [
   {
     key: 'broadcast', label: '📢 Broadcast',
     body:
-      `📢 *Broadcast & Channel Posts* _(Owner)_\n\n` +
-      `• *Broadcast* — user အားလုံး / tier အလိုက် / active (၃၀ ရက်) ဆီ message (စာ + ပုံ)\n` +
-      `• Admin menu → *📣 Announce* ခလုတ် (သို့ \`/announce\`) — *Product ကြေညာချက်* — product စာရင်းထဲက ရွေး → 🆕 New Product / ⚡ Flash Sale ပုံစံရွေး → *bot user အားလုံး + ကြေညာချက် channel နှစ်ခုလုံး* ကို 🛒 ဝယ်မယ့်ခလုတ်နဲ့တကွ တစ်ပြိုင်နက် ပို့ပေးမယ်\n` +
-      `• \`/addchannelpost\` — channel ကို နေ့စဉ် auto post (HH:MM MMT)\n` +
-      `• \`/listchannelposts\`, \`/sendchannelpost\`, \`/togglechannelpost\`, \`/delchannelpost\`\n` +
-      `• \`/setseason\` — အခါသမယ theme (Thingyan/Christmas…)\n\n` +
-      `🎬 *ဥပမာ — product ကြေညာနည်း:*\n` +
-      `1️⃣ menu → *📣 Announce* နှိပ် (သို့ \`/announce\` ရိုက်) → product ခလုတ်တွေထဲက တစ်ခု ရွေး\n` +
-      `2️⃣ ပုံစံရွေး — 🆕 New Product (ဒါမှမဟုတ် flash sale price သတ်မှတ်ထားရင် ⚡ Flash Sale)\n` +
-      `3️⃣ → user အားလုံး + channel မှာ "🛒 ဝယ်မယ်" ခလုတ်ပါတဲ့ ကြေညာစာ တစ်ပြိုင်နက် ရောက်မယ်\n\n` +
-      `🎬 *ဥပမာ ၁ — user အားလုံးဆီ message ပို့နည်း:*\n` +
-      `1️⃣ menu → *📢 Broadcast* နှိပ် → ဘယ်သူဆီပို့မလဲ ရွေး (👥 All / tier / active)\n` +
-      `2️⃣ ပို့မယ့် စာ (ဒါမှမဟုတ် ပုံ+စာ) ရိုက်ထည့် → *✅ Send* အတည်ပြု\n` +
-      `3️⃣ → ရွေးထားတဲ့ user တိုင်းဆီ တစ်ပြိုင်တည်း ရောက်မယ်\n\n` +
-      `🎬 *ဥပမာ ၂ — channel ကို နေ့စဉ် auto-post:*\n` +
-      `1️⃣ \`/addchannelpost\` → channel ရွေး → စာ ရိုက် → အချိန် "09:00" ထည့်\n` +
-      `2️⃣ → နေ့တိုင်း မနက် ၉ နာရီ (MMT) channel မှာ auto တင်ပေးမယ်`,
+      `📢 *Broadcast & Announcement Automation* _(Manager+)_\n\n` +
+      `*Admin Marketing → 📣 Announce* ထဲမှာ button-based flow သုံးနိုင်ပါတယ်။ Command မရိုက်ဘဲ button နဲ့ စီမံနိုင်ပါမယ်။\n\n` +
+      `*📣 Announce UI*\n` +
+      `• 🛒 *Shop Products* — active shop products ကိုကြည့်\n` +
+      `• 🔐 *Premium Accounts* — active account products ကိုကြည့်\n` +
+      `• Product card ဘေးက ☐ ကိုနှိပ်ပြီး product အများရွေး\n` +
+      `• ✅ *Select All in Shop/Premium Accounts* — category တစ်ခုလုံးရွေး\n` +
+      `• 📢 *Announce Selected (N)* — ရွေးထားတဲ့ product အများကို တစ်ခါတည်း ပို့\n\n` +
+      `*📅 Schedule Manager UI*\n` +
+      `📣 Announce → 📅 Schedule Manager → ➕ New Schedule\n` +
+      `1️⃣ 🌐 All Active Products / 📦 Product တစ်ခု / 📂 Category တစ်ခု ရွေး\n` +
+      `2️⃣ 🕘 Daily 09:00 / ⏱ Every 1 hour / ⏱ Every 6 hours ရွေး\n` +
+      `3️⃣ Schedule ဖန်တီးပြီးရင် 🟢 Active အဖြစ် run မယ်\n` +
+      `4️⃣ Schedule တစ်ခုချင်းစီမှာ ⏸️ Pause/▶️ Resume, ▶️ Run Now, 🗑 Delete button တွေရှိမယ်\n` +
+      `5️⃣ ⏱ Retention button ကိုနှိပ်ပြီး bot-user message ကို မဖျက် / 1h / 6h / 12h / 24h လှည့်ပြောင်း\n\n` +
+      `*Message Retention Rule*\n` +
+      `• Bot user ဆီပို့တဲ့ announce ကို သတ်မှတ်ချိန်ရောက်ရင် auto-delete\n` +
+      `• Announcement Channel post ကို အမြဲမဖျက်\n` +
+      `• Telegram limitation ကြောင့် retention ကို 48 နာရီထက် မကျော်စေရ\n\n` +
+      `*📜 Announcement History* — schedule run status, selected item count, user sent count နဲ့ run time ကိုကြည့်\n` +
+      `*📢 Broadcast* — user အားလုံး / tier / active users ဆီ စာ သို့မဟုတ် ပုံ+စာ ပို့\n` +
+      `*📡 Channels* — channel auto-post ကို စီမံ\n\n` +
+      `🎬 *Button flow ဥပမာ:*\n` +
+      `1️⃣ Admin Marketing → 📣 Announce → 🛒 Shop Products\n` +
+      `2️⃣ ✅ Select All in Shop → 📢 Announce Selected\n` +
+      `3️⃣ 📅 Schedule Manager → ➕ New Schedule → 📂 Category → 🕘 Daily 09:00\n` +
+      `4️⃣ Schedule Manager မှာ ⏱ Retention ကို 6h ထား\n` +
+      `5️⃣ Channel post မဖျက်ဘဲ bot-user copy ကို 6 နာရီအကြာ auto-delete လုပ်မယ်`,
   },
   {
     key: 'promotions', label: '🎟 Promotions',
