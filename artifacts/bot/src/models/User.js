@@ -52,6 +52,12 @@ const userSchema = new mongoose.Schema(
       default: null,
       comment: 'referral code | channel post ID | product ID | null',
     },
+    joinTag: {
+      type:    String,
+      default: null,
+      maxlength: 64,
+      comment: 'Optional first-touch campaign/source tag for referral analytics',
+    },
 
     // ── Onboarding ────────────────────────────────────────────────────────────
     onboardingDone: {

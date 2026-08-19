@@ -34,10 +34,10 @@ function escapeMarkdown(value = '') {
   return String(value).replace(/([\\_*`\[\]])/g, '\\$1');
 }
 
-async function setJoinSourceOnce(telegramId, source, ref) {
+async function setJoinSourceOnce(telegramId, source, ref, tag = null) {
   await User.updateOne(
     { telegramId, joinSource: 'unknown' },
-    { $set: { joinSource: source, joinRef: ref || null } }
+    { $set: { joinSource: source, joinRef: ref || null, joinTag: tag || null } }
   );
 }
 
@@ -96,8 +96,10 @@ module.exports = function registerStart(bot) {
 
     // ── Referral deep link: ref_CODE ────────────────────────────────────────
     if (payload?.startsWith('ref_')) {
-      const refCode = payload.slice(4);
-      await setJoinSourceOnce(ctx.from.id, 'referral', refCode);
+      const refParts = payload.slice(4).split('_');
+      const refCode = refParts.shift();
+      const refTag = refParts.join('_').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64) || null;
+      await setJoinSourceOnce(ctx.from.id, 'referral', refCode, refTag);
 
       try {
         const [user, status] = await Promise.all([

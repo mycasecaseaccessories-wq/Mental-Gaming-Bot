@@ -49,8 +49,9 @@ async function getOrCreateCode(telegramId) {
   return code;
 }
 
-function getReferralLink(code) {
-  return `https://t.me/mentalgamingstorebot?start=ref_${code}`;
+function getReferralLink(code, tag = null) {
+  const safeTag = tag == null ? '' : String(tag).trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 32);
+  return `https://t.me/mentalgamingstorebot?start=ref_${code}${safeTag ? `_${safeTag}` : ''}`;
 }
 
 // ── Referral tier helpers ─────────────────────────────────────────────────────
@@ -205,6 +206,33 @@ async function processTopupCommission(userId, topupAmount, telegram, topupTxId =
   const commissionKS   = Math.floor(topupAmount * rate / 100);
   // Policy: all rewards are paid in Mental Coins only.
   const commissionType = 'Coin';
+
+  // Optional reward budget guard. The check is deliberately before wallet
+  // credit; a later retry can still be evaluated against the same source txId.
+  if (status.referralBudgetEnabled && commissionKS > 0) {
+    const now = new Date();
+    const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const [dailySpent, monthlySpent] = await Promise.all([
+      Referral.aggregate([
+        { $unwind: '$commissionHistory' },
+        { $match: { 'commissionHistory.paidAt': { $gte: dayStart }, 'commissionHistory.reversed': { $ne: true } } },
+        { $group: { _id: null, total: { $sum: '$commissionHistory.commissionCoins' } } },
+      ]),
+      Referral.aggregate([
+        { $unwind: '$commissionHistory' },
+        { $match: { 'commissionHistory.paidAt': { $gte: monthStart }, 'commissionHistory.reversed': { $ne: true } } },
+        { $group: { _id: null, total: { $sum: '$commissionHistory.commissionCoins' } } },
+      ]),
+    ]);
+    const dailyLimit = Number(status.referralDailyBudgetCoins) || 0;
+    const monthlyLimit = Number(status.referralMonthlyBudgetCoins) || 0;
+    if ((dailyLimit > 0 && (dailySpent[0]?.total || 0) + commissionKS > dailyLimit) ||
+        (monthlyLimit > 0 && (monthlySpent[0]?.total || 0) + commissionKS > monthlyLimit)) {
+      await auditLog('System', 'REFERRAL_BUDGET_BLOCKED', String(referral._id), 'Referral', { commissionKS, dailyLimit, monthlyLimit });
+      return null;
+    }
+  }
 
   const commissionTxId = topupTxId ? `referral:commission:${topupTxId}` : null;
 

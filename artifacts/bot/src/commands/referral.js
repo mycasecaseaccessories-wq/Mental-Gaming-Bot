@@ -33,6 +33,7 @@ const Referral        = require('../models/Referral');
 const FraudFlag       = require('../models/FraudFlag');
 const SystemStatus    = require('../models/SystemStatus');
 const User            = require('../models/User');
+const { getReferralReport, reportToCsv } = require('../services/ReferralAnalyticsService');
 
 // ── Tier progress section builder ─────────────────────────────────────────────
 
@@ -125,6 +126,8 @@ module.exports = function registerReferral(bot) {
       [Markup.button.callback('🏆 Tier Settings', 'ref_admin_tiers')],
       [Markup.button.callback(`🛡 Fraud Review (${flagged})`, 'ref_admin_fraud')],
       [Markup.button.callback('🛠 Fraud Rules', 'ref_admin_fraud_rules')],
+      [Markup.button.callback('📈 Referral Analytics', 'ref_admin_analytics')],
+      [Markup.button.callback('💰 Reward Budget', 'ref_admin_budget')],
       [Markup.button.callback('🎯 Referral Campaign', 'rc_panel')],
       [Markup.button.callback('↩️ Admin Marketing', 'nav:go:admin_main')],
     ]);
@@ -224,6 +227,65 @@ module.exports = function registerReferral(bot) {
     const text = `🛡 *Fraud Review*\\n\\n${flags.map((f) => `${icons[f.severity] || '⚪'} *${f.type}*\\nReferrer: \`${f.referrerTid}\` → Referee: \`${f.refereeTid}\``).join('\\n\\n')}`;
     return edit ? ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }) : ctx.reply(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) });
   }
+
+  bot.action('ref_admin_budget', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    const text = `💰 *Referral Reward Budget*\\n\\n` +
+      `Status: *${status.referralBudgetEnabled ? '🟢 Enabled' : '🔴 Disabled'}*\\n` +
+      `Daily cap: *${Number(status.referralDailyBudgetCoins || 0).toLocaleString()} MC*\\n` +
+      `Monthly cap: *${Number(status.referralMonthlyBudgetCoins || 0).toLocaleString()} MC*\\n\\n` +
+      `Budget ပြည့်ရင် commission အသစ်ကို ခဏရပ်ပြီး referral မပျက်စေပါ။`;
+    return ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+      [Markup.button.callback('🔴 Disable', 'ref_admin_budget:off')],
+      [Markup.button.callback('📅 Daily 10k', 'ref_admin_budget:daily:10000'), Markup.button.callback('📅 Daily 50k', 'ref_admin_budget:daily:50000')],
+      [Markup.button.callback('🗓 Monthly 100k', 'ref_admin_budget:monthly:100000'), Markup.button.callback('🗓 Monthly 500k', 'ref_admin_budget:monthly:500000')],
+      [Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')],
+    ]) });
+  });
+
+  bot.action(/^ref_admin_budget:(off|daily|monthly)(?::(\d+))?$/, adminOnly(), async (ctx) => {
+    const mode = ctx.match[1];
+    const amount = Number(ctx.match[2] || 0);
+    const update = mode === 'off'
+      ? { referralBudgetEnabled: false }
+      : mode === 'daily'
+        ? { referralBudgetEnabled: true, referralDailyBudgetCoins: amount }
+        : { referralBudgetEnabled: true, referralMonthlyBudgetCoins: amount };
+    await SystemStatus.set(update, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_REFERRAL_REWARD_BUDGET', null, 'System', update);
+    await ctx.answerCbQuery('Reward budget saved');
+    return ctx.editMessageText('✅ Referral reward budget updated.', { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Reward Budget', 'ref_admin_budget')]]) });
+  });
+
+  bot.action('ref_admin_analytics', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Loading analytics...');
+    const report = await getReferralReport({ days: 30 });
+    const text =
+      `📈 *Referral Analytics — Last 30 Days*\\n\\n` +
+      `👥 Referral joins: *${report.joined}*\\n` +
+      `🔗 Referral records: *${report.total}*\\n` +
+      `✅ Active/Completed: *${report.completed}*\\n` +
+      `⏳ Pending: *${report.pending}* · 🔒 Frozen: *${report.frozen}*\\n` +
+      `📊 Conversion: *${report.conversionRate}%*\\n\\n` +
+      `💳 Referred top-ups: *${report.topups}*\\n` +
+      `💰 Top-up value: *${Number(report.topupAmountKS).toLocaleString()} KS*\\n` +
+      `🪙 Commission cost: *${Number(report.commissionCoins).toLocaleString()} MC*\\n` +
+      `↩️ Reversed: *${Number(report.reversedCommissionCoins).toLocaleString()} MC*\\n` +
+      `⚠️ Unresolved fraud: *${report.unresolvedFraud}*\\n\\n` +
+      `🏷 Tags: ${report.byTag.slice(0, 5).map((row) => `${row.tag} (${row.users})`).join(', ') || 'None'}`;
+    return ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+      [Markup.button.callback('📄 Export CSV', 'ref_admin_analytics_export')],
+      [Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')],
+    ]) });
+  });
+
+  bot.action('ref_admin_analytics_export', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery('Preparing CSV...');
+    const report = await getReferralReport({ days: 30 });
+    const csv = reportToCsv(report);
+    await ctx.replyWithDocument({ source: Buffer.from(csv, 'utf8'), filename: `referral-analytics-${new Date().toISOString().slice(0, 10)}.csv` }, { caption: '📈 Referral analytics export — last 30 days' });
+  });
 
   bot.action('ref_admin_fraud_rules', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();

@@ -40,6 +40,9 @@ const systemStatusSchema = new mongoose.Schema(
     referralVelocityLimit:     { type: Number,  default: 10, min: 1, max: 1000 },
     referralNewAccountWindowMinutes: { type: Number, default: 10, min: 0, max: 1440 },
     referralRapidTopupSeconds: { type: Number, default: 120, min: 0, max: 86400 },
+    referralBudgetEnabled:    { type: Boolean, default: false },
+    referralDailyBudgetCoins: { type: Number, default: 0, min: 0 },
+    referralMonthlyBudgetCoins: { type: Number, default: 0, min: 0 },
     referralWelcomeBonusKS:    { type: Number,  default: 200 },
     referralWelcomeBonusCoins: { type: Number,  default: 50 },
 
