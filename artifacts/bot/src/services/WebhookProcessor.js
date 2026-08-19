@@ -350,4 +350,4 @@ function startWebhookProcessor(telegram) {
   console.log('[WebhookProcessor] ✅ Webhook event processor started');
 }
 
-module.exports = { startWebhookProcessor, processPendingEvents, normalizeSourceTxId };
+module.exports = { startWebhookProcessor, processPendingEvents, processEvent, normalizeSourceTxId };

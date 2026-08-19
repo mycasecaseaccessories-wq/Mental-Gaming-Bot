@@ -34,6 +34,8 @@ const FraudFlag       = require('../models/FraudFlag');
 const SystemStatus    = require('../models/SystemStatus');
 const User            = require('../models/User');
 const { getReferralReport, reportToCsv } = require('../services/ReferralAnalyticsService');
+const WebhookEvent = require('../models/WebhookEvent');
+const { processEvent } = require('../services/WebhookProcessor');
 
 // ── Tier progress section builder ─────────────────────────────────────────────
 
@@ -103,13 +105,14 @@ module.exports = function registerReferral(bot) {
 
   async function sendReferralAdminPanel(ctx, edit = false) {
     const status = await SystemStatus.get();
-    const [total, completed, active, pending, frozen, flagged] = await Promise.all([
+    const [total, completed, active, pending, frozen, flagged, refundQueue] = await Promise.all([
       Referral.countDocuments({}),
       Referral.countDocuments({ status: 'Completed' }),
       Referral.countDocuments({ status: 'Active' }),
       Referral.countDocuments({ status: 'Pending' }),
       Referral.countDocuments({ status: 'Frozen' }),
       FraudFlag.countDocuments({ resolved: false }),
+      WebhookEvent.countDocuments({ eventType: { $in: ['payment.refunded', 'payment.chargeback'] }, status: 'failed' }),
     ]);
     const text =
       `🔗 *Referral Manager*\n` +
@@ -119,7 +122,8 @@ module.exports = function registerReferral(bot) {
       `Minimum top-up: *${(status.referralMinTopup || 1000).toLocaleString()} KS*\n\n` +
       `👥 Total: *${total}*  ✅ Completed: *${completed}*\n` +
       `🔄 Active: *${active}*  ⏳ Pending: *${pending}*\n` +
-      `🔒 Frozen: *${frozen}*  ⚠️ Fraud review: *${flagged}*`;
+      `🔒 Frozen: *${frozen}*  ⚠️ Fraud review: *${flagged}*\n` +
+      `↩️ Refund/Chargeback retry queue: *${refundQueue}*`;
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback('📊 Refresh Stats', 'ref_admin_panel'), Markup.button.callback(status.referralEnabled ? '🔴 Pause Referral' : '🟢 Enable Referral', 'ref_admin_toggle')],
       [Markup.button.callback('⚙️ Commission Settings', 'ref_admin_settings')],
@@ -128,6 +132,7 @@ module.exports = function registerReferral(bot) {
       [Markup.button.callback('🛠 Fraud Rules', 'ref_admin_fraud_rules')],
       [Markup.button.callback('📈 Referral Analytics', 'ref_admin_analytics')],
       [Markup.button.callback('💰 Reward Budget', 'ref_admin_budget')],
+      [Markup.button.callback(`↩️ Refund/Chargeback Queue (${refundQueue})`, 'ref_admin_refund_queue')],
       [Markup.button.callback('🎯 Referral Campaign', 'rc_panel')],
       [Markup.button.callback('↩️ Admin Marketing', 'nav:go:admin_main')],
     ]);
@@ -285,6 +290,47 @@ module.exports = function registerReferral(bot) {
     const report = await getReferralReport({ days: 30 });
     const csv = reportToCsv(report);
     await ctx.replyWithDocument({ source: Buffer.from(csv, 'utf8'), filename: `referral-analytics-${new Date().toISOString().slice(0, 10)}.csv` }, { caption: '📈 Referral analytics export — last 30 days' });
+  });
+
+  bot.action('ref_admin_refund_queue', requireRole('OWNER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    const events = await WebhookEvent.find({
+      eventType: { $in: ['payment.refunded', 'payment.chargeback'] },
+      status: 'failed',
+    }).sort({ createdAt: 1 }).limit(15).lean();
+    if (!events.length) {
+      return ctx.editMessageText('✅ *Refund/Chargeback Queue*\\n\\nRetry လုပ်ရန် failed event မရှိပါ။', {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')]]),
+      });
+    }
+    const rows = events.map((event) => [Markup.button.callback(
+      `🔁 ${event.eventType === 'payment.chargeback' ? 'Chargeback' : 'Refund'} · ${event.externalRef || String(event._id).slice(-8)}`,
+      `ref_admin_refund_retry:${event._id}`,
+    )]);
+    rows.push([Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')]);
+    const text = `↩️ *Refund/Chargeback Queue*\\n\\n` + events.map((event) =>
+      `• ${event.eventType} — ${event.externalRef || '-'}\\n  Error: ${String(event.error || 'Unknown error').slice(0, 120)}`
+    ).join('\\n\\n');
+    return ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) });
+  });
+
+  bot.action(/^ref_admin_refund_retry:(.+)$/, requireRole('OWNER'), async (ctx) => {
+    const eventId = ctx.match[1];
+    await ctx.answerCbQuery('Retrying reversal...');
+    const event = await WebhookEvent.findOneAndUpdate(
+      { _id: eventId, eventType: { $in: ['payment.refunded', 'payment.chargeback'] }, status: 'failed' },
+      { $set: { status: 'pending', error: null, processedAt: null } },
+      { new: true },
+    );
+    if (!event) return ctx.reply('⚠️ ဒီ refund/chargeback event ကို retry လုပ်လို့မရတော့ပါ (processed သို့မဟုတ် မတွေ့ပါ)။');
+    await processEvent(event, ctx.telegram);
+    const refreshed = await WebhookEvent.findById(eventId).lean();
+    if (refreshed?.status === 'processed') {
+      await auditLog(ctx.from.id, 'REFUND_CHARGEBACK_RETRIED', eventId, 'WebhookEvent', { eventType: event.eventType, externalRef: event.externalRef });
+      return ctx.editMessageText('✅ Refund/chargeback reversal ပြန်လုပ်ပြီးပါပြီ။', { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Refund Queue', 'ref_admin_refund_queue')]]) });
+    }
+    return ctx.editMessageText(`❌ Retry မအောင်မြင်သေးပါ။\\n\\nError: ${refreshed?.error || 'Unknown error'}`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Refund Queue', 'ref_admin_refund_queue')]]) });
   });
 
   bot.action('ref_admin_fraud_rules', adminOnly(), async (ctx) => {
