@@ -22,6 +22,7 @@ const Referral     = require('../models/Referral');
 const User         = require('../models/User');
 const SystemStatus = require('../models/SystemStatus');
 const { config }   = require('../../config/settings');
+const { auditLog }  = require('./logger');
 
 // ── Admin notification builder ───────────────────────────────────────────────
 
@@ -134,19 +135,22 @@ async function checkReferralFraud({ newUserId, referrerId, refCode, telegram, re
     });
   }
 
-  // ── Pattern 4: Both accounts very new (< 10 minutes) ─────────────────────
-  const tenMinutes = 10 * 60_000;
+  // ── Pattern 4: Both accounts very new (admin-configurable window) ────────
+  const newAccountWindowMinutes = Number.isFinite(status.referralNewAccountWindowMinutes)
+    ? status.referralNewAccountWindowMinutes
+    : 10;
+  const newAccountWindow = newAccountWindowMinutes * 60_000;
   const now = Date.now();
   const referrerAge = referrer?.joinDate ? now - new Date(referrer.joinDate).getTime() : Infinity;
   const refereeAge  = newUser?.joinDate  ? now - new Date(newUser.joinDate).getTime()  : Infinity;
-  if (referrerAge < tenMinutes && refereeAge < tenMinutes) {
+  if (newAccountWindow > 0 && referrerAge < newAccountWindow && refereeAge < newAccountWindow) {
     detectedFlags.push({
       type: 'BOTH_ACCOUNTS_NEW',
       severity: 'MEDIUM',
       details: {
         referrerAgeMinutes: Math.floor(referrerAge / 60_000),
         refereeAgeMinutes:  Math.floor(refereeAge  / 60_000),
-        note: 'Both accounts registered within the last 10 minutes.',
+        note: `Both accounts registered within the last ${newAccountWindowMinutes} minutes.`,
       },
     });
   }
@@ -192,11 +196,15 @@ async function checkTopupFraud(referral, telegram) {
   const refereeTid  = referee?.telegramId  || 0;
   const referrerTid = referrer?.telegramId || 0;
 
-  // Rapid topup: referred user tops up < 2 minutes after joining
-  const twoMinutes = 2 * 60_000;
+  // Rapid top-up: admin-configurable window after joining
+  const status = await SystemStatus.get();
+  const rapidTopupSeconds = Number.isFinite(status.referralRapidTopupSeconds)
+    ? status.referralRapidTopupSeconds
+    : 120;
+  const rapidTopupWindow = rapidTopupSeconds * 1000;
   const refereeAge = referee?.joinDate ? Date.now() - new Date(referee.joinDate).getTime() : Infinity;
 
-  if (refereeAge < twoMinutes) {
+  if (rapidTopupWindow > 0 && refereeAge < rapidTopupWindow) {
     const flag = await FraudFlag.create({
       referralId:  referral._id,
       referrerTid,
@@ -236,8 +244,13 @@ function registerFraudActions(bot) {
     // Freeze all pending referrals for this user
     await Referral.updateMany(
       { $or: [{ referrerId: user._id }, { refereeId: user._id }], status: { $in: ['Pending', 'Active'] } },
-      { $set: { status: 'Frozen', isFraudSuspected: true, fraudReason: 'Blocked by admin after fraud alert' } }
+      { $set: { status: 'Frozen', isFraudSuspected: true, fraudReason: 'Blocked by admin after fraud alert', fraudReviewedBy: ctx.from.id, fraudReviewedAt: new Date() } }
     );
+    await FraudFlag.updateMany(
+      { $or: [{ referrerTid: targetTid }, { refereeTid: targetTid }], resolved: false },
+      { $set: { resolved: true, resolvedBy: ctx.from.id, resolvedAt: new Date(), resolution: 'BLOCKED' } }
+    );
+    await auditLog(ctx.from.id, 'REFERRAL_FRAUD_BLOCKED', String(targetTid), 'Referral', { targetTid });
 
     await ctx.editMessageText(
       `🚫 *User Blocked*\n\n` +
@@ -257,6 +270,26 @@ function registerFraudActions(bot) {
     } catch {}
   });
 
+  // Release a frozen referral after manual review.
+  bot.action(/^fraud_unfreeze:(.+)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('Releasing referral...');
+    const referral = await Referral.findById(ctx.match[1]);
+    if (!referral) return ctx.reply('❌ Referral not found.');
+    const nextStatus = referral.commissionMode === 'first' && referral.bonusPaid ? 'Completed' : referral.bonusPaid ? 'Active' : 'Pending';
+    referral.status = nextStatus;
+    referral.isFraudSuspected = false;
+    referral.fraudReason = null;
+    referral.fraudReviewedBy = ctx.from.id;
+    referral.fraudReviewedAt = new Date();
+    await referral.save();
+    await FraudFlag.updateMany(
+      { referralId: referral._id, resolved: false },
+      { $set: { resolved: true, resolvedBy: ctx.from.id, resolvedAt: new Date(), resolution: 'WARNED' } }
+    );
+    await auditLog(ctx.from.id, 'REFERRAL_FRAUD_UNFROZEN', referral._id.toString(), 'Referral', { nextStatus });
+    await ctx.editMessageText(`🔓 *Referral released*\\n\\nStatus: *${nextStatus}*\\n_Reviewed by admin; no account block applied._`, { parse_mode: 'Markdown' });
+  });
+
   // Dismiss a fraud flag (admin reviewed and decided it's OK)
   bot.action(/^fraud_dismiss:(.+)$/, requireRole('STAFF'), async (ctx) => {
     await ctx.answerCbQuery('Dismissed.');
@@ -268,6 +301,7 @@ function registerFraudActions(bot) {
       resolvedAt: new Date(),
       resolution: 'DISMISSED',
     });
+    await auditLog(ctx.from.id, 'REFERRAL_FRAUD_DISMISSED', flagId, 'FraudFlag', {});
 
     await ctx.editMessageText(
       `✅ *Fraud flag dismissed.*\n_Reviewed by admin — no action taken._`,

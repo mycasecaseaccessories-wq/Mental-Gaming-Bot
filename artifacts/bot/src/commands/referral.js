@@ -124,6 +124,7 @@ module.exports = function registerReferral(bot) {
       [Markup.button.callback('⚙️ Commission Settings', 'ref_admin_settings')],
       [Markup.button.callback('🏆 Tier Settings', 'ref_admin_tiers')],
       [Markup.button.callback(`🛡 Fraud Review (${flagged})`, 'ref_admin_fraud')],
+      [Markup.button.callback('🛠 Fraud Rules', 'ref_admin_fraud_rules')],
       [Markup.button.callback('🎯 Referral Campaign', 'rc_panel')],
       [Markup.button.callback('↩️ Admin Marketing', 'nav:go:admin_main')],
     ]);
@@ -216,12 +217,43 @@ module.exports = function registerReferral(bot) {
         Markup.button.callback('🚫 Block Referrer', `fraud_block:${flag.referrerTid}`),
         Markup.button.callback('🚫 Block Referee', `fraud_block:${flag.refereeTid}`),
       ]);
+      if (flag.referralId) rows.push([Markup.button.callback('🔓 Release Referral', `fraud_unfreeze:${flag.referralId}`)]);
       rows.push([Markup.button.callback('✅ Dismiss', `fraud_dismiss:${flag._id}`)]);
     }
     rows.push([Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')]);
     const text = `🛡 *Fraud Review*\\n\\n${flags.map((f) => `${icons[f.severity] || '⚪'} *${f.type}*\\nReferrer: \`${f.referrerTid}\` → Referee: \`${f.refereeTid}\``).join('\\n\\n')}`;
     return edit ? ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }) : ctx.reply(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) });
   }
+
+  bot.action('ref_admin_fraud_rules', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const status = await SystemStatus.get();
+    const text =
+      `🛠 *Referral Fraud Rules*\\n\\n` +
+      `⚡ Velocity limit: *${status.referralVelocityLimit || 10}/hour*\\n` +
+      `🆕 New-account window: *${status.referralNewAccountWindowMinutes ?? 10} minutes*\\n` +
+      `⏱ Rapid top-up window: *${status.referralRapidTopupSeconds ?? 120} seconds*\\n\\n` +
+      `Preset button တစ်ခုနှိပ်ပြီး ချက်ချင်းသိမ်းပါ။`;
+    return ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+      [Markup.button.callback('⚡ 5 refs/hour', 'ref_admin_rule:velocity:5'), Markup.button.callback('⚡ 10 refs/hour', 'ref_admin_rule:velocity:10'), Markup.button.callback('⚡ 20 refs/hour', 'ref_admin_rule:velocity:20')],
+      [Markup.button.callback('🆕 0 min', 'ref_admin_rule:newWindow:0'), Markup.button.callback('🆕 10 min', 'ref_admin_rule:newWindow:10'), Markup.button.callback('🆕 30 min', 'ref_admin_rule:newWindow:30')],
+      [Markup.button.callback('⏱ Off', 'ref_admin_rule:rapid:0'), Markup.button.callback('⏱ 2 min', 'ref_admin_rule:rapid:120'), Markup.button.callback('⏱ 5 min', 'ref_admin_rule:rapid:300')],
+      [Markup.button.callback('↩️ Referral Manager', 'ref_admin_panel')],
+    ]) });
+  });
+
+  bot.action(/^ref_admin_rule:(velocity|newWindow|rapid):(\d+)$/, adminOnly(), async (ctx) => {
+    const type = ctx.match[1];
+    const value = Number(ctx.match[2]);
+    const field = type === 'velocity' ? 'referralVelocityLimit' : type === 'newWindow' ? 'referralNewAccountWindowMinutes' : 'referralRapidTopupSeconds';
+    const limits = { referralVelocityLimit: [1, 1000], referralNewAccountWindowMinutes: [0, 1440], referralRapidTopupSeconds: [0, 86400] };
+    const [min, max] = limits[field];
+    if (value < min || value > max) return ctx.answerCbQuery('Invalid rule value', { show_alert: true });
+    await SystemStatus.set({ [field]: value }, ctx.from.id);
+    await auditLog(ctx.from.id, 'SET_REFERRAL_FRAUD_RULE', null, 'System', { field, value });
+    await ctx.answerCbQuery('Fraud rule saved');
+    return ctx.editMessageText(`✅ Fraud rule updated.`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Fraud Rules', 'ref_admin_fraud_rules')]]) });
+  });
 
   bot.action('ref_admin_fraud', requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery();

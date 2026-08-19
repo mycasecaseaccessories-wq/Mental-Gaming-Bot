@@ -37,7 +37,9 @@ const systemStatusSchema = new mongoose.Schema(
     referralCommissionMode:    { type: String,  enum: ['first', 'every'], default: 'first' },
     referralCommissionType:    { type: String,  enum: ['KS', 'Coin', 'Both'], default: 'KS' },
     referralMinTopup:          { type: Number,  default: 1000 },
-    referralVelocityLimit:     { type: Number,  default: 10 },
+    referralVelocityLimit:     { type: Number,  default: 10, min: 1, max: 1000 },
+    referralNewAccountWindowMinutes: { type: Number, default: 10, min: 0, max: 1440 },
+    referralRapidTopupSeconds: { type: Number, default: 120, min: 0, max: 86400 },
     referralWelcomeBonusKS:    { type: Number,  default: 200 },
     referralWelcomeBonusCoins: { type: Number,  default: 50 },
 
