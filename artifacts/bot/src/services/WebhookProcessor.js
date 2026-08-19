@@ -120,6 +120,15 @@ async function processPaymentCompleted(event, telegram) {
   const WalletService = require('./WalletService');
   const approved = await WalletService.approveTopup(transaction.txId, 0);
 
+  // Keep webhook approvals consistent with manual approvals: commission is
+  // keyed by the approved source txId so retries cannot pay twice.
+  try {
+    const { processTopupCommission } = require('./ReferralService');
+    await processTopupCommission(approved.user._id, approved.amountKS, telegram, approved.txId || transaction.txId);
+  } catch (err) {
+    console.error('[WebhookProcessor] referral commission error:', err.message);
+  }
+
   if (telegram) {
     try {
       await telegram.sendMessage(

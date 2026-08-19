@@ -121,7 +121,7 @@ module.exports = function registerTopup(bot) {
         `✅ *Top-up approved!*`
       );
 
-      const { user, amountKS, bonusCoins, happyHourCoins, happyHourPct, topupCoupon } = await approveTopup(txId, ctx.from.id);
+      const { user, amountKS, bonusCoins, happyHourCoins, happyHourPct, topupCoupon, txId: approvedSourceTxId } = await approveTopup(txId, ctx.from.id);
 
       await auditLog(ctx.from.id, 'TOPUP_APPROVED', txId, 'Transaction', { amountKS, bonusCoins, happyHourCoins });
 
@@ -133,7 +133,7 @@ module.exports = function registerTopup(bot) {
       }).catch(() => {});
 
       // ── Process referral commission (first or every-topup mode) ────────
-      processTopupCommission(user._id, amountKS, ctx.telegram).catch((err) =>
+      processTopupCommission(user._id, amountKS, ctx.telegram, approvedSourceTxId || txId).catch((err) =>
         console.error('[Topup] Referral commission error:', err.message)
       );
 

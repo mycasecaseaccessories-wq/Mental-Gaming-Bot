@@ -18,7 +18,7 @@
 const Referral          = require('../models/Referral');
 const User              = require('../models/User');
 const SystemStatus      = require('../models/SystemStatus');
-const { creditKS, creditCoin } = require('./WalletService');
+const { creditKS, creditCoin, debitCoin } = require('./WalletService');
 const { auditLog }      = require('./logger');
 const { checkReferralFraud, checkTopupFraud } = require('./FraudDetector');
 
@@ -159,7 +159,7 @@ async function registerReferral(newUserId, refCode, telegram = null) {
 // Called by topup.js after admin approves a top-up.
 // Works for both 'first' and 'every' modes.
 
-async function processTopupCommission(userId, topupAmount, telegram) {
+async function processTopupCommission(userId, topupAmount, telegram, topupTxId = null) {
   // Find active or pending referral where this user is the referee
   const referral = await Referral.findOne({
     refereeId: userId,
@@ -167,6 +167,12 @@ async function processTopupCommission(userId, topupAmount, telegram) {
     isFraudSuspected: false,
   });
   if (!referral) return null;
+
+  // A top-up event can be retried by an admin action or webhook. Referrals must
+  // receive at most one commission entry for the same approved source tx.
+  if (topupTxId && (referral.commissionHistory || []).some((entry) => entry.txId === topupTxId)) {
+    return null;
+  }
 
   const referee  = await User.findById(userId);
   const referrer = await User.findById(referral.referrerId);
@@ -200,18 +206,22 @@ async function processTopupCommission(userId, topupAmount, telegram) {
   // Policy: all rewards are paid in Mental Coins only.
   const commissionType = 'Coin';
 
+  const commissionTxId = topupTxId ? `referral:commission:${topupTxId}` : null;
+
   // ── Award referrer commission ─────────────────────────────────────────────
   if (commissionKS > 0) {
     if (commissionType === 'KS' || commissionType === 'Both') {
       await creditKS(referrer._id, commissionKS, {
         type: 'Bonus',
+        txId: commissionTxId ? `${commissionTxId}:ks` : null,
         note: `Referral commission ${rate}% of ${topupAmount.toLocaleString()} KS — @${referee.username || referee.telegramId}`,
       });
     }
     if (commissionType === 'Coin' || commissionType === 'Both') {
       await creditCoin(referrer._id, commissionKS, {
         type: 'Bonus',
-        note: `Referral coin commission`,
+        txId: commissionTxId,
+        note: `Referral coin commission — source ${topupTxId || 'legacy'}`,
       });
     }
   }
@@ -229,36 +239,61 @@ async function processTopupCommission(userId, topupAmount, telegram) {
     if (welcomeCoins > 0) {
       await creditCoin(referee._id, welcomeCoins, {
         type: 'Bonus',
+        txId: `referral:welcome:${referral._id}`,
         note: 'Welcome bonus — joined via referral',
       });
     }
   }
 
-  // ── Update referral record ────────────────────────────────────────────────
-  referral.totalCommissionKS    = (referral.totalCommissionKS    || 0) + (commissionType === 'Coin' ? 0 : commissionKS);
-  referral.totalCommissionCoins = (referral.totalCommissionCoins || 0) + (commissionType === 'Coin' ? commissionKS : 0);
-  referral.bonusPaid            = true;
-  referral.completedAt          = referral.completedAt || new Date();
-  referral.topupAmount          = referral.topupAmount  || topupAmount;
-
-  if (referral.commissionMode === 'first') {
-    referral.status = 'Completed';
-  } else {
-    referral.status = 'Active'; // keeps earning on future top-ups
-  }
-
-  referral.commissionHistory.push({
+  // ── Update referral record atomically ─────────────────────────────────────
+  // The history txId predicate prevents two concurrent approvals from adding
+  // the same commission event twice. Wallet ledger txIds provide the second
+  // idempotency guard if a retry happens after the wallet credit.
+  const historyEntry = {
     topupAmount,
     commissionRate: rate,
     commissionKS,
     commissionCoins: commissionType === 'Coin' ? commissionKS : 0,
     paidAt: new Date(),
-  });
-
-  await referral.save();
+    txId: topupTxId,
+  };
+  const updateFilter = {
+    _id: referral._id,
+    status: { $in: ['Pending', 'Active'] },
+    isFraudSuspected: false,
+    ...(topupTxId ? { 'commissionHistory.txId': { $ne: topupTxId } } : {}),
+    ...(referral.commissionMode === 'first' ? { bonusPaid: false } : {}),
+  };
+  const updateOps = {
+    $inc: {
+      totalCommissionKS: commissionType === 'Coin' ? 0 : commissionKS,
+      totalCommissionCoins: commissionType === 'Coin' ? commissionKS : 0,
+    },
+    $set: {
+      bonusPaid: true,
+      completedAt: referral.completedAt || new Date(),
+      topupAmount: referral.topupAmount || topupAmount,
+      status: referral.commissionMode === 'first' ? 'Completed' : 'Active',
+    },
+    $push: { commissionHistory: historyEntry },
+  };
+  let updatedReferral;
+  if (typeof Referral.findOneAndUpdate === 'function') {
+    updatedReferral = await Referral.findOneAndUpdate(updateFilter, updateOps, { new: true });
+  } else {
+    // Lightweight test doubles may expose only document.save(); production uses
+    // the atomic findOneAndUpdate branch above.
+    referral.totalCommissionKS = (referral.totalCommissionKS || 0) + updateOps.$inc.totalCommissionKS;
+    referral.totalCommissionCoins = (referral.totalCommissionCoins || 0) + updateOps.$inc.totalCommissionCoins;
+    Object.assign(referral, updateOps.$set);
+    referral.commissionHistory = [...(referral.commissionHistory || []), historyEntry];
+    await referral.save();
+    updatedReferral = referral;
+  }
+  if (!updatedReferral) return null;
 
   // ── Referral campaign hook (first completion only) ────────────────────────
-  if (referral.commissionHistory.length === 1) {
+  if (updatedReferral.commissionHistory.length === 1) {
     try {
       const { onReferralCompleted } = require('./RefCampaignService');
       await onReferralCompleted(referrer, telegram, referee, topupAmount);
@@ -319,6 +354,50 @@ async function processTopupCommission(userId, topupAmount, telegram) {
   }
 
   return { referral, commissionKS, rate, isFirstTopup };
+}
+
+// ── Reverse a commission when the source top-up is refunded/charged back ────────
+async function reverseTopupCommission(topupTxId, actorId = 'System', reason = 'Source top-up refunded') {
+  if (!topupTxId) throw new Error('Top-up transaction ID is required');
+
+  const referral = await Referral.findOne({ 'commissionHistory.txId': topupTxId });
+  if (!referral) return null;
+  const entry = (referral.commissionHistory || []).find((item) => item.txId === topupTxId);
+  if (!entry || entry.reversed) return null;
+
+  const reversalTxId = `referral:reversal:${topupTxId}`;
+  if (entry.commissionCoins > 0) {
+    await debitCoin(referral.referrerId, entry.commissionCoins, {
+      type: 'Debit',
+      txId: reversalTxId,
+      note: `Referral commission reversal — ${reason}`,
+    });
+  }
+
+  const updated = await Referral.findOneAndUpdate(
+    {
+      _id: referral._id,
+      commissionHistory: { $elemMatch: { txId: topupTxId, reversed: { $ne: true } } },
+    },
+    {
+      $set: {
+        'commissionHistory.$.reversed': true,
+        'commissionHistory.$.reversedAt': new Date(),
+        'commissionHistory.$.reversalTxId': reversalTxId,
+      },
+      $inc: { totalCommissionCoins: -Math.abs(entry.commissionCoins || 0) },
+    },
+    { new: true }
+  );
+  if (!updated) return null;
+
+  await auditLog(actorId, 'REFERRAL_COMMISSION_REVERSED', referral._id.toString(), 'Referral', {
+    topupTxId,
+    reversalTxId,
+    amountCoins: entry.commissionCoins || 0,
+    reason,
+  });
+  return { referral: updated, entry, reversalTxId };
 }
 
 // ── Legacy alias kept so old callers don't break during transition ─────────────
@@ -460,6 +539,7 @@ module.exports = {
   getReferralLink,
   registerReferral,
   processTopupCommission,
+  reverseTopupCommission,
   processFirstTopup,    // legacy alias
   getStats,
   getLeaderboard,

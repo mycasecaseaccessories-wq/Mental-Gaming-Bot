@@ -181,40 +181,65 @@ async function debitKS(userId, amount, { type = 'Purchase', note = '', txId = nu
 /**
  * Credit Mental Coins to a user.
  */
-async function creditCoin(userId, amount, { type = 'Bonus', note = '', session = null } = {}) {
+async function creditCoin(userId, amount, { type = 'Bonus', note = '', txId = null, session: externalSession = null } = {}) {
   if (amount <= 0) throw new Error('Coin credit must be positive');
 
-  const user = await User.findById(userId).session(session || null);
-  if (!user) throw new Error('User not found');
+  const session = externalSession || (await mongoose.startSession());
+  const ownsSession = !externalSession;
+  if (ownsSession) session.startTransaction();
 
-  const before = user.balanceCoin;
-  user.balanceCoin += amount;
-  await user.save(session ? { session } : undefined);
+  try {
+    // A supplied txId is an idempotency key. Check before mutating the wallet.
+    if (txId && await Transaction.exists({ txId }).session(session)) {
+      const existing = await User.findById(userId).session(session);
+      if (!existing) throw new Error('User not found');
+      if (ownsSession) await session.commitTransaction();
+      return existing;
+    }
 
-  await Transaction.create(
-    [
-      {
-        userId: user._id,
-        type,
-        wallet: 'Coin',
-        amount,
-        balanceBefore: before,
-        balanceAfter: user.balanceCoin,
-        status: 'Completed',
-        note,
-      },
-    ],
-    session ? { session } : undefined,
-  );
+    const user = await User.findById(userId).session(session);
+    if (!user) throw new Error('User not found');
 
-  return user;
+    const before = user.balanceCoin;
+    user.balanceCoin += amount;
+    await user.save({ session });
+
+    await Transaction.create(
+      [
+        {
+          userId: user._id,
+          type,
+          wallet: 'Coin',
+          amount,
+          balanceBefore: before,
+          balanceAfter: user.balanceCoin,
+          txId: txId || undefined,
+          status: 'Completed',
+          note,
+        },
+      ],
+      { session },
+    );
+
+    if (ownsSession) await session.commitTransaction();
+    return user;
+  } catch (err) {
+    if (ownsSession) await session.abortTransaction();
+    throw err;
+  } finally {
+    if (ownsSession) await session.endSession();
+  }
 }
 
 /**
  * Debit Mental Coins from a user.
  */
-async function debitCoin(userId, amount, { type = 'Debit', note = '' } = {}) {
+async function debitCoin(userId, amount, { type = 'Debit', note = '', txId = null } = {}) {
   if (amount <= 0) throw new Error('Coin debit must be positive');
+
+  if (txId && await Transaction.exists({ txId })) {
+    return User.findById(userId);
+  }
 
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
@@ -231,6 +256,7 @@ async function debitCoin(userId, amount, { type = 'Debit', note = '' } = {}) {
     amount: -amount,
     balanceBefore: before,
     balanceAfter: user.balanceCoin,
+    txId: txId || undefined,
     status: 'Completed',
     note,
   });

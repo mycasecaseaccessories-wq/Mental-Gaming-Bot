@@ -19,6 +19,9 @@ const commissionEntrySchema = new mongoose.Schema(
     commissionCoins: { type: Number, default: 0 },
     paidAt:          { type: Date, default: Date.now },
     txId:            { type: String, default: null },
+    reversed:        { type: Boolean, default: false },
+    reversedAt:      { type: Date, default: null },
+    reversalTxId:    { type: String, default: null },
   },
   { _id: false }
 );
