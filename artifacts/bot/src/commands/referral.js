@@ -84,7 +84,7 @@ function modeLabel(mode, type) {
 
 // ── Share invite text (rich visual message) ────────────────────────────────────
 
-function buildShareText(stats) {
+function buildShareText(stats, link = stats.link) {
   return (
     `🎮 *Join Mental Gaming Store!*\n\n` +
     `Myanmar's best game top-up store:\n` +
@@ -93,7 +93,7 @@ function buildShareText(stats) {
     `  ✅ Trusted by thousands\n\n` +
     `🎁 *Join with my link and get:*\n` +
     `  🪙 *+${(stats.welcomeBonus.coins).toLocaleString()} Mental Coins* welcome bonus\n\n` +
-    `👇 Tap to join:\n${stats.link}`
+    `👇 Tap to join:\n${link}`
   );
 }
 
@@ -342,6 +342,13 @@ module.exports = function registerReferral(bot) {
           }).join('\n')
         : '  _No referrals yet — share your link below!_';
 
+      const detailButtons = stats.recentReferrals.map((r) => [
+        Markup.button.callback(`${STATUS_ICON[r.status] || '•'} ${r.maskedName}`, `ref_detail:${r.id}`),
+      ]);
+      const milestoneLine = stats.nextMilestone
+        ? `🎯 *Next milestone:* ${stats.nextMilestone} completed referrals (${Math.max(0, stats.nextMilestone - stats.completedCount)} more)\n`
+        : `🏆 *All referral milestones reached!*\n`;
+
       const text =
         `🔗 *Referral Program*\n` +
         `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
@@ -357,6 +364,7 @@ module.exports = function registerReferral(bot) {
         `\`──────────────────────\`\n` +
         `🎯 *Commission:* ${stats.commissionRate}% per top-up\n` +
         `📋 *Mode:* ${modeStr}\n` +
+        milestoneLine +
         buildTierProgress(stats) +
         `\`──────────────────────\`\n` +
         `🎁 *Your Friend Gets:* +${stats.welcomeBonus.coins.toLocaleString()} MC\n` +
@@ -368,10 +376,9 @@ module.exports = function registerReferral(bot) {
       await ctx.reply(text, {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.url(
-            '📤 Share Invite',
-            `https://t.me/share/url?url=${encodeURIComponent(stats.link)}&text=${encodeURIComponent(buildShareText(stats))}`
-          )],
+          [Markup.button.url('📤 Telegram Share', `https://t.me/share/url?url=${encodeURIComponent(stats.shareLinks.telegram)}&text=${encodeURIComponent(buildShareText(stats, stats.shareLinks.telegram))}`)],
+          [Markup.button.url('📘 Facebook Link', stats.shareLinks.facebook), Markup.button.url('🎵 TikTok Link', stats.shareLinks.tiktok)],
+          ...detailButtons,
           [
             Markup.button.callback('🏆 Leaderboard',   'ref_leaderboard'),
             Markup.button.callback('🔄 Refresh',       'ref_refresh'),
@@ -455,6 +462,26 @@ module.exports = function registerReferral(bot) {
       return `${medal[i] || `${i + 1}.`} ${tag} — *${entry.count}* refs — ${(((entry.totalCoins || 0) + (entry.totalKS || 0))).toLocaleString()} MC earned`;
     });
     await ctx.reply(`🏆 *Referral Leaderboard*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+  });
+
+  // ── Inline: referral detail ──────────────────────────────────────────────────
+
+  bot.action(/^ref_detail:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const user = await User.findByTelegramId(ctx.from.id);
+    const referral = user ? await Referral.findOne({ _id: ctx.match[1], referrerId: user._id }).populate('refereeId', 'username first_name telegramId') : null;
+    if (!referral) return ctx.reply('❌ Referral detail not found.');
+    const earned = (referral.totalCommissionCoins || 0) + (referral.totalCommissionKS || 0);
+    const name = referral.refereeId?.username ? `@${referral.refereeId.username}` : referral.refereeId?.first_name || 'User';
+    return ctx.editMessageText(
+      `👤 *Referral Detail*\\n\\n` +
+      `User: *${name}*\\n` +
+      `Status: *${STATUS_ICON[referral.status] || '•'} ${referral.status}*\\n` +
+      `Joined: *${referral.createdAt.toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT*\\n` +
+      `Commission earned: *${earned.toLocaleString()} MC*\\n` +
+      (referral.isFraudSuspected ? `\\n🔒 *Under fraud review:* ${referral.fraudReason || 'Review pending'}\\n` : ''),
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Back to Referral', 'ref_refresh')]]) }
+    );
   });
 
   // ── Inline: refresh stats ─────────────────────────────────────────────────────

@@ -346,6 +346,9 @@ async function processTopupCommission(userId, topupAmount, telegram, topupTxId =
     const levelUpLine  = tierLevelUp
       ? `\n🆙 *You've reached ${currentTier.emoji} ${currentTier.label} tier!*\n`
       : '';
+    const milestoneLine = [1, 5, 10, 25, 50, 100].includes(thisIsRefN)
+      ? `\n🎯 *Milestone reached:* ${thisIsRefN} completed referrals!\n`
+      : '';
     const { nextTier } = resolveTierInfo(thisIsRefN, status.referralTiers);
     const nextLine     = nextTier && !tierLevelUp
       ? `\n_${nextTier.minRefs - thisIsRefN} more referral${nextTier.minRefs - thisIsRefN !== 1 ? 's' : ''} to reach ${nextTier.emoji} ${nextTier.label} (${nextTier.rate}%)_`
@@ -355,7 +358,7 @@ async function processTopupCommission(userId, topupAmount, telegram, topupTxId =
         referrer.telegramId,
         `🎉 *Referral Commission Earned!*\n\n` +
         `${refereeTag} just topped up!\n` +
-        `🏅 ${tierBadge}${levelUpLine}\n` +
+        `🏅 ${tierBadge}${levelUpLine}${milestoneLine}\n` +
         `💰 Commission (${rate}%): *+${commissionKS.toLocaleString()} ${commissionType === 'Coin' ? 'MC' : 'KS'}*\n` +
         nextLine + `\n` +
         (referral.commissionMode === 'every'
@@ -464,16 +467,24 @@ async function getStats(telegramId) {
     .limit(8);
 
   const { currentTier, nextTier } = resolveTierInfo(completedCount, status.referralTiers);
+  const milestones = [1, 5, 10, 25, 50, 100];
+  const nextMilestone = milestones.find((value) => value > completedCount) || null;
 
   return {
     code,
     link:        getReferralLink(code),
+    shareLinks: {
+      telegram: getReferralLink(code, 'telegram'),
+      facebook: getReferralLink(code, 'facebook'),
+      tiktok: getReferralLink(code, 'tiktok'),
+    },
     total,
     completed,
     pending,
     active,
     frozen,
     completedCount,
+    nextMilestone,
     tier:            currentTier,
     nextTier,
     totalKSEarned:    earned.totalKS,
@@ -486,7 +497,8 @@ async function getStats(telegramId) {
       ks:    0, // Policy: welcome bonus paid in Mental Coins only.
       coins: (status.referralWelcomeBonusCoins || 50) + (status.referralWelcomeBonusKS || 200),
     },
-    recentReferrals: recentReferrals.map((r) => ({
+    recentReferrals:     recentReferrals.map((r) => ({
+      id:         r._id.toString(),
       status:     r.status,
       earned:     (r.totalCommissionCoins || 0) + (r.totalCommissionKS || 0),
       isFraud:    r.isFraudSuspected,
