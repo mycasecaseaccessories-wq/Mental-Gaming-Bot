@@ -308,7 +308,10 @@ const GUIDE_SECTIONS = [
       `• 🔴/🟢 *Pause/Enable Referral* — referral program ကို button နဲ့ ရပ်/ဖွင့်\n` +
       `• ⚙️ *Commission Settings* — 1% / 2% / 3% / 5% rate နဲ့ First/Every top-up mode ရွေး\n` +
       `• 🏆 *Tier Settings* — Default / Fast / Premium tier preset ရွေး\n` +
-      `• 🛡 *Fraud Review* — flag တစ်ခုချင်းစီအတွက် 🚫 Block Referrer, 🚫 Block Referee, ✅ Dismiss button သုံး\n` +
+      `• 🛡 *Fraud Review* — flag တစ်ခုချင်းစီအတွက် 🚫 Block Referrer, 🚫 Block Referee, 🔓 Release Referral, ✅ Dismiss button သုံး\n` +
+      `• 🛠 *Fraud Rules* — refs/hour, new-account window, rapid top-up window ကို preset button နဲ့ ပြင်\n` +
+      `• 📈 *Referral Analytics* — 30-day joins, conversion, top-up value, MC commission cost, fraud နဲ့ tag breakdown ကြည့်; CSV export လုပ်\n` +
+      `• 💰 *Reward Budget* — daily/monthly MC cap ဖွင့်/ပိတ်; budget ပြည့်ရင် commission အသစ် ခဏရပ်\n` +
       `• 🎯 *Referral Campaign* — campaign wizard ဆက်ဖွင့်\n` +
       `• Legacy command များ: \`/setreftiers\`, \`/reftiers\`, \`/togglereferral\`, \`/reffraud\` ကိုလည်း ဆက်သုံးနိုင်\n\n` +
       `🎬 *ဥပမာ ၁ — Spin ဆု အသစ် ထည့်နည်း:*\n` +
@@ -319,8 +322,11 @@ const GUIDE_SECTIONS = [
       `1️⃣ Admin Menu → 📣 Admin Marketing → 🔗 Referral Manager\n` +
       `2️⃣ ⚙️ Commission Settings → 3% → 🔁 Every top-up (သို့) 🟢 First top-up\n` +
       `3️⃣ 🏆 Tier Settings → Default 2/3/5% (သို့) Fast/Premium preset\n` +
-      `4️⃣ 🛡 Fraud Review → flag ကို စစ် → user ကို block သို့မဟုတ် flag ကို dismiss\n` +
-      `5️⃣ Referral commission ကို policy အရ *Mental Coin (MC)* နဲ့ ပေးမယ်`,
+      `4️⃣ 🛡 Fraud Review → flag ကို စစ် → user ကို block, referral ကို 🔓 release, သို့မဟုတ် dismiss\n` +
+      `5️⃣ 🛠 Fraud Rules → velocity/account-age/rapid-top-up preset တစ်ခုရွေး\n` +
+      `6️⃣ 📈 Referral Analytics → report ကြည့် → CSV export နှိပ်\n` +
+      `7️⃣ 💰 Reward Budget → daily/monthly cap ရွေး (မလိုရင် Disable)\n` +
+      `8️⃣ Referral commission ကို policy အရ *Mental Coin (MC)* နဲ့ ပေးမယ်`,
   },
   {
     key: 'coins', label: '🪙 Coins & Tiers',
