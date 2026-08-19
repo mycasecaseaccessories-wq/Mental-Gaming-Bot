@@ -76,6 +76,20 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    reversalTxId: {
+      type: String,
+      default: null,
+      index: true,
+      comment: 'Referral commission reversal ledger transaction linked to a refunded/charged-back top-up',
+    },
+    reversedAt: {
+      type: Date,
+      default: null,
+    },
+    reversalReason: {
+      type: String,
+      default: null,
+    },
     timestamp: {
       type: Date,
       default: Date.now,

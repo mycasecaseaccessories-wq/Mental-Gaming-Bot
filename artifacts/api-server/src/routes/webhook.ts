@@ -123,6 +123,9 @@ router.post(
       "payment_failed":    "payment.failed",
       "payment_declined":  "payment.failed",
       "refund_completed":  "payment.refunded",
+      "payment_refunded":  "payment.refunded",
+      "chargeback":        "payment.chargeback",
+      "payment_chargeback": "payment.chargeback",
     };
 
     const rawEvent = (body.event || body.status || body.type || "unknown") as string;

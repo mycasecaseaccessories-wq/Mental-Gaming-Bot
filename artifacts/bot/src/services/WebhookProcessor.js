@@ -18,11 +18,18 @@ const Transaction = require('../models/Transaction');
 
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
+function normalizeSourceTxId(externalRef) {
+  const value = String(externalRef || '');
+  return value.endsWith('_approved') ? value.slice(0, -'_approved'.length) : value;
+}
+
 // ── Event processor dispatch table ───────────────────────────────────────────
 
 const PROCESSORS = {
   'payment.completed': processPaymentCompleted,
   'payment.failed': processPaymentFailed,
+  'payment.refunded': processPaymentRefunded,
+  'payment.chargeback': processPaymentRefunded,
   'topup.delivered': processTopupDelivered,
   'topup.failed': processTopupFailed,
 };
@@ -153,6 +160,56 @@ async function processPaymentCompleted(event, telegram) {
   }
 
   return { orderId: null };
+}
+
+async function processPaymentRefunded(event, telegram) {
+  const payload = event.payload || {};
+  const externalRef = payload.externalRef || payload.transaction_id || payload.reference || payload.order_id || event.externalRef;
+  if (!externalRef) throw new Error('Refund/chargeback event has no external reference');
+
+  const transaction = await Transaction.findOne({
+    $or: [
+      { txId: externalRef },
+      { txId: `${externalRef}_approved` },
+      { reference: externalRef },
+      { providerRef: externalRef },
+    ],
+    type: 'Topup',
+    status: 'Completed',
+  });
+  if (!transaction) {
+    // Provider retries after the bot already marked the source as reversed are safe.
+    const alreadyReversed = await Transaction.findOne({
+      $or: [{ txId: externalRef }, { txId: `${externalRef}_approved` }],
+      type: 'Topup',
+      reversalTxId: { $ne: null },
+    });
+    if (alreadyReversed) return { alreadyProcessed: true };
+    throw new Error(`Completed top-up not found for refund reference: ${externalRef}`);
+  }
+
+  const { reverseTopupCommission } = require('./ReferralService');
+  const sourceTxId = normalizeSourceTxId(externalRef);
+  const reason = payload.reason || payload.note || (event.eventType === 'payment.chargeback' ? 'Payment chargeback' : 'Payment refunded');
+  // approveTopup keeps the pending record as <source>_approved but the KS
+  // ledger and referral commission use the original source txId.
+  const reversal = await reverseTopupCommission(sourceTxId, 'System', reason);
+  if (reversal) {
+    await Transaction.updateMany(
+      { $or: [{ txId: sourceTxId }, { txId: `${sourceTxId}_approved` }], type: 'Topup' },
+      { $set: { reversalTxId: reversal.reversalTxId, reversedAt: new Date(), reversalReason: reason } },
+    );
+  }
+
+  if (telegram && transaction.userId) {
+    try {
+      const user = await User.findById(transaction.userId).select('telegramId');
+      if (user?.telegramId) {
+        await telegram.sendMessage(user.telegramId, `↩️ Payment refund/chargeback recorded.\n\nReference: ${externalRef}\nReferral rewards linked to this top-up were reversed where applicable.`, { parse_mode: 'Markdown' });
+      }
+    } catch {}
+  }
+  return { alreadyProcessed: !reversal, reversalTxId: reversal?.reversalTxId || null };
 }
 
 async function processPaymentFailed(event, telegram) {
@@ -293,4 +350,4 @@ function startWebhookProcessor(telegram) {
   console.log('[WebhookProcessor] ✅ Webhook event processor started');
 }
 
-module.exports = { startWebhookProcessor, processPendingEvents };
+module.exports = { startWebhookProcessor, processPendingEvents, normalizeSourceTxId };

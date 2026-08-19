@@ -43,6 +43,10 @@ const systemStatusSchema = new mongoose.Schema(
     referralBudgetEnabled:    { type: Boolean, default: false },
     referralDailyBudgetCoins: { type: Number, default: 0, min: 0 },
     referralMonthlyBudgetCoins: { type: Number, default: 0, min: 0 },
+    referralBudgetDayKey:      { type: String, default: null },
+    referralBudgetDayUsed:     { type: Number, default: 0, min: 0 },
+    referralBudgetMonthKey:    { type: String, default: null },
+    referralBudgetMonthUsed:   { type: Number, default: 0, min: 0 },
     referralWelcomeBonusKS:    { type: Number,  default: 200 },
     referralWelcomeBonusCoins: { type: Number,  default: 50 },
 
@@ -383,6 +387,70 @@ systemStatusSchema.statics.set = async function (fields, updatedBy = null) {
     { $set: fields },
     { upsert: true, new: true }
   );
+};
+
+function budgetPeriodKeys(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Rangoon', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now).reduce((acc, item) => ({ ...acc, [item.type]: item.value }), {});
+  return { dayKey: `${parts.year}-${parts.month}-${parts.day}`, monthKey: `${parts.year}-${parts.month}` };
+}
+
+// Atomically reserves both daily and monthly referral MC budget windows.
+systemStatusSchema.statics.reserveReferralBudget = async function (amount, now = new Date()) {
+  const requested = Math.max(0, Math.floor(Number(amount) || 0));
+  const current = await this.get();
+  if (!current.referralBudgetEnabled || requested === 0) return { allowed: true, reserved: false };
+  const { dayKey, monthKey } = budgetPeriodKeys(now);
+
+  // Reset stale period counters before the conditional reservation. The
+  // subsequent update is the gate: concurrent requests can only win once.
+  await this.updateOne({ _id: SINGLETON_ID }, [
+    { $set: {
+      referralBudgetDayUsed: { $cond: [{ $eq: ['$referralBudgetDayKey', dayKey] }, '$referralBudgetDayUsed', 0] },
+      referralBudgetDayKey: dayKey,
+      referralBudgetMonthUsed: { $cond: [{ $eq: ['$referralBudgetMonthKey', monthKey] }, '$referralBudgetMonthUsed', 0] },
+      referralBudgetMonthKey: monthKey,
+    } },
+  ]);
+
+  const reserved = await this.findOneAndUpdate(
+    {
+      _id: SINGLETON_ID,
+      referralBudgetEnabled: true,
+      $and: [
+        { $or: [
+          { referralDailyBudgetCoins: { $lte: 0 } },
+          { $expr: { $lte: [{ $add: ['$referralBudgetDayUsed', requested] }, '$referralDailyBudgetCoins'] } },
+        ] },
+        { $or: [
+          { referralMonthlyBudgetCoins: { $lte: 0 } },
+          { $expr: { $lte: [{ $add: ['$referralBudgetMonthUsed', requested] }, '$referralMonthlyBudgetCoins'] } },
+        ] },
+      ],
+    },
+    { $inc: { referralBudgetDayUsed: requested, referralBudgetMonthUsed: requested } },
+    { new: true },
+  );
+  return { allowed: !!reserved, reserved: !!reserved, dayKey, monthKey };
+};
+
+systemStatusSchema.statics.releaseReferralBudget = async function (amount, now = new Date()) {
+  const requested = Math.max(0, Math.floor(Number(amount) || 0));
+  if (!requested) return false;
+  const { dayKey, monthKey } = budgetPeriodKeys(now);
+  const released = await this.findOneAndUpdate(
+    {
+      _id: SINGLETON_ID,
+      referralBudgetDayKey: dayKey,
+      referralBudgetMonthKey: monthKey,
+      referralBudgetDayUsed: { $gte: requested },
+      referralBudgetMonthUsed: { $gte: requested },
+    },
+    { $inc: { referralBudgetDayUsed: -requested, referralBudgetMonthUsed: -requested } },
+    { new: true },
+  );
+  return !!released;
 };
 
 module.exports = mongoose.model('SystemStatus', systemStatusSchema);

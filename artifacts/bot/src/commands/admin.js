@@ -311,7 +311,8 @@ const GUIDE_SECTIONS = [
       `• 🛡 *Fraud Review* — flag တစ်ခုချင်းစီအတွက် 🚫 Block Referrer, 🚫 Block Referee, 🔓 Release Referral, ✅ Dismiss button သုံး\n` +
       `• 🛠 *Fraud Rules* — refs/hour, new-account window, rapid top-up window ကို preset button နဲ့ ပြင်\n` +
       `• 📈 *Referral Analytics* — 30-day joins, conversion, top-up value, MC commission cost, fraud နဲ့ tag breakdown ကြည့်; CSV export လုပ်\n` +
-      `• 💰 *Reward Budget* — daily/monthly MC cap ဖွင့်/ပိတ်; budget ပြည့်ရင် commission အသစ် ခဏရပ်\n` +
+      `• 💰 *Reward Budget* — daily/monthly MC cap ဖွင့်/ပိတ်; budget ပြည့်ရင် commission အသစ် ခဏရပ်; concurrent approval တွေမှာ atomic reservation သုံး\n` +
+      `• ↩️ *Refund/Chargeback* — payment provider refund/chargeback webhook ရောက်ရင် source top-up commission ကို idempotent ပြန်နုတ်ပြီး reversal ledger/audit မှတ်\n` +
       `• 🎯 *Referral Campaign* — campaign wizard ဆက်ဖွင့်\n` +
       `• Legacy command များ: \`/setreftiers\`, \`/reftiers\`, \`/togglereferral\`, \`/reffraud\` ကိုလည်း ဆက်သုံးနိုင်\n\n` +
       `🎬 *ဥပမာ ၁ — Spin ဆု အသစ် ထည့်နည်း:*\n` +
@@ -326,7 +327,8 @@ const GUIDE_SECTIONS = [
       `5️⃣ 🛠 Fraud Rules → velocity/account-age/rapid-top-up preset တစ်ခုရွေး\n` +
       `6️⃣ 📈 Referral Analytics → report ကြည့် → CSV export နှိပ်\n` +
       `7️⃣ 💰 Reward Budget → daily/monthly cap ရွေး (မလိုရင် Disable)\n` +
-      `8️⃣ Referral commission ကို policy အရ *Mental Coin (MC)* နဲ့ ပေးမယ်`,
+      `8️⃣ Refund/chargeback ဖြစ်ရင် provider က \`payment.refunded\` (သို့) \`payment.chargeback\` event ပို့ → source top-up ကိုရှာ → commission reversal အလိုအလျောက်လုပ်\n` +
+      `9️⃣ Referral commission ကို policy အရ *Mental Coin (MC)* နဲ့ ပေးမယ်`,
   },
   {
     key: 'coins', label: '🪙 Coins & Tiers',

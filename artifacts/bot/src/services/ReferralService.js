@@ -207,51 +207,44 @@ async function processTopupCommission(userId, topupAmount, telegram, topupTxId =
   // Policy: all rewards are paid in Mental Coins only.
   const commissionType = 'Coin';
 
-  // Optional reward budget guard. The check is deliberately before wallet
-  // credit; a later retry can still be evaluated against the same source txId.
+  let budgetReserved = false;
   if (status.referralBudgetEnabled && commissionKS > 0) {
-    const now = new Date();
-    const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const [dailySpent, monthlySpent] = await Promise.all([
-      Referral.aggregate([
-        { $unwind: '$commissionHistory' },
-        { $match: { 'commissionHistory.paidAt': { $gte: dayStart }, 'commissionHistory.reversed': { $ne: true } } },
-        { $group: { _id: null, total: { $sum: '$commissionHistory.commissionCoins' } } },
-      ]),
-      Referral.aggregate([
-        { $unwind: '$commissionHistory' },
-        { $match: { 'commissionHistory.paidAt': { $gte: monthStart }, 'commissionHistory.reversed': { $ne: true } } },
-        { $group: { _id: null, total: { $sum: '$commissionHistory.commissionCoins' } } },
-      ]),
-    ]);
-    const dailyLimit = Number(status.referralDailyBudgetCoins) || 0;
-    const monthlyLimit = Number(status.referralMonthlyBudgetCoins) || 0;
-    if ((dailyLimit > 0 && (dailySpent[0]?.total || 0) + commissionKS > dailyLimit) ||
-        (monthlyLimit > 0 && (monthlySpent[0]?.total || 0) + commissionKS > monthlyLimit)) {
-      await auditLog('System', 'REFERRAL_BUDGET_BLOCKED', String(referral._id), 'Referral', { commissionKS, dailyLimit, monthlyLimit });
+    if (typeof SystemStatus.reserveReferralBudget !== 'function') {
+      throw new Error('Referral reward budget reservation is unavailable');
+    }
+    const reservation = await SystemStatus.reserveReferralBudget(commissionKS);
+    if (!reservation.allowed) {
+      await auditLog('System', 'REFERRAL_BUDGET_BLOCKED', String(referral._id), 'Referral', { commissionKS });
       return null;
     }
+    budgetReserved = reservation.reserved;
   }
 
   const commissionTxId = topupTxId ? `referral:commission:${topupTxId}` : null;
 
   // ── Award referrer commission ─────────────────────────────────────────────
-  if (commissionKS > 0) {
-    if (commissionType === 'KS' || commissionType === 'Both') {
-      await creditKS(referrer._id, commissionKS, {
-        type: 'Bonus',
-        txId: commissionTxId ? `${commissionTxId}:ks` : null,
-        note: `Referral commission ${rate}% of ${topupAmount.toLocaleString()} KS — @${referee.username || referee.telegramId}`,
-      });
+  try {
+    if (commissionKS > 0) {
+      if (commissionType === 'KS' || commissionType === 'Both') {
+        await creditKS(referrer._id, commissionKS, {
+          type: 'Bonus',
+          txId: commissionTxId ? `${commissionTxId}:ks` : null,
+          note: `Referral commission ${rate}% of ${topupAmount.toLocaleString()} KS — @${referee.username || referee.telegramId}`,
+        });
+      }
+      if (commissionType === 'Coin' || commissionType === 'Both') {
+        await creditCoin(referrer._id, commissionKS, {
+          type: 'Bonus',
+          txId: commissionTxId,
+          note: `Referral coin commission — source ${topupTxId || 'legacy'}`,
+        });
+      }
     }
-    if (commissionType === 'Coin' || commissionType === 'Both') {
-      await creditCoin(referrer._id, commissionKS, {
-        type: 'Bonus',
-        txId: commissionTxId,
-        note: `Referral coin commission — source ${topupTxId || 'legacy'}`,
-      });
+  } catch (err) {
+    if (budgetReserved && typeof SystemStatus.releaseReferralBudget === 'function') {
+      await SystemStatus.releaseReferralBudget(commissionKS).catch(() => {});
     }
+    throw err;
   }
 
   // ── Welcome bonus for referee (first top-up only) ─────────────────────────
