@@ -2,7 +2,7 @@
  * Shop command — registers all navigation folders and wires /shop entry.
  */
 
-const { Markup } = require('telegraf');
+const { Markup, Input } = require('telegraf');
 const Nav = require('../services/NavigationService');
 const Product = require('../models/Product');
 const Catalog = require('../models/Catalog');
@@ -32,6 +32,12 @@ function productLogo(product = {}) {
 
 function isInStock(product = {}) {
   return product.stockCount === -1 || Number(product.stockCount) > 0;
+}
+
+function telegramPhotoInput(imageUrl) {
+  const value = String(imageUrl || '').trim();
+  if (/^https?:\/\//i.test(value)) return Input.fromURL(value);
+  return { source: value };
 }
 
 function productButtonLabel(product) {
@@ -301,7 +307,7 @@ module.exports = function registerShop(bot) {
       if (product.imageUrl) {
         await deleteRef(ctx, ref);
         return ctx.replyWithPhoto(
-          { source: product.imageUrl },
+          telegramPhotoInput(product.imageUrl),
           { caption: text, parse_mode: 'Markdown', ...productKeyboard }
         );
       }
