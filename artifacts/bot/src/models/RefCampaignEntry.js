@@ -13,6 +13,8 @@ const refCampaignEntrySchema = new mongoose.Schema(
 
     countedRefs:    { type: Number, default: 0, comment: 'Refs counted toward next reward' },
     totalRefs:      { type: Number, default: 0, comment: 'All refs counted in this campaign' },
+    dailyInviteDate: { type: String, default: null, comment: 'Myanmar calendar date used for daily invite quota' },
+    dailyInviteCount: { type: Number, default: 0, comment: 'Qualified referrals counted on dailyInviteDate' },
     rewardsClaimed: { type: Number, default: 0 },
   },
   { timestamps: true, versionKey: false }

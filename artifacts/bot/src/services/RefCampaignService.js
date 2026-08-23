@@ -17,7 +17,12 @@ function rewardText(c) {
   if (c.rewardType === 'mc') return `${c.rewardAmount} MC`;
   if (c.rewardType === 'ks') return `${c.rewardAmount.toLocaleString()} KS`;
   if (c.rewardType === 'product_free') return `🎁 ${c.rewardLabel || 'Product'} (အခမဲ့)`;
+  if (c.rewardType === 'product_price') return `🎁 ${c.rewardLabel || 'Product'} (${Number(c.campaignPrice || 0).toLocaleString()} KS)`;
   return c.rewardLabel || 'Product';
+}
+
+function myanmarDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Rangoon' }).format(date);
 }
 
 /**
@@ -71,12 +76,26 @@ async function onReferralCompleted(referrer, telegram, referee = null, topupAmou
       { upsert: true }
     );
 
-    // Atomically count this referral, respecting the per-user invite cap
-    const countFilter = { campaignId: camp._id, telegramId: referrer.telegramId };
+    // Atomically count this referral, respecting lifetime and Myanmar-day caps.
+    const entryId = { campaignId: camp._id, telegramId: referrer.telegramId };
+    const dayKey = myanmarDateKey();
+    if (camp.maxDailyInvites > 0) {
+      await RefCampaignEntry.updateOne(
+        { ...entryId, dailyInviteDate: { $ne: dayKey } },
+        { $set: { dailyInviteDate: dayKey, dailyInviteCount: 0 } },
+      );
+    }
+    const countFilter = { ...entryId };
     if (camp.maxInvitesPerUser > 0) countFilter.totalRefs = { $lt: camp.maxInvitesPerUser };
+    if (camp.maxDailyInvites > 0) {
+      countFilter.$or = [
+        { dailyInviteDate: dayKey, dailyInviteCount: { $lt: camp.maxDailyInvites } },
+        { dailyInviteDate: { $ne: dayKey } },
+      ];
+    }
     let entry = await RefCampaignEntry.findOneAndUpdate(
       countFilter,
-      { $inc: { totalRefs: 1, countedRefs: 1 } },
+      { $inc: { totalRefs: 1, countedRefs: 1, dailyInviteCount: camp.maxDailyInvites > 0 ? 1 : 0 }, $set: { dailyInviteDate: dayKey } },
       { new: true }
     );
     if (!entry) return null; // invite cap reached — not counted
@@ -129,8 +148,11 @@ async function onReferralCompleted(referrer, telegram, referee = null, topupAmou
           await creditKS(referrer._id, camp.rewardAmount, {
             type: 'Bonus', note: `Ref campaign reward: ${camp.title}`,
           });
-        } else if (camp.rewardType === 'product_free') {
-          // product_free — auto-issue a personal 100%-off coupon for the bot
+        } else if (camp.rewardType === 'product_free' || camp.rewardType === 'product_price') {
+          // Product reward — issue a personal coupon for the selected bot product.
+          // product_free uses 100% off; product_price uses a flat discount so
+          // the winner pays the configured campaign price.
+
           // product so the winner can buy it once for free in the shop.
           // Only mint if the product still exists AND is active, otherwise the
           // coupon would be un-redeemable (orderScene/OrderService reject
@@ -139,8 +161,10 @@ async function onReferralCompleted(referrer, telegram, referee = null, topupAmou
           const prod = camp.rewardProductId ? await Product.findById(camp.rewardProductId) : null;
           if (prod && prod.isActive) {
             const promo = await generateCoupon(config.bot.adminId, {
-              discountType: 'Percentage',
-              value: 100,
+              discountType: camp.rewardType === 'product_free' ? 'Percentage' : 'Flat',
+              value: camp.rewardType === 'product_free'
+                ? 100
+                : Math.max(0, Number(prod.finalPrice || 0) - Number(camp.campaignPrice || 0)),
               maxUses: null,
               perUserLimit: 1,
               scopeType: 'product',
@@ -221,10 +245,10 @@ async function notifyUser(telegram, referrer, camp, entry, granted, coupons = []
   try {
     if (granted.length) {
       let tail;
-      if (camp.rewardType === 'product_free') {
+      if (camp.rewardType === 'product_free' || camp.rewardType === 'product_price') {
         tail = coupons.length
           ? `\n\n🎟 သင့် coupon code: ${coupons.join(', ')}\n\n` +
-            `👉 Shop ထဲဝင် → "${camp.rewardLabel}" ကို ရွေး → coupon သုံးပြီး အခမဲ့ ဝယ်လိုက်ပါ!\n` +
+            `👉 Shop ထဲဝင် → "${camp.rewardLabel}" ကို ရွေး → coupon သုံးပြီး ${camp.rewardType === 'product_free' ? 'အခမဲ့' : `${Number(camp.campaignPrice || 0).toLocaleString()} KS နဲ့`} ဝယ်လိုက်ပါ!\n` +
             `(order လုပ်တဲ့အခါ ဒီ coupon က button အဖြစ် အလိုအလျောက် ပေါ်ပါလိမ့်မယ်။)`
           : `\n\nAdmin က မကြာခင် ဆက်သွယ်ပြီး ပို့ပေးပါမယ်။`;
       } else if (camp.rewardType === 'product') {

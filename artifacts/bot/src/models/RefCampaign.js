@@ -19,7 +19,7 @@ const refCampaignSchema = new mongoose.Schema(
 
     rewardType: {
       type: String,
-      enum: ['mc', 'ks', 'product', 'product_free'],
+      enum: ['mc', 'ks', 'product', 'product_free', 'product_price'],
       required: true,
       comment: 'mc = Mental Coins, ks = wallet cash, product = manual delivery by admin, product_free = auto free-buy coupon for a bot Product',
     },
@@ -29,13 +29,25 @@ const refCampaignSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
       default: null,
-      comment: 'For product_free — the bot Product the winner may buy once for free (via auto 100% coupon)',
+      comment: 'For product_free/product_price — the bot Product the winner may buy once with a personal coupon',
+    },
+    campaignPrice: {
+      type: Number,
+      default: null,
+      min: 0,
+      comment: 'For product_price — final KS price the referrer pays once the threshold is reached',
     },
 
     maxInvitesPerUser: {
       type: Number,
       default: 0,
-      comment: 'Max referrals counted per user in this campaign (0 = unlimited)',
+      comment: 'Lifetime max referrals counted per user in this campaign (0 = unlimited)',
+    },
+    maxDailyInvites: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'Max referrals counted per user per Myanmar calendar day (0 = unlimited)',
     },
     maxRewardsPerUser: {
       type: Number,

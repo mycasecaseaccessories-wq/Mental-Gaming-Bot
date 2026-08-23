@@ -41,6 +41,7 @@ async function showUserCampaign(ctx) {
     `📊 သင့်တိုးတက်မှု: ${bar(counted, camp.requiredRefs)}  *${counted}/${camp.requiredRefs}*\n` +
     (claimed > 0 ? `🎁 ရပြီးသားဆု: *${claimed} ခု*\n` : '') +
     (camp.maxInvitesPerUser > 0 ? `👥 တစ်ယောက်လျှင် ref အများဆုံး: ${camp.maxInvitesPerUser} ယောက် (သုံးပြီး ${totalRefs})\n` : '') +
+    (camp.maxDailyInvites > 0 ? `📅 တစ်ရက်လျှင် ref အများဆုံး: ${camp.maxDailyInvites} ယောက်\n` : '') +
     (camp.maxRewardsPerUser > 0 ? `🎁 တစ်ယောက်လျှင် ဆု အများဆုံး: ${camp.maxRewardsPerUser} ခု\n` : '') +
     (quotaLeft !== null ? `⏳ ဆု လက်ကျန်: *${quotaLeft} ခု* (ကုန်ရင် campaign ပြီးမယ်)\n` : '') +
     (camp.minRefereeAgeDays > 0 ? `🛡 ဖိတ်ခံရသူရဲ့ Telegram account သက်တမ်း အနည်းဆုံး *${camp.minRefereeAgeDays} ရက်* ရှိရပါမယ်\n` : '') +
@@ -66,6 +67,7 @@ async function buildAdminPanel() {
       `🟢 *${esc(camp.title)}* (ဖွင့်ထား)\n\n` +
       `🏆 ဆု: ${esc(rewardText(camp))} / ref ${camp.requiredRefs} ယောက်\n` +
       `👥 Max ref per user: ${camp.maxInvitesPerUser || '∞'}\n` +
+      `📅 Daily ref limit: ${camp.maxDailyInvites || '∞'} / user\n` +
       `🎁 Max ဆု per user: ${camp.maxRewardsPerUser || '∞'}\n` +
       `📦 ဆုစုစုပေါင်း limit: ${camp.totalRewardLimit || '∞'} (ပေးပြီး ${camp.totalRewardsClaimed})\n` +
       `🛡 ဖိတ်ခံရသူ acc သက်တမ်း: ${camp.minRefereeAgeDays > 0 ? `≥ ${camp.minRefereeAgeDays} ရက် (ID ခန့်မှန်း)` : 'မစစ်ပါ'}\n` +
@@ -180,6 +182,7 @@ module.exports = function registerRefCampaign(bot) {
           [Markup.button.callback('🪙 MC (Mental Coins)', 'rcw_type:mc')],
           [Markup.button.callback('💵 KS (Wallet ငွေ)', 'rcw_type:ks')],
           [Markup.button.callback('🎁 Bot Product (အခမဲ့ ဝယ်ခွင့်)', 'rcw_type:product_free')],
+          [Markup.button.callback('🏷️ Bot Product (သတ်မှတ်ဈေးနဲ့ ဝယ်ခွင့်)', 'rcw_type:product_price')],
           [Markup.button.callback('📦 Product (ကိုယ်တိုင်ပို့)', 'rcw_type:product')],
         ])
       );
@@ -196,12 +199,26 @@ module.exports = function registerRefCampaign(bot) {
       st.step = 'maxinv';
       return ctx.reply(`Step 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
+    if (st.step === 'rprice') {
+      const n = parseInt(input.replace(/[^\d]/g, ''), 10);
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့မဟုတ် ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      st.campaignPrice = n;
+      st.step = 'maxinv';
+      return ctx.reply(`Step 6/10: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = lifetime limit မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+    }
     if (st.step === 'maxinv') {
       const n = parseInt(input, 10);
       if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
       st.maxInvitesPerUser = n;
+      st.step = 'dailymax';
+      return ctx.reply(`Step 7/10: တစ်ရက်လျှင် *အများဆုံး ဘယ်နှစ်ယောက်* ကို valid ref အဖြစ် တွက်ပေးမလဲ?\n_(ဥပမာ 10 — ကျော်သွားရင် ဒီနေ့မတွက်ဘဲ နောက်နေ့မှာ ပြန်တွက်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+    }
+    if (st.step === 'dailymax') {
+      const n = parseInt(input, 10);
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့မဟုတ် ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      st.maxDailyInvites = n;
       st.step = 'maxrew';
-      return ctx.reply(`Step 6/9: တစ်ယောက်လျှင် *ဆု အများဆုံး ဘယ်နှစ်ခု* လဲရမလဲ?\n_(0 = ကန့်သတ်မထား၊ များသောအားဖြင့် 1)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 8/10: တစ်ယောက်လျှင် *ဆု အများဆုံး ဘယ်နှစ်ခု* လဲရမလဲ?\n_(0 = ကန့်သတ်မထား၊ များသောအားဖြင့် 1)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
     if (st.step === 'maxrew') {
       const n = parseInt(input, 10);
@@ -241,7 +258,9 @@ module.exports = function registerRefCampaign(bot) {
         rewardAmount: st.rewardAmount || 0,
         rewardLabel: st.rewardLabel || '',
         rewardProductId: st.rewardProductId || null,
+        campaignPrice: st.campaignPrice ?? null,
         maxInvitesPerUser: st.maxInvitesPerUser,
+        maxDailyInvites: st.maxDailyInvites || 0,
         maxRewardsPerUser: st.maxRewardsPerUser,
         totalRewardLimit: st.totalRewardLimit,
         minRefereeAgeDays: st.minRefereeAgeDays || 0,
@@ -257,7 +276,7 @@ module.exports = function registerRefCampaign(bot) {
   });
 
   // Reward type selector (wizard step 3→4)
-  bot.action(/^rcw_type:(mc|ks|product|product_free)$/, adminOnly(), async (ctx) => {
+  bot.action(/^rcw_type:(mc|ks|product|product_free|product_price)$/, adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const st = ctx.session?.rcAdmin;
     if (!st || st.step !== 'rtype') return;
@@ -266,7 +285,7 @@ module.exports = function registerRefCampaign(bot) {
       st.step = 'rlabel';
       return ctx.reply(`Step 4/9: *ဆု product နာမည်* ရိုက်ပါ:\n_(ဥပမာ "ExpressVPN 1 Month" — ဆုရသူကို admin က ကိုယ်တိုင် ပို့ရပါမယ်)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
     }
-    if (st.rewardType === 'product_free') {
+    if (st.rewardType === 'product_free' || st.rewardType === 'product_price') {
       const prods = await Product.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).limit(30);
       if (!prods.length) {
         st.rewardType = null;
@@ -277,7 +296,7 @@ module.exports = function registerRefCampaign(bot) {
         Markup.button.callback(`${p.name} — ${p.finalPrice.toLocaleString()} KS`, `rcw_prod:${p._id}`),
       ]);
       return ctx.reply(
-        `Step 4/9: *ဆုအဖြစ်ပေးမယ့် Product* ရွေးပါ:\n_(ref ပြည့်တဲ့သူဟာ ဒီ product ကို ၁ ကြိမ် အခမဲ့ ဝယ်လို့ရမယ် — coupon အလိုအလျောက် ထုတ်ပေးပါမယ်)_`,
+        `Step 4/10: *Campaign Product* ရွေးပါ:\n_(ref ပြည့်တဲ့သူဟာ ဒီ product ကို ၁ ကြိမ် ${st.rewardType === 'product_free' ? 'အခမဲ့' : 'သတ်မှတ်ဈေးနဲ့'} ဝယ်လို့ရမယ် — coupon အလိုအလျောက် ထုတ်ပေးပါမယ်)_`,
         { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
       );
     }
@@ -294,9 +313,13 @@ module.exports = function registerRefCampaign(bot) {
     if (!p) return ctx.reply('❌ Product မတွေ့ပါ။ ပြန်ရွေးပါ။');
     st.rewardProductId = p._id;
     st.rewardLabel = p.name;
+    if (st.rewardType === 'product_price') {
+      st.step = 'rprice';
+      return ctx.reply(`✅ Campaign Product: *${esc(p.name)}*\n\nStep 5/10: Ref ပြည့်သူ ဝယ်ရမယ့် *campaign price* (KS) ရိုက်ပါ:`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+    }
     st.step = 'maxinv';
     return ctx.reply(
-      `✅ ဆု Product: *${esc(p.name)}* (အခမဲ့)\n\nStep 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`,
+      `✅ ဆု Product: *${esc(p.name)}* (${st.rewardType === 'product_free' ? 'အခမဲ့' : 'သတ်မှတ်ဈေး'})\n\nStep 5/10: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`,
       { parse_mode: 'Markdown', ...Markup.forceReply() }
     );
   });
