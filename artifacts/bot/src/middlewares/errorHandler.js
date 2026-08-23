@@ -74,6 +74,17 @@ function errorHandler() {
       const errorCode = err.response?.error_code ?? err.code;
       const errorDescription = String(err.response?.description || err.message || '').toLowerCase();
       const blockedByUser = errorCode === 403 && errorDescription.includes('blocked by the user');
+      const expiredCallback = errorCode === 400 && (
+        errorDescription.includes('query is too old')
+        || errorDescription.includes('response timeout expired')
+        || errorDescription.includes('query id is invalid')
+      );
+      if (expiredCallback) {
+        // Telegram callback queries expire quickly; a late answer is harmless and
+        // must not generate a crash report for the admin.
+        console.warn('[ErrorHandler] Expired Telegram callback query; ignored');
+        return;
+      }
       if (blockedByUser) {
         // A user blocking the bot is expected during broadcasts; do not turn it
         // into a noisy admin alert or an unhandled update failure.
