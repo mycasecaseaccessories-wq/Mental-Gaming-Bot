@@ -34,6 +34,11 @@ function mdEsc(s) {
   return String(s == null ? '' : s).replace(/([_*`\[])/g, '\\$1');
 }
 
+function captionSafe(text) {
+  const value = String(text || '');
+  return value.length <= 1024 ? value : `${value.slice(0, 1000)}\n\n…`;
+}
+
 // ── Product announcement formatter ───────────────────────────────────────────
 
 function formatNewProductAnnouncement(product) {
@@ -48,16 +53,19 @@ function formatNewProductAnnouncement(product) {
       : ``;
 
   return (
-    `🆕 *New Product Alert!*\n` +
+    `🆕 *NEW PRODUCT*\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
     `🎮 *${mdEsc(product.name)}*\n` +
     `${categoryLine}\n` +
-    `💰 Price: *${priceStr}*\n` +
+    `💰 *${priceStr}*\n` +
     `${typeLine}\n` +
     (stockLine ? `${stockLine}\n` : ``) +
+    (product.warrantyDays > 0 ? `🛡 Warranty: *${product.warrantyDays} days*\n` : ``) +
+    (Array.isArray(product.checkoutFieldsOverride) && product.checkoutFieldsOverride.length ? `🧾 Account info required\n` : ``) +
     (product.description ? `\n📝 _${mdEsc(product.description)}_\n` : ``) +
     `\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
-    `🏪 Mental Gaming Store`
+    `🛒 Tap *Buy Now* below to order\n` +
+    `🏪 *Mental Gaming Store*`
   );
 }
 
@@ -84,14 +92,16 @@ function formatFlashSaleAnnouncement(product, salePrice, endsAt) {
     : 'Limited time';
 
   return (
-    `⚡ *FLASH SALE!*\n` +
+    `⚡ *FLASH SALE*\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-    `🎮 *${mdEsc(product.name)}*\n\n` +
-    `~~${originalPrice.toLocaleString()} KS~~ → *${salePrice.toLocaleString()} KS*\n` +
-    `🎉 Save *${savings.toLocaleString()} KS* (${pct}% OFF!)\n\n` +
-    `⏰ Ends at: *${endsStr} MMT*\n\n` +
+    `🎮 *${mdEsc(product.name)}*\n` +
+    `📂 ${mdEsc(product.category || 'Product')}\n\n` +
+    `~~${originalPrice.toLocaleString()} KS~~  →  *${salePrice.toLocaleString()} KS*\n` +
+    `🎉 You save *${savings.toLocaleString()} KS* (${pct}% OFF)\n` +
+    (product.warrantyDays > 0 ? `🛡 Warranty: *${product.warrantyDays} days*\n` : ``) +
+    `\n⏰ Ends: *${endsStr} MMT*\n\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
-    `⚡ _Limited time offer — hurry!_`
+    `🛒 Limited-time offer — tap *Buy Now* below`
   );
 }
 
@@ -158,7 +168,7 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
   try {
     const { photo, ...sendOptions } = extra || {};
     const msg = photo
-      ? await telegram.sendPhoto(channelId, photo, { caption: text, parse_mode: 'Markdown', ...(keyboard || {}), ...sendOptions })
+      ? await telegram.sendPhoto(channelId, photo, { caption: captionSafe(text), parse_mode: 'Markdown', ...(keyboard || {}), ...sendOptions })
       : await telegram.sendMessage(channelId, text, { parse_mode: 'Markdown', ...(keyboard || {}), ...sendOptions });
     return msg;
   } catch (err) {
@@ -172,7 +182,7 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
       try {
         const { photo, ...sendOptions } = extra || {};
         return photo
-          ? await telegram.sendPhoto(channelId, photo, { caption: text, ...(keyboard || {}), ...sendOptions })
+          ? await telegram.sendPhoto(channelId, photo, { caption: captionSafe(text), ...(keyboard || {}), ...sendOptions })
           : await telegram.sendMessage(channelId, text, { ...(keyboard || {}), ...sendOptions });
       } catch (retryErr) {
         console.error(`[BroadcastService] Plain-text channel retry failed (${channelId}):`, retryErr.message);
@@ -201,7 +211,7 @@ function withTimeout(promise, ms = SEND_TIMEOUT) {
 async function sendMessageWithTimeout(telegram, telegramId, text, extra) {
   const { photo, ...sendOptions } = extra || {};
   const request = photo
-    ? telegram.sendPhoto(telegramId, photo, { caption: text, parse_mode: 'Markdown', ...sendOptions })
+    ? telegram.sendPhoto(telegramId, photo, { caption: captionSafe(text), parse_mode: 'Markdown', ...sendOptions })
     : telegram.sendMessage(telegramId, text, { parse_mode: 'Markdown', ...sendOptions });
   return withTimeout(request);
 }
