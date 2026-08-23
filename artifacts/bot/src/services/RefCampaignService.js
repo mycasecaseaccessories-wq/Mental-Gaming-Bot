@@ -29,9 +29,9 @@ function myanmarDateKey(date = new Date()) {
  * Called when a referral is completed for the first time (referee's first
  * qualifying top-up). Increments progress and grants rewards when due.
  */
-async function onReferralCompleted(referrer, telegram, referee = null, topupAmount = 0) {
+async function onReferralCompletedForCampaign(referrer, telegram, referee = null, topupAmount = 0, campaignOverride = null) {
   try {
-    const camp = await RefCampaign.getActive();
+    const camp = campaignOverride || await RefCampaign.getActive();
     if (!camp) return null;
 
     // Anti-gaming: invited user's first top-up must meet the campaign minimum
@@ -268,6 +268,22 @@ async function notifyUser(telegram, referrer, camp, entry, granted, coupons = []
       );
     }
   } catch {}
+}
+
+async function onReferralCompleted(referrer, telegram, referee = null, topupAmount = 0) {
+  const campaigns = typeof RefCampaign.getActiveMany === 'function'
+    ? await RefCampaign.getActiveMany()
+    : [await RefCampaign.getActive()].filter(Boolean);
+  if (!campaigns.length) return null;
+  if (campaigns.length === 1) {
+    return onReferralCompletedForCampaign(referrer, telegram, referee, topupAmount, campaigns[0]);
+  }
+  const results = [];
+  for (const campaign of campaigns) {
+    const result = await onReferralCompletedForCampaign(referrer, telegram, referee, topupAmount, campaign);
+    if (result) results.push({ campaignId: campaign._id, ...result });
+  }
+  return results.length ? { campaigns: results } : null;
 }
 
 module.exports = { onReferralCompleted, rewardText };

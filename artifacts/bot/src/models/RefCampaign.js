@@ -83,14 +83,16 @@ const refCampaignSchema = new mongoose.Schema(
   { timestamps: true, versionKey: false }
 );
 
-// DB-level guarantee: only ONE active campaign at a time
-refCampaignSchema.index(
-  { isActive: 1 },
-  { unique: true, partialFilterExpression: { isActive: true } }
-);
+// Multiple campaigns may be active at the same time. Each campaign keeps
+// its own RefCampaignEntry progress and reward limits.
+refCampaignSchema.index({ isActive: 1, createdAt: -1 });
 
 refCampaignSchema.statics.getActive = function () {
   return this.findOne({ isActive: true }).sort({ createdAt: -1 });
+};
+
+refCampaignSchema.statics.getActiveMany = function () {
+  return this.find({ isActive: true }).sort({ createdAt: -1 });
 };
 
 module.exports = mongoose.model('RefCampaign', refCampaignSchema);

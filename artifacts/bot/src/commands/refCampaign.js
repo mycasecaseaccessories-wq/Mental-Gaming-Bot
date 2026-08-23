@@ -25,32 +25,35 @@ function bar(cur, total, len = 10) {
 // ── User view ────────────────────────────────────────────────────────────────
 
 async function showUserCampaign(ctx) {
-  const camp = await RefCampaign.getActive();
-  if (!camp) {
+  const campaigns = await RefCampaign.getActiveMany();
+  if (!campaigns.length) {
     return ctx.reply(
       `🎯 *Referral Campaign*\n\n_လက်ရှိ campaign မရှိသေးပါ။ ကြေညာတဲ့အခါ ပြန်ကြည့်ပေးပါ။_\n\n👥 ပုံမှန် referral commission ကတော့ အမြဲရနေပါတယ် — /referral`,
       { parse_mode: 'Markdown' }
     );
   }
-  const entry = await RefCampaignEntry.findOne({ campaignId: camp._id, telegramId: ctx.from.id });
-  const counted = entry?.countedRefs || 0;
-  const claimed = entry?.rewardsClaimed || 0;
-  const totalRefs = entry?.totalRefs || 0;
-  const quotaLeft = camp.totalRewardLimit > 0 ? camp.totalRewardLimit - camp.totalRewardsClaimed : null;
-
-  let text =
-    `🎯 *${esc(camp.title)}*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-    `🏆 ဆု: *${esc(rewardText(camp))}* (ref *${camp.requiredRefs} ယောက်* ပြည့်တိုင်း)\n\n` +
-    `📊 သင့်တိုးတက်မှု: ${bar(counted, camp.requiredRefs)}  *${counted}/${camp.requiredRefs}*\n` +
-    (claimed > 0 ? `🎁 ရပြီးသားဆု: *${claimed} ခု*\n` : '') +
-    (camp.maxInvitesPerUser > 0 ? `👥 တစ်ယောက်လျှင် ref အများဆုံး: ${camp.maxInvitesPerUser} ယောက် (သုံးပြီး ${totalRefs})\n` : '') +
-    (camp.maxDailyInvites > 0 ? `📅 တစ်ရက်လျှင် ref အများဆုံး: ${camp.maxDailyInvites} ယောက်\n` : '') +
-    (camp.maxRewardsPerUser > 0 ? `🎁 တစ်ယောက်လျှင် ဆု အများဆုံး: ${camp.maxRewardsPerUser} ခု\n` : '') +
-    (quotaLeft !== null ? `⏳ ဆု လက်ကျန်: *${quotaLeft} ခု* (ကုန်ရင် campaign ပြီးမယ်)\n` : '') +
-    (camp.minRefereeAgeDays > 0 ? `🛡 ဖိတ်ခံရသူရဲ့ Telegram account သက်တမ်း အနည်းဆုံး *${camp.minRefereeAgeDays} ရက်* ရှိရပါမယ်\n` : '') +
-    (camp.minRefereeTopup > 0 ? `💰 ဖိတ်ခံရသူ ပထမ ငွေဖြည့် အနည်းဆုံး *${camp.minRefereeTopup.toLocaleString()} KS* ရှိရပါမယ်\n` : '') +
-    `\n_မိတ်ဆွေက သင့် link နဲ့ဝင်ပြီး ပထမဆုံး ငွေဖြည့်ရင် 1 ref အဖြစ် တွက်ပါတယ်။_\n` +
-    `🔗 သင့် link ကို /referral မှာ ယူပါ။`;
+  const entries = await RefCampaignEntry.find({
+    campaignId: { $in: campaigns.map((campaign) => campaign._id) },
+    telegramId: ctx.from.id,
+  }).lean();
+  const entryByCampaign = new Map(entries.map((entry) => [String(entry.campaignId), entry]));
+  const sections = campaigns.map((camp) => {
+    const entry = entryByCampaign.get(String(camp._id));
+    const counted = entry?.countedRefs || 0;
+    const claimed = entry?.rewardsClaimed || 0;
+    const totalRefs = entry?.totalRefs || 0;
+    const quotaLeft = camp.totalRewardLimit > 0 ? camp.totalRewardLimit - camp.totalRewardsClaimed : null;
+    return `🎯 *${esc(camp.title)}*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+      `🏆 ဆု: *${esc(rewardText(camp))}* (ref *${camp.requiredRefs} ယောက်* ပြည့်တိုင်း)\n` +
+      `📊 တိုးတက်မှု: ${bar(counted, camp.requiredRefs)}  *${counted}/${camp.requiredRefs}*\n` +
+      (claimed > 0 ? `🎁 ရပြီးသားဆု: *${claimed} ခု*\n` : '') +
+      (camp.maxDailyInvites > 0 ? `📅 တစ်ရက် limit: ${camp.maxDailyInvites} ယောက်\n` : '') +
+      (camp.maxRewardsPerUser > 0 ? `🎁 ဆုအများဆုံး: ${camp.maxRewardsPerUser} ခု\n` : '') +
+      (quotaLeft !== null ? `⏳ ဆုလက်ကျန်: *${quotaLeft} ခု*\n` : '');
+  });
+  const text = `🎯 *Referral Campaigns*\n\n${sections.join('\n')}` +
+    `\n_မိတ်ဆွေက သင့် link နဲ့ဝင်ပြီး ပထမဆုံး ငွေဖြည့်ရင် campaign တိုင်းမှာ valid ref အဖြစ် တွက်ပါတယ်။_\n` +
+    `🔗 သင့် link တစ်ခုတည်းကို campaign အားလုံးအတွက် အသုံးပြုနိုင်ပါတယ်။`;
 
   await ctx.reply(text, {
     parse_mode: 'Markdown',
@@ -126,8 +129,7 @@ module.exports = function registerRefCampaign(bot) {
 
   bot.action('rc_new', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const existing = await RefCampaign.getActive();
-    if (existing) return ctx.reply('❌ Campaign တစ်ခု ဖွင့်ထားပြီးသားပါ။ အရင်ပိတ်ပြီးမှ အသစ်စပါ။');
+    // Multiple campaigns may run at the same time; each keeps separate progress.
     ctx.session.rcAdmin = { step: 'title' };
     await ctx.reply(
       `➕ *Campaign အသစ်*\n\nStep 1/9: *Campaign နာမည်* ရိုက်ပါ:\n_(ဥပမာ "မိတ်ဆွေ ၅ ယောက်ခေါ် VPN အလကားရ")_`,

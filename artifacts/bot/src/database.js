@@ -32,6 +32,15 @@ async function connectDB(attempt = 1) {
       console.error('[DB] AccountGiveaway index sync warning:', e.message);
     }
 
+    // RefCampaign now allows multiple active campaigns. syncIndexes removes
+    // the old unique partial `isActive` index left by the single-campaign design.
+    try {
+      const RefCampaign = require('./models/RefCampaign');
+      await RefCampaign.syncIndexes();
+    } catch (e) {
+      console.error('[DB] RefCampaign index sync warning:', e.message);
+    }
+
     // User's referralCode index changed from `sparse` to `partial` — the old
     // sparse unique index indexed explicit nulls, so once one user held the null
     // slot every new signup failed with E11000 and was silently dropped.
