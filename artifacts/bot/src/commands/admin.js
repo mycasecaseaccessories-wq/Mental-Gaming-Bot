@@ -1381,6 +1381,8 @@ module.exports = function registerAdmin(bot) {
       `📦 Stock: ${p.stockCount === -1 ? '∞ Unlimited' : p.stockCount}\n` +
       `🛡 Warranty: ${p.warrantyDays > 0 ? `${p.warrantyDays} days` : 'None'}\n` +
       `🧾 Account fields: ${Array.isArray(p.checkoutFieldsOverride) ? (p.checkoutFieldsOverride.length ? p.checkoutFieldsOverride.map((f) => f.label).join(', ') : 'None') : 'Catalog defaults'}\n` +
+      `🚚 Delivery: ${p.deliveryMode || 'Manual'}\n` +
+      `↩️ Refund: ${p.refundPolicy || 'full'}\n` +
       `Status: ${p.isActive ? '✅ Active' : '🔴 Inactive'}\n` +
       `${checkoutLine}` +
       `${photoStatus}\n` +
@@ -1423,6 +1425,8 @@ module.exports = function registerAdmin(bot) {
           [Markup.button.callback('🔢 Max Qty/Order', `ap_ef:${id}:maxQuantity`)],
           [Markup.button.callback('🛡 Warranty Days', `ap_ef:${id}:warrantyDays`)],
           [Markup.button.callback('🧾 Account Requirements', `ap_ef:${id}:requirements`)],
+          [Markup.button.callback('🚚 Delivery Mode', `ap_ef:${id}:deliveryMode`)],
+          [Markup.button.callback('↩️ Refund Policy', `ap_ef:${id}:refundPolicy`)],
           [Markup.button.callback('🔙 Back',         `ap_view:${id}`)],
         ]),
       }
@@ -1446,6 +1450,8 @@ module.exports = function registerAdmin(bot) {
       maxQuantity: 'Max Qty per Order (1 = no selector, 10 = max 10, 0 = unlimited)',
       warrantyDays: 'Warranty Days (0 = none)',
       requirements: 'Account fields (key:label,key:label or skip)',
+      deliveryMode: 'Delivery Mode (manual or auto)',
+      refundPolicy: 'Refund Policy (full, manual, or none)',
     };
     const current = {
       name:        p.name,
@@ -1458,6 +1464,8 @@ module.exports = function registerAdmin(bot) {
       maxQuantity: p.maxQuantity ?? 'unlimited',
       warrantyDays: p.warrantyDays ?? 0,
       requirements: Array.isArray(p.checkoutFieldsOverride) ? p.checkoutFieldsOverride.map((f) => `${f.key}:${f.label}`).join(',') || 'none' : 'catalog defaults',
+      deliveryMode: p.deliveryMode || 'Manual',
+      refundPolicy: p.refundPolicy || 'full',
     };
     ctx.session.editProductField = { id, field };
     await ctx.reply(
@@ -1934,6 +1942,14 @@ module.exports = function registerAdmin(bot) {
           } catch (error) {
             return ctx.reply(`❌ ${error.message}`);
           }
+        } else if (field === 'deliveryMode') {
+          const value = text.trim().toLowerCase();
+          if (!['manual', 'auto'].includes(value)) return ctx.reply('❌ Delivery Mode ကို `manual` သို့မဟုတ် `auto` ထည့်ပါ။');
+          p.deliveryMode = value === 'auto' ? 'Auto' : 'Manual';
+        } else if (field === 'refundPolicy') {
+          const value = text.trim().toLowerCase();
+          if (!['full', 'manual', 'none'].includes(value)) return ctx.reply('❌ Refund Policy ကို `full`, `manual`, သို့မဟုတ် `none` ထည့်ပါ။');
+          p.refundPolicy = value;
         }
 
         await p.save();

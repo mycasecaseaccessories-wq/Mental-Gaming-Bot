@@ -742,7 +742,7 @@ module.exports = function registerAdminGameConfig(bot) {
         if (isNaN(warrantyDays) || warrantyDays < 0) return ctx.reply('❌ Warranty days အတွက် 0 သို့မဟုတ် အပေါင်းဂဏန်း ထည့်ပါ။');
         ctx.session.adminAddProduct = { ...addState, step: 'requirements', warrantyDays };
         return ctx.reply(
-          `✅ Warranty: *${warrantyDays ? `${warrantyDays} days` : 'None'}*\n\nStep 7/7: Account လိုအပ်ချက်များ ထည့်ပါ။\n\`game_id:Game ID,email:Email\` ပုံစံသုံးပါ။ မလိုလျှင် \`skip\``,
+          `✅ Warranty: *${warrantyDays ? `${warrantyDays} days` : 'None'}*\n\nStep 7/9: Account လိုအပ်ချက်များ ထည့်ပါ။\n\`game_id:Game ID,email:Email\` ပုံစံသုံးပါ။ မလိုလျှင် \`skip\``,
           { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ap_cancel')]]) }
         );
       }
@@ -750,6 +750,25 @@ module.exports = function registerAdminGameConfig(bot) {
         let checkoutFieldsOverride;
         try { checkoutFieldsOverride = parseCheckoutRequirements(input); }
         catch (error) { return ctx.reply(`❌ ${error.message}`); }
+        ctx.session.adminAddProduct = { ...addState, step: 'deliveryMode', checkoutFieldsOverride };
+        return ctx.reply(
+          `✅ Account requirements saved.\n\nStep 8/9: Delivery Mode ရွေးပါ။\n\`manual\` = Admin ကိုယ်တိုင်ပို့၊ \`auto\` = Provider API ဖြင့် အလိုအလျောက်ပို့`,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ap_cancel')]]) }
+        );
+      }
+      if (addState.step === 'deliveryMode') {
+        const deliveryMode = input.trim().toLowerCase();
+        if (!['manual', 'auto'].includes(deliveryMode)) return ctx.reply('❌ `manual` သို့မဟုတ် `auto` ထည့်ပါ။');
+        ctx.session.adminAddProduct = { ...addState, step: 'refundPolicy', deliveryMode: deliveryMode === 'auto' ? 'Auto' : 'Manual' };
+        return ctx.reply(
+          `✅ Delivery: *${deliveryMode === 'auto' ? 'Auto' : 'Manual'}*\n\nStep 9/9: Refund Policy ထည့်ပါ။\n\`full\` = အပြည့်ပြန်အမ်း၊ \`manual\` = Admin စစ်ပြီးမှ၊ \`none\` = refund မပေး`,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ap_cancel')]]) }
+        );
+      }
+      if (addState.step === 'refundPolicy') {
+        const refundPolicy = input.trim().toLowerCase();
+        if (!['full', 'manual', 'none'].includes(refundPolicy)) return ctx.reply('❌ `full`, `manual`, သို့မဟုတ် `none` ထည့်ပါ။');
+        const checkoutFieldsOverride = addState.checkoutFieldsOverride;
         // Safety guard: never attempt to create a product with incomplete data.
         // If the earlier steps' data is somehow missing from the session, show a
         // clear message and let the admin restart instead of a raw DB error.
@@ -776,6 +795,8 @@ module.exports = function registerAdminGameConfig(bot) {
             stockCount: addState.stockCount ?? -1,
             warrantyDays: addState.warrantyDays ?? 0,
             checkoutFieldsOverride,
+            deliveryMode: addState.deliveryMode || 'Manual',
+            refundPolicy,
             isActive: true,
           });
           await auditLog(ctx.from.id, 'PRODUCT_CREATED', product._id.toString(), 'Product', { name: product.name, price: addState.price });
@@ -785,7 +806,9 @@ module.exports = function registerAdminGameConfig(bot) {
             `✅ *Product Created!*\n\n📦 *${product.name}*\n📁 ${product.category}\n💰 ${price(product.finalPrice)}\n` +
             `📦 Stock: ${product.stockCount === -1 ? 'Unlimited' : product.stockCount}\n` +
             `🛡 Warranty: ${product.warrantyDays ? `${product.warrantyDays} days` : 'None'}\n` +
-            `🧾 Account fields: ${checkoutFieldsOverride?.length || 0}` +
+            `🧾 Account fields: ${checkoutFieldsOverride?.length || 0}\n` +
+            `🚚 Delivery: ${product.deliveryMode}\n` +
+            `↩️ Refund: ${product.refundPolicy}` +
             (addState.description ? `\n📝 ${addState.description}` : '') +
             `\n\n_It now appears in the shop under ${product.category}._`,
             { parse_mode: 'Markdown' }

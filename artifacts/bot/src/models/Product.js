@@ -30,6 +30,13 @@ const productSchema = new mongoose.Schema(
     stockWarningThreshold: { type: Number, default: 5 },
     warrantyDays:          { type: Number, default: 0, min: 0, comment: '0 = no warranty' },
     warrantyNote:          { type: String, default: '' },
+    refundPolicy: {
+      type: String,
+      enum: ['full', 'manual', 'none'],
+      default: 'full',
+      comment: 'full = auto full wallet refund, manual = admin review, none = no refund',
+    },
+    refundPolicyNote:      { type: String, default: '' },
     // null = unlimited qty per order (UI shows up to 10); 1 = no qty selector; N = max N per order
     maxQuantity:           { type: Number, default: null },
 
