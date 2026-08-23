@@ -18,6 +18,19 @@ const { price } = require('../utils/ui');
 const Catalog = require('../models/Catalog');
 const TierService = require('../services/TierService');
 
+function parseCheckoutRequirements(input) {
+  if (!input || input.trim().toLowerCase() === 'skip' || input.trim() === '-') return null;
+  const fields = input.split(',').map((part, index) => {
+    const [rawKey, ...rawLabel] = part.split(':');
+    const key = (rawKey || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+    const label = rawLabel.join(':').trim() || key.replace(/_/g, ' ');
+    if (!key || !label) throw new Error(`Account field #${index + 1} must use key:label format.`);
+    return { key, label, fieldType: 'text', required: true, placeholder: '', helpText: '', sortOrder: index };
+  });
+  if (!fields.length || fields.length > 10) throw new Error('Enter 1–10 account fields, or `skip`.');
+  return fields;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Build the "Select category" keyboard for Add Product from the admin's own
@@ -698,7 +711,7 @@ module.exports = function registerAdminGameConfig(bot) {
         if (isNaN(p) || p <= 0) return ctx.reply('❌ Enter a positive number.');
         ctx.session.adminAddProduct = { ...addState, step: 'description', price: p };
         return ctx.reply(
-          `✅ Price: *${price(p)}*\n\nStep 4/4: Enter description (or type \`skip\`):`,
+          `✅ Price: *${price(p)}*\n\nStep 4/7: Enter description (or type \`skip\`):`,
           {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([
@@ -709,6 +722,34 @@ module.exports = function registerAdminGameConfig(bot) {
       }
       if (addState.step === 'description') {
         const desc = input.toLowerCase() === 'skip' ? '' : input;
+        ctx.session.adminAddProduct = { ...addState, step: 'stock', description: desc };
+        return ctx.reply(
+          `✅ Description saved.\n\nStep 5/7: Stock limit ထည့်ပါ။\n\`-1\` = Unlimited, ဥပမာ \`100\``,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ap_cancel')]]) }
+        );
+      }
+      if (addState.step === 'stock') {
+        const stock = parseInt(input.replace(/,/g, ''), 10);
+        if (isNaN(stock) || stock < -1) return ctx.reply('❌ Stock အတွက် -1 (unlimited) သို့မဟုတ် 0 နှင့်အထက် ဂဏန်းထည့်ပါ။');
+        ctx.session.adminAddProduct = { ...addState, step: 'warranty', stockCount: stock };
+        return ctx.reply(
+          `✅ Stock: *${stock === -1 ? 'Unlimited' : stock}*\n\nStep 6/7: Warranty ရက်အရေအတွက် ထည့်ပါ။\n\`0\` = Warranty မရှိ`,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ap_cancel')]]) }
+        );
+      }
+      if (addState.step === 'warranty') {
+        const warrantyDays = parseInt(input.replace(/,/g, ''), 10);
+        if (isNaN(warrantyDays) || warrantyDays < 0) return ctx.reply('❌ Warranty days အတွက် 0 သို့မဟုတ် အပေါင်းဂဏန်း ထည့်ပါ။');
+        ctx.session.adminAddProduct = { ...addState, step: 'requirements', warrantyDays };
+        return ctx.reply(
+          `✅ Warranty: *${warrantyDays ? `${warrantyDays} days` : 'None'}*\n\nStep 7/7: Account လိုအပ်ချက်များ ထည့်ပါ။\n\`game_id:Game ID,email:Email\` ပုံစံသုံးပါ။ မလိုလျှင် \`skip\``,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ap_cancel')]]) }
+        );
+      }
+      if (addState.step === 'requirements') {
+        let checkoutFieldsOverride;
+        try { checkoutFieldsOverride = parseCheckoutRequirements(input); }
+        catch (error) { return ctx.reply(`❌ ${error.message}`); }
         // Safety guard: never attempt to create a product with incomplete data.
         // If the earlier steps' data is somehow missing from the session, show a
         // clear message and let the admin restart instead of a raw DB error.
@@ -731,15 +772,21 @@ module.exports = function registerAdminGameConfig(bot) {
             baseCurrency: 'MMK',
             baseCost: addState.price,
             finalPrice: addState.price,
-            description: desc,
+            description: addState.description || '',
+            stockCount: addState.stockCount ?? -1,
+            warrantyDays: addState.warrantyDays ?? 0,
+            checkoutFieldsOverride,
             isActive: true,
           });
           await auditLog(ctx.from.id, 'PRODUCT_CREATED', product._id.toString(), 'Product', { name: product.name, price: addState.price });
           const CacheService = require('../services/CacheService');
           if (typeof CacheService.invalidate === 'function') CacheService.invalidate(addState.category);
           return ctx.reply(
-            `✅ *Product Created!*\n\n📦 *${product.name}*\n📁 ${product.category}\n💰 ${price(product.finalPrice)}` +
-            (desc ? `\n📝 ${desc}` : '') +
+            `✅ *Product Created!*\n\n📦 *${product.name}*\n📁 ${product.category}\n💰 ${price(product.finalPrice)}\n` +
+            `📦 Stock: ${product.stockCount === -1 ? 'Unlimited' : product.stockCount}\n` +
+            `🛡 Warranty: ${product.warrantyDays ? `${product.warrantyDays} days` : 'None'}\n` +
+            `🧾 Account fields: ${checkoutFieldsOverride?.length || 0}` +
+            (addState.description ? `\n📝 ${addState.description}` : '') +
             `\n\n_It now appears in the shop under ${product.category}._`,
             { parse_mode: 'Markdown' }
           );

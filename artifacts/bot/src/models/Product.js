@@ -28,6 +28,8 @@ const productSchema = new mongoose.Schema(
 
     stockCount:            { type: Number, default: -1, comment: '-1 = unlimited' },
     stockWarningThreshold: { type: Number, default: 5 },
+    warrantyDays:          { type: Number, default: 0, min: 0, comment: '0 = no warranty' },
+    warrantyNote:          { type: String, default: '' },
     // null = unlimited qty per order (UI shows up to 10); 1 = no qty selector; N = max N per order
     maxQuantity:           { type: Number, default: null },
 

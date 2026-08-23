@@ -19,6 +19,19 @@ const { adminMenuKeyboard, adminSectionKeyboard } = require('../utils/keyboard')
 const AdminService = require('../services/AdminService');
 const os = require('os');
 
+function parseProductCheckoutFields(input) {
+  if (!input || input.trim() === '-' || input.trim().toLowerCase() === 'skip') return null;
+  const fields = input.split(',').map((part, index) => {
+    const [rawKey, ...rawLabel] = part.split(':');
+    const key = (rawKey || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+    const label = rawLabel.join(':').trim() || key.replace(/_/g, ' ');
+    if (!key || !label) throw new Error(`Account field #${index + 1} must use key:label.`);
+    return { key, label, fieldType: 'text', required: true, placeholder: '', helpText: '', sortOrder: index };
+  });
+  if (fields.length > 10) throw new Error('Maximum 10 account fields allowed.');
+  return fields;
+}
+
 // Split a long Markdown message into <=4096-char chunks on newline boundaries.
 // Each guide line keeps its Markdown entities balanced, so splitting between
 // lines never breaks the parse. Telegram's hard cap is 4096.
@@ -1366,6 +1379,8 @@ module.exports = function registerAdmin(bot) {
       `💰 Price: ${price(p.finalPrice)}\n` +
       `${flashLine}` +
       `📦 Stock: ${p.stockCount === -1 ? '∞ Unlimited' : p.stockCount}\n` +
+      `🛡 Warranty: ${p.warrantyDays > 0 ? `${p.warrantyDays} days` : 'None'}\n` +
+      `🧾 Account fields: ${Array.isArray(p.checkoutFieldsOverride) ? (p.checkoutFieldsOverride.length ? p.checkoutFieldsOverride.map((f) => f.label).join(', ') : 'None') : 'Catalog defaults'}\n` +
       `Status: ${p.isActive ? '✅ Active' : '🔴 Inactive'}\n` +
       `${checkoutLine}` +
       `${photoStatus}\n` +
@@ -1406,6 +1421,8 @@ module.exports = function registerAdmin(bot) {
           [Markup.button.callback('📦 Stock Count',  `ap_ef:${id}:stock`)],
           [Markup.button.callback('🌍 Region',       `ap_ef:${id}:region`)],
           [Markup.button.callback('🔢 Max Qty/Order', `ap_ef:${id}:maxQuantity`)],
+          [Markup.button.callback('🛡 Warranty Days', `ap_ef:${id}:warrantyDays`)],
+          [Markup.button.callback('🧾 Account Requirements', `ap_ef:${id}:requirements`)],
           [Markup.button.callback('🔙 Back',         `ap_view:${id}`)],
         ]),
       }
@@ -1427,6 +1444,8 @@ module.exports = function registerAdmin(bot) {
       stock:       'Stock Count (-1 for unlimited)',
       region:      'Region (e.g. Global, SEA, MY)',
       maxQuantity: 'Max Qty per Order (1 = no selector, 10 = max 10, 0 = unlimited)',
+      warrantyDays: 'Warranty Days (0 = none)',
+      requirements: 'Account fields (key:label,key:label or skip)',
     };
     const current = {
       name:        p.name,
@@ -1437,6 +1456,8 @@ module.exports = function registerAdmin(bot) {
       stock:       p.stockCount,
       region:      p.region || 'Global',
       maxQuantity: p.maxQuantity ?? 'unlimited',
+      warrantyDays: p.warrantyDays ?? 0,
+      requirements: Array.isArray(p.checkoutFieldsOverride) ? p.checkoutFieldsOverride.map((f) => `${f.key}:${f.label}`).join(',') || 'none' : 'catalog defaults',
     };
     ctx.session.editProductField = { id, field };
     await ctx.reply(
@@ -1902,6 +1923,16 @@ module.exports = function registerAdmin(bot) {
             return ctx.reply('❌ Enter a number ≥ 1, or `0` for unlimited.');
           } else {
             p.maxQuantity = val;
+          }
+        } else if (field === 'warrantyDays') {
+          const val = parseInt(text.replace(/,/g, ''), 10);
+          if (isNaN(val) || val < 0) return ctx.reply('❌ Warranty days အတွက် 0 သို့မဟုတ် အပေါင်းဂဏန်း ထည့်ပါ။');
+          p.warrantyDays = val;
+        } else if (field === 'requirements') {
+          try {
+            p.checkoutFieldsOverride = parseProductCheckoutFields(text);
+          } catch (error) {
+            return ctx.reply(`❌ ${error.message}`);
           }
         }
 
