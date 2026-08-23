@@ -7,7 +7,7 @@
  * One claim per user PER giveaway (claim-record-first). 👤 Single accounts only.
  */
 const { Markup } = require('telegraf');
-const { adminOnly } = require('../middlewares/adminCheck');
+const { adminOnly, isAnyAdmin } = require('../middlewares/adminCheck');
 const { auditLog } = require('../services/logger');
 const { broadcastToUsers } = require('../services/BroadcastService');
 const { getKnownChannels } = require('../services/ChannelRegistryService');
@@ -1112,7 +1112,7 @@ module.exports = function registerAccountGiveaway(bot) {
   bot.on('text', async (ctx, next) => {
     const wiz = ctx.session?.accGaWiz;
     if (!wiz) return next();
-    if (ctx.from.id !== config.bot.adminId) return next();
+    if (!(await isAnyAdmin(ctx.from?.id))) return next();
     if (ctx.message.reply_to_message?.message_id !== wiz.promptId) {
       ctx.session.accGaWiz = null;
       return next();

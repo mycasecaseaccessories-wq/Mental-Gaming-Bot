@@ -14,7 +14,7 @@
  */
 
 const { Markup } = require('telegraf');
-const { adminOnly } = require('../middlewares/adminCheck');
+const { adminOnly, isAnyAdmin } = require('../middlewares/adminCheck');
 const Catalog = require('../models/Catalog');
 const Product = require('../models/Product');
 const { auditLog } = require('../services/logger');
@@ -707,8 +707,7 @@ module.exports = (bot) => {
   // reaches this point (e.g. menu buttons whose handlers load later, like
   // "🎁 Coin Rewards"). Instead we pass non-owners through with next().
   bot.on('message', async (ctx, next) => {
-    const { config } = require('../../config/settings');
-    if (Number(ctx.from?.id) !== Number(config.bot.adminId)) return next();
+    if (!(await isAnyAdmin(ctx.from?.id))) return next();
     const action = ctx.session?.catalogAction;
     const text = ctx.message?.text?.trim();
 
