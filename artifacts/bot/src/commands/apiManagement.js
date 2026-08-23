@@ -667,8 +667,11 @@ module.exports = function registerApiManagement(bot) {
     if (!schedule) return ctx.answerCbQuery('Schedule မတွေ့ပါ', { show_alert: true });
     schedule.isActive = true; schedule.nextRunAt = new Date(); await schedule.save();
     await ctx.answerCbQuery('Run Now စတင်ပါပြီ');
-    const result = await AnnouncementAutomationService.runDueSchedules(ctx.telegram);
-    await ctx.reply(`✅ Run Now ပြီးပါပြီ။ Completed: ${result.completed}, Failed: ${result.failed}`);
+    // Do not hold the Telegram callback update while broadcasting to all users;
+    // large user lists can exceed Telegraf's 90-second update timeout.
+    AnnouncementAutomationService.runDueSchedules(ctx.telegram)
+      .then((result) => ctx.reply(`✅ Run Now ပြီးပါပြီ။ Completed: ${result.completed}, Failed: ${result.failed}`))
+      .catch((err) => ctx.reply(`❌ Run Now မအောင်မြင်ပါ။ ${String(err.message || err).slice(0, 180)}`).catch(() => {}));
     return showScheduleMenu(ctx);
   });
 

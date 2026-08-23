@@ -71,6 +71,15 @@ function errorHandler() {
     try {
       await next();
     } catch (err) {
+      const errorCode = err.response?.error_code ?? err.code;
+      const errorDescription = String(err.response?.description || err.message || '').toLowerCase();
+      const blockedByUser = errorCode === 403 && errorDescription.includes('blocked by the user');
+      if (blockedByUser) {
+        // A user blocking the bot is expected during broadcasts; do not turn it
+        // into a noisy admin alert or an unhandled update failure.
+        console.warn('[ErrorHandler] Telegram user blocked the bot; ignored');
+        return;
+      }
       console.error('[ErrorHandler] Update error:', err.message, err.stack);
 
       // Reply to user with generic message
