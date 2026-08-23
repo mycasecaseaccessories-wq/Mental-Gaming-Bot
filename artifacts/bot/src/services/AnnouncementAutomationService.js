@@ -98,8 +98,18 @@ function fingerprint(schedule, targets) {
 async function claimSchedule(schedule) {
   const token = crypto.randomUUID();
   const staleAt = new Date(Date.now() - CLAIM_STALE_MS);
+  const now = new Date();
   const claimed = await AnnouncementSchedule.findOneAndUpdate(
-    { _id: schedule._id, isActive: true, nextRunAt: { $lte: new Date() }, $or: [{ claimedAt: null }, { claimedAt: { $lt: staleAt } }] },
+    {
+      _id: schedule._id,
+      isActive: true,
+      $or: [
+        { nextRunAt: { $lte: now, $ne: null } },
+        { nextRunAt: null, frequency: { $ne: 'once' } },
+        { nextRunAt: { $exists: false }, frequency: { $ne: 'once' } },
+      ],
+      $and: [{ $or: [{ claimedAt: null }, { claimedAt: { $lt: staleAt } }] }],
+    },
     { $set: { claimedAt: new Date(), claimToken: token } },
     { new: true }
   );
@@ -167,7 +177,15 @@ async function runSchedule(schedule, token, telegram) {
 }
 
 async function runDueSchedules(telegram) {
-  const candidates = await AnnouncementSchedule.find({ isActive: true, nextRunAt: { $lte: new Date() } }).limit(50).lean();
+  const now = new Date();
+  const candidates = await AnnouncementSchedule.find({
+    isActive: true,
+    $or: [
+      { nextRunAt: { $lte: now, $ne: null } },
+      { nextRunAt: null, frequency: { $ne: 'once' } },
+      { nextRunAt: { $exists: false }, frequency: { $ne: 'once' } },
+    ],
+  }).limit(50).lean();
   const summary = { considered: candidates.length, completed: 0, skipped: 0, failed: 0 };
   for (const candidate of candidates) {
     const claimed = await claimSchedule(candidate);

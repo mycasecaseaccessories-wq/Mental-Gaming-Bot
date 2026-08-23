@@ -619,6 +619,13 @@ module.exports = function registerApiManagement(bot) {
     return showScheduleTime(ctx, 'monthly');
   });
 
+  // Hourly presets previously had buttons but no callback handler, so tapping
+  // "Every 1 hour" or "Every 6 hours" silently did nothing.
+  bot.action(/^ann_sched_freq:(hourly|every_6_hours)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery('Schedule ဖန်တီးနေပါပြီ...');
+    return createButtonSchedule(ctx, ctx.match[1]);
+  });
+
   bot.action(/^ann_sched_freq:interval:(\d+)$/, requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery('Schedule ဖန်တီးနေပါပြီ...');
     return createButtonSchedule(ctx, 'interval', { intervalMinutes: Number(ctx.match[1]) });
