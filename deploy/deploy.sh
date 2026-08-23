@@ -10,11 +10,36 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# Vite 7 requires Node >=20.19.0. VPS images often still default to Node 18.
+node_is_supported="$(node -e 'const [major,minor]=process.versions.node.split(".").map(Number); process.stdout.write(String((major === 20 && minor >= 19) || major >= 22 ? 1 : 0))' 2>/dev/null || echo 0)"
+if [ "$node_is_supported" != "1" ]; then
+  NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    echo "==> Node.js 20.19+ လိုအပ်သောကြောင့် Node.js 22 သို့ ပြောင်းနေသည်..."
+    # shellcheck disable=SC1090
+    . "$NVM_DIR/nvm.sh"
+    nvm install 22
+    nvm use 22
+    command -v corepack >/dev/null 2>&1 && corepack enable
+  else
+    echo "❌ Node.js $(node -v 2>/dev/null || echo unknown) မကိုက်ညီပါ။"
+    echo "   Node.js 22 ကို install လုပ်ပြီး terminal အသစ်ဖွင့်ကာ deploy script ကို ပြန် run ပါ။"
+    echo "   nvm သုံးလျှင်: curl -fsSL https://nvm.sh | bash && source ~/.bashrc && nvm install 22 && nvm use 22"
+    exit 1
+  fi
+fi
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  command -v corepack >/dev/null 2>&1 || { echo "❌ pnpm မတွေ့ပါ။ Node.js 22/corepack ကို enable လုပ်ပါ။"; exit 1; }
+  corepack prepare pnpm@10.34.5 --activate
+fi
+
 echo "==> [1/5] Latest code ဆွဲနေသည် (git pull)..."
 git pull --ff-only
 
 echo "==> [2/5] Dependencies install (pnpm)..."
-pnpm install --frozen-lockfile
+# Re-fetch optional native packages (Tailwind/Rollup) for the active OS + Node runtime.
+pnpm install --frozen-lockfile --force
 
 echo "==> [3/5] Backend + shared libs build..."
 pnpm run typecheck:libs
