@@ -30,7 +30,7 @@ sudo cp -r artifacts/landing/dist/* /var/www/mgs/landing/
 
 echo "==> [5/5] PM2 restart (bot + api-server)..."
 if pm2 describe mgs-bot > /dev/null 2>&1; then
-  pm2 reload deploy/ecosystem.config.cjs
+  pm2 reload deploy/ecosystem.config.cjs --update-env
 else
   pm2 start deploy/ecosystem.config.cjs
   pm2 save

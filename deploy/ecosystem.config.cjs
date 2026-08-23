@@ -12,7 +12,7 @@ module.exports = {
     {
       name: "mgs-bot",
       cwd: __dirname + "/..",
-      script: "bot/src/index.js",
+      script: "artifacts/bot/src/index.js",
       interpreter: "node",
       env: {
         NODE_ENV: "production",
