@@ -25,7 +25,13 @@ function loadEnvFile(filePath) {
   }
 }
 
-loadEnvFile(process.env.MGS_ENV_FILE || path.resolve(__dirname, "../.env"));
+const envCandidates = [
+  process.env.MGS_ENV_FILE,
+  path.resolve(__dirname, "../.env"),
+  path.resolve(__dirname, "../artifacts/bot/.env"),
+  path.resolve(__dirname, ".env"),
+].filter(Boolean);
+for (const envFile of envCandidates) loadEnvFile(envFile);
 
 module.exports = {
   apps: [
