@@ -179,8 +179,26 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
         console.error(`[BroadcastService] Plain-text channel retry failed (${channelId}):`, retryErr.message);
       }
     }
-    return null;
+        return null;
   }
+}
+
+// Scheduled channel posts need their message_id persisted so retention cleanup
+// can delete them just like bot-user deliveries.
+async function trackChannelDelivery(message, options = {}) {
+  const retentionSeconds = Number(options.retentionSeconds || 0);
+  if (!message?.message_id || !options.scheduleId || retentionSeconds <= 0) return;
+  const AnnouncementDelivery = require('../models/AnnouncementDelivery');
+  const chatId = message.chat?.id ?? message.chat_id;
+  if (chatId == null) return;
+  await AnnouncementDelivery.create({
+    scheduleId: options.scheduleId,
+    runId: options.runId || null,
+    chatId: Number(chatId),
+    messageId: Number(message.message_id),
+    destination: 'channel',
+    deleteAt: new Date(Date.now() + Math.min(retentionSeconds, 172800) * 1000),
+  }).catch((err) => console.error('[BroadcastService] channel delivery tracking failed:', err.message));
 }
 
 // ── Broadcast to all bot users ───────────────────────────────────────────────
@@ -372,6 +390,7 @@ async function announceAccountProductEverywhere(accountProduct, telegram, option
   ]);
 
   const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard });
+  await trackChannelDelivery(channelMsg, options);
   const { sent, failed } = options.destination === 'channel'
     ? { sent: 0, failed: 0 }
     : await broadcastToUsers(telegram, text, { ...keyboard }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
@@ -421,6 +440,7 @@ async function announceProductsEverywhere(products, style, telegram, options = {
   const text = formatGroupedProductAnnouncement(eligible, style);
   const keyboard = groupedProductKeyboard(eligible);
   const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard });
+  await trackChannelDelivery(channelMsg, options);
   const { sent, failed } = options.destination === 'channel'
     ? { sent: 0, failed: 0 }
     : await broadcastToUsers(telegram, text, { ...keyboard }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
@@ -503,6 +523,7 @@ async function announceProductEverywhere(product, style, telegram, options = {})
   ]);
 
   const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard });
+  await trackChannelDelivery(channelMsg, options);
   const { sent, failed } = options.destination === 'channel'
     ? { sent: 0, failed: 0 }
     : await broadcastToUsers(telegram, text, { ...keyboard }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });

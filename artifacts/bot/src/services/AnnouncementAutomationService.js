@@ -199,10 +199,11 @@ async function runDueSchedules(telegram) {
 }
 
 async function cleanupDeliveries(telegram) {
-  const due = await AnnouncementDelivery.find({ destination: 'user', status: 'sent', deleteAt: { $ne: null, $lte: new Date() } }).limit(500);
+  const due = await AnnouncementDelivery.find({ destination: { $in: ['user', 'channel'] }, status: 'sent', deleteAt: { $ne: null, $lte: new Date() } }).limit(500);
   let deleted = 0, failed = 0;
   for (const delivery of due) {
     try {
+      if (!telegram) throw new Error('Telegram client is unavailable');
       await telegram.deleteMessage(delivery.chatId, delivery.messageId);
       await AnnouncementDelivery.updateOne({ _id: delivery._id }, { $set: { status: 'deleted', attempts: (delivery.attempts || 0) + 1 } });
       deleted += 1;
