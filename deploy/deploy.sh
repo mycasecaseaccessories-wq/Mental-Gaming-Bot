@@ -14,19 +14,23 @@ cd "$ROOT"
 node_is_supported="$(node -e 'const [major,minor]=process.versions.node.split(".").map(Number); process.stdout.write(String((major === 20 && minor >= 19) || major >= 22 ? 1 : 0))' 2>/dev/null || echo 0)"
 if [ "$node_is_supported" != "1" ]; then
   NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-  if [ -s "$NVM_DIR/nvm.sh" ]; then
-    echo "==> Node.js 20.19+ လိုအပ်သောကြောင့် Node.js 22 သို့ ပြောင်းနေသည်..."
-    # shellcheck disable=SC1090
-    . "$NVM_DIR/nvm.sh"
-    nvm install 22
-    nvm use 22
-    command -v corepack >/dev/null 2>&1 && corepack enable
-  else
-    echo "❌ Node.js $(node -v 2>/dev/null || echo unknown) မကိုက်ညီပါ။"
-    echo "   Node.js 22 ကို install လုပ်ပြီး terminal အသစ်ဖွင့်ကာ deploy script ကို ပြန် run ပါ။"
-    echo "   nvm သုံးလျှင်: curl -fsSL https://nvm.sh | bash && source ~/.bashrc && nvm install 22 && nvm use 22"
+  if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+    echo "==> nvm မတွေ့ပါ။ Node.js 22 bootstrap လုပ်နေသည်..."
+    command -v curl >/dev/null 2>&1 || { echo "❌ curl မတွေ့ပါ။ curl ကို install လုပ်ပြီး ပြန် run ပါ။"; exit 1; }
+    export PROFILE=/dev/null
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+  fi
+  if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+    echo "❌ nvm install မအောင်မြင်ပါ။ အောက်ပါ command ဖြင့် Node.js 22 ကို install လုပ်ပြီး ပြန် run ပါ။"
+    echo "   curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash"
     exit 1
   fi
+  echo "==> Node.js 20.19+ လိုအပ်သောကြောင့် Node.js 22 သို့ ပြောင်းနေသည်..."
+  # shellcheck disable=SC1090
+  . "$NVM_DIR/nvm.sh"
+  nvm install 22
+  nvm use 22
+  command -v corepack >/dev/null 2>&1 && corepack enable
 fi
 
 if ! command -v pnpm >/dev/null 2>&1; then
