@@ -14,6 +14,9 @@ const { config } = require('../../config/settings');
 function esc(s) {
   return String(s == null ? '' : s).replace(/([_*`\[])/g, '\\$1');
 }
+function wizardCancelKeyboard() {
+  return Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'rcw_cancel')]]);
+}
 function bar(cur, total, len = 10) {
   const filled = Math.min(len, Math.round((cur / total) * len));
   return '▰'.repeat(filled) + '▱'.repeat(len - filled);
@@ -115,6 +118,12 @@ module.exports = function registerRefCampaign(bot) {
     await editOrReply(ctx, text, keyboard);
   });
 
+  bot.action('rcw_cancel', adminOnly(), async (ctx) => {
+    ctx.session.rcAdmin = null;
+    await ctx.answerCbQuery('ဖျက်ပြီးပါပြီ');
+    return ctx.reply('❌ Ref Campaign ဖန်တီးမှုကို ပယ်ဖျက်လိုက်ပါပြီ။', Markup.inlineKeyboard([[Markup.button.callback('🎯 Panel', 'rc_panel')]]));
+  });
+
   bot.action('rc_new', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
     const existing = await RefCampaign.getActive();
@@ -122,7 +131,7 @@ module.exports = function registerRefCampaign(bot) {
     ctx.session.rcAdmin = { step: 'title' };
     await ctx.reply(
       `➕ *Campaign အသစ်*\n\nStep 1/9: *Campaign နာမည်* ရိုက်ပါ:\n_(ဥပမာ "မိတ်ဆွေ ၅ ယောက်ခေါ် VPN အလကားရ")_`,
-      { parse_mode: 'Markdown', ...Markup.forceReply() }
+      { parse_mode: 'Markdown', ...wizardCancelKeyboard() }
     );
   });
 
@@ -169,11 +178,11 @@ module.exports = function registerRefCampaign(bot) {
     if (st.step === 'title') {
       st.title = input;
       st.step = 'refs';
-      return ctx.reply(`Step 2/9: ဆုတစ်ခုရဖို့ *ref ဘယ်နှစ်ယောက်* လိုမလဲ? (ဥပမာ 5)`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 2/9: ဆုတစ်ခုရဖို့ *ref ဘယ်နှစ်ယောက်* လိုမလဲ? (ဥပမာ 5)`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     if (st.step === 'refs') {
       const n = parseInt(input, 10);
-      if (!n || n < 1) return ctx.reply('❌ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 5):', Markup.forceReply());
+      if (!n || n < 1) return ctx.reply('❌ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 5):', wizardCancelKeyboard());
       st.requiredRefs = n;
       st.step = 'rtype';
       return ctx.reply(
@@ -189,67 +198,67 @@ module.exports = function registerRefCampaign(bot) {
     }
     if (st.step === 'ramount') {
       const n = parseInt(input.replace(/[^\d]/g, ''), 10);
-      if (!n || n < 1) return ctx.reply('❌ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      if (!n || n < 1) return ctx.reply('❌ ကိန်းဂဏန်း ရိုက်ပါ:', wizardCancelKeyboard());
       st.rewardAmount = n;
       st.step = 'maxinv';
-      return ctx.reply(`Step 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     if (st.step === 'rlabel') {
       st.rewardLabel = input;
       st.step = 'maxinv';
-      return ctx.reply(`Step 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 5/9: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     if (st.step === 'rprice') {
       const n = parseInt(input.replace(/[^\d]/g, ''), 10);
-      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့မဟုတ် ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့မဟုတ် ကိန်းဂဏန်း ရိုက်ပါ:', wizardCancelKeyboard());
       st.campaignPrice = n;
       st.step = 'maxinv';
-      return ctx.reply(`Step 6/10: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = lifetime limit မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 6/10: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = lifetime limit မထား)_`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     if (st.step === 'maxinv') {
       const n = parseInt(input, 10);
-      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', wizardCancelKeyboard());
       st.maxInvitesPerUser = n;
       st.step = 'dailymax';
-      return ctx.reply(`Step 7/10: တစ်ရက်လျှင် *အများဆုံး ဘယ်နှစ်ယောက်* ကို valid ref အဖြစ် တွက်ပေးမလဲ?\n_(ဥပမာ 10 — ကျော်သွားရင် ဒီနေ့မတွက်ဘဲ နောက်နေ့မှာ ပြန်တွက်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 7/10: တစ်ရက်လျှင် *အများဆုံး ဘယ်နှစ်ယောက်* ကို valid ref အဖြစ် တွက်ပေးမလဲ?\n_(ဥပမာ 10 — ကျော်သွားရင် ဒီနေ့မတွက်ဘဲ နောက်နေ့မှာ ပြန်တွက်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     if (st.step === 'dailymax') {
       const n = parseInt(input, 10);
-      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့မဟုတ် ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့မဟုတ် ကိန်းဂဏန်း ရိုက်ပါ:', wizardCancelKeyboard());
       st.maxDailyInvites = n;
       st.step = 'maxrew';
-      return ctx.reply(`Step 8/10: တစ်ယောက်လျှင် *ဆု အများဆုံး ဘယ်နှစ်ခု* လဲရမလဲ?\n_(0 = ကန့်သတ်မထား၊ များသောအားဖြင့် 1)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 8/10: တစ်ယောက်လျှင် *ဆု အများဆုံး ဘယ်နှစ်ခု* လဲရမလဲ?\n_(0 = ကန့်သတ်မထား၊ များသောအားဖြင့် 1)_`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     if (st.step === 'maxrew') {
       const n = parseInt(input, 10);
-      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', wizardCancelKeyboard());
       st.maxRewardsPerUser = n;
       st.step = 'quota';
-      return ctx.reply(`Step 7/9: Campaign တစ်ခုလုံးမှာ *ဆု စုစုပေါင်း ဘယ်နှစ်ခု* ပေးမလဲ?\n_(ပြည့်တာနဲ့ campaign အလိုအလျောက် ပိတ်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 7/9: Campaign တစ်ခုလုံးမှာ *ဆု စုစုပေါင်း ဘယ်နှစ်ခု* ပေးမလဲ?\n_(ပြည့်တာနဲ့ campaign အလိုအလျောက် ပိတ်မယ်။ 0 = ကန့်သတ်မထား)_`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     if (st.step === 'quota') {
       const n = parseInt(input, 10);
-      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', Markup.forceReply());
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ:', wizardCancelKeyboard());
       st.totalRewardLimit = n;
       st.step = 'minage';
       return ctx.reply(
         `Step 8/9: ဖိတ်ခံရသူရဲ့ *Telegram account သက်တမ်း အနည်းဆုံး ဘယ်နှစ်ရက်* ရှိရမလဲ?\n_(Account အသစ်စက်စက်နဲ့ လိမ်ခေါ်တာ ကာကွယ်ဖို့ — ID ကနေ ခန့်မှန်းတွက်ပါတယ်။ 0 = မစစ်ဘူး၊ ဥပမာ 90 = ၃ လ)_`,
-        { parse_mode: 'Markdown', ...Markup.forceReply() }
+        { parse_mode: 'Markdown', ...wizardCancelKeyboard() }
       );
     }
     if (st.step === 'minage') {
       const n = parseInt(input, 10);
-      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 90):', Markup.forceReply());
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 90):', wizardCancelKeyboard());
       st.minRefereeAgeDays = n;
       st.step = 'mintopup';
       return ctx.reply(
         `Step 9/9: ဖိတ်ခံရသူက campaign မှာ တွက်ဖို့ *ပထမ ငွေဖြည့် အနည်းဆုံး ဘယ်လောက်* (KS) ရှိရမလဲ?\n_(လိမ်ခေါ်တာ / အသေးစား topup နဲ့ ဆုလုတာ ကာကွယ်ဖို့ — 0 = မစစ်ဘူး၊ ဥပမာ 10000)_\n_ℹ️ ပုံမှန် referral commission ကတော့ ဒီစည်းနဲ့ မသက်ဆိုင်ပါ။_`,
-        { parse_mode: 'Markdown', ...Markup.forceReply() }
+        { parse_mode: 'Markdown', ...wizardCancelKeyboard() }
       );
     }
     if (st.step === 'mintopup') {
       const n = parseInt(input.replace(/[^\d]/g, ''), 10);
-      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 10000):', Markup.forceReply());
+      if (isNaN(n) || n < 0) return ctx.reply('❌ 0 သို့ ကိန်းဂဏန်း ရိုက်ပါ (ဥပမာ 10000):', wizardCancelKeyboard());
       ctx.session.rcAdmin = null;
       const camp = await RefCampaign.create({
         title: st.title,
@@ -283,7 +292,7 @@ module.exports = function registerRefCampaign(bot) {
     st.rewardType = ctx.match[1];
     if (st.rewardType === 'product') {
       st.step = 'rlabel';
-      return ctx.reply(`Step 4/9: *ဆု product နာမည်* ရိုက်ပါ:\n_(ဥပမာ "ExpressVPN 1 Month" — ဆုရသူကို admin က ကိုယ်တိုင် ပို့ရပါမယ်)_`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`Step 4/9: *ဆု product နာမည်* ရိုက်ပါ:\n_(ဥပမာ "ExpressVPN 1 Month" — ဆုရသူကို admin က ကိုယ်တိုင် ပို့ရပါမယ်)_`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     if (st.rewardType === 'product_free' || st.rewardType === 'product_price') {
       const prods = await Product.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).limit(30);
@@ -301,7 +310,7 @@ module.exports = function registerRefCampaign(bot) {
       );
     }
     st.step = 'ramount';
-    return ctx.reply(`Step 4/9: *ဆု ပမာဏ* ရိုက်ပါ (${st.rewardType === 'mc' ? 'MC' : 'KS'}):`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+    return ctx.reply(`Step 4/9: *ဆု ပမာဏ* ရိုက်ပါ (${st.rewardType === 'mc' ? 'MC' : 'KS'}):`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
   });
 
   // Product picker for product_free reward (wizard step 4→5)
@@ -315,12 +324,12 @@ module.exports = function registerRefCampaign(bot) {
     st.rewardLabel = p.name;
     if (st.rewardType === 'product_price') {
       st.step = 'rprice';
-      return ctx.reply(`✅ Campaign Product: *${esc(p.name)}*\n\nStep 5/10: Ref ပြည့်သူ ဝယ်ရမယ့် *campaign price* (KS) ရိုက်ပါ:`, { parse_mode: 'Markdown', ...Markup.forceReply() });
+      return ctx.reply(`✅ Campaign Product: *${esc(p.name)}*\n\nStep 5/10: Ref ပြည့်သူ ဝယ်ရမယ့် *campaign price* (KS) ရိုက်ပါ:`, { parse_mode: 'Markdown', ...wizardCancelKeyboard() });
     }
     st.step = 'maxinv';
     return ctx.reply(
       `✅ ဆု Product: *${esc(p.name)}* (${st.rewardType === 'product_free' ? 'အခမဲ့' : 'သတ်မှတ်ဈေး'})\n\nStep 5/10: တစ်ယောက်လျှင် *ref အများဆုံး ဘယ်နှစ်ယောက်* ထိ တွက်ပေးမလဲ?\n_(0 = ကန့်သတ်မထား)_`,
-      { parse_mode: 'Markdown', ...Markup.forceReply() }
+      { parse_mode: 'Markdown', ...wizardCancelKeyboard() }
     );
   });
 };
