@@ -42,9 +42,14 @@ function captionSafe(text) {
 // ── Product announcement formatter ───────────────────────────────────────────
 
 function formatNewProductAnnouncement(product) {
-  const priceStr    = `${product.finalPrice.toLocaleString()} KS`;
-  const categoryLine = `📂 ${mdEsc(product.category)} · ${mdEsc(product.region)}`;
-  const typeLine    = product.productType === 'DigitalCode' ? '⚡ Instant delivery' : '⏱ Delivered within 30 mins';
+  const priceStr    = `${Number(product.finalPrice || 0).toLocaleString()} KS`;
+  const categoryLine = `📂 ${mdEsc(product.category || 'Product')} · ${mdEsc(product.region || 'Global')}`;
+  const typeLine    = product.deliveryMode === 'auto'
+    ? '⚡ Instant delivery'
+    : product.productType === 'DigitalCode' ? '⚡ Digital delivery' : '🧑‍💻 Manual delivery';
+  const refundLine   = product.refundPolicy === 'none'
+    ? '↩️ Refund: Not available'
+    : product.refundPolicy === 'manual' ? '↩️ Refund: Admin review' : '↩️ Refund: Available';
 
   const stockLine = product.stockCount > 0
     ? `📦 Stock: ${product.stockCount} available`
@@ -64,22 +69,29 @@ function formatNewProductAnnouncement(product) {
     (Array.isArray(product.checkoutFieldsOverride) && product.checkoutFieldsOverride.length ? `🧾 Account info required\n` : ``) +
     (product.description ? `\n📝 _${mdEsc(product.description)}_\n` : ``) +
     `\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
-    `🛒 Tap *Buy Now* below to order\n` +
+    `${refundLine}\n` +
+    `\n🛒 Tap *Buy Now* below to order\n` +
     `🏪 *Mental Gaming Store*`
   );
 }
 
 function formatPriceUpdateAnnouncement(product, oldPrice, newPrice) {
   const diff    = newPrice - oldPrice;
-  const pct     = Math.round((Math.abs(diff) / oldPrice) * 100);
+  const base    = Number(oldPrice) || 1;
+  const pct     = Math.round((Math.abs(diff) / base) * 100);
   const arrow   = diff < 0 ? '🔽' : '🔼';
   const dirWord = diff < 0 ? 'Price Drop' : 'Price Update';
 
   return (
-    `${arrow} *${dirWord}: ${mdEsc(product.name)}*\n\n` +
-    `~~${oldPrice.toLocaleString()} KS~~ → *${newPrice.toLocaleString()} KS*\n` +
-    `${diff < 0 ? `🎉 Save *${Math.abs(diff).toLocaleString()} KS* (${pct}% off!)` : `+${pct}% update`}\n\n` +
-    `🏪 Mental Gaming Store`
+    `${arrow} *${dirWord}*\n` +
+    `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
+    `🎮 *${mdEsc(product.name)}*\n` +
+    `📂 ${mdEsc(product.category || 'Product')}\n\n` +
+    `~~${Number(oldPrice).toLocaleString()} KS~~  →  *${Number(newPrice).toLocaleString()} KS*\n` +
+    `${diff < 0 ? `🎉 Save *${Math.abs(diff).toLocaleString()} KS* (${pct}% OFF)` : `📈 Price increased by *${pct}%*`}\n\n` +
+    `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
+    `🛒 Tap *Buy Now* below to order\n` +
+    `🏪 *Mental Gaming Store*`
   );
 }
 
