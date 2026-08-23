@@ -29,12 +29,10 @@ sudo rm -rf /var/www/mgs/landing/*
 sudo cp -r artifacts/landing/dist/* /var/www/mgs/landing/
 
 echo "==> [5/5] PM2 restart (bot + api-server)..."
-if pm2 describe mgs-bot > /dev/null 2>&1; then
-  pm2 reload deploy/ecosystem.config.cjs --update-env
-else
-  pm2 start deploy/ecosystem.config.cjs
-  pm2 save
-fi
+# Use the ecosystem file as the source of truth. This avoids failures caused
+# by manually restarting an old process name such as `mental-bot`.
+pm2 startOrReload deploy/ecosystem.config.cjs --update-env
+pm2 save --force
 
 echo ""
 echo "✅ Deploy ပြီးပါပြီ။"

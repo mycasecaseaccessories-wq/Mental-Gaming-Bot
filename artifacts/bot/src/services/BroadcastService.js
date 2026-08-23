@@ -16,6 +16,7 @@
 
 const { Markup }   = require('telegraf');
 const SystemStatus = require('../models/SystemStatus');
+const Catalog = require('../models/Catalog');
 
 const BOT_USERNAME = process.env.BOT_USERNAME || 'mentalgamingstorebot';
 
@@ -41,9 +42,31 @@ function captionSafe(text) {
 
 // ── Product announcement formatter ───────────────────────────────────────────
 
+/** Resolve a product's top-level catalog name, hiding nested sub-categories. */
+async function withMainCategory(product) {
+  if (!product?.catalogId) return product;
+  try {
+    let catalog = await Catalog.findById(product.catalogId).select('name parentCategory').lean();
+    let guard = 0;
+    while (catalog?.parentCategory && guard++ < 8) {
+      const parent = await Catalog.findById(catalog.parentCategory).select('name parentCategory').lean();
+      if (!parent) break;
+      catalog = parent;
+    }
+    if (catalog?.name) return { ...product, mainCategory: catalog.name };
+  } catch (err) {
+    console.error('[BroadcastService] main category lookup failed:', err.message);
+  }
+  return product;
+}
+
+function categoryName(product) {
+  return product?.mainCategory || product?.category || 'Product';
+}
+
 function formatNewProductAnnouncement(product) {
   const priceStr    = `${Number(product.finalPrice || 0).toLocaleString()} KS`;
-  const categoryLine = `📂 ${mdEsc(product.category || 'Product')} · ${mdEsc(product.region || 'Global')}`;
+  const categoryLine = `📂 Category: *${mdEsc(categoryName(product))}*\n🌍 Region: ${mdEsc(product.region || 'Global')}`;
   const typeLine    = product.deliveryMode === 'auto'
     ? '⚡ Instant delivery'
     : product.productType === 'DigitalCode' ? '⚡ Digital delivery' : '🧑‍💻 Manual delivery';
@@ -85,8 +108,8 @@ function formatPriceUpdateAnnouncement(product, oldPrice, newPrice) {
   return (
     `${arrow} *${dirWord}*\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-    `🎮 *${mdEsc(product.name)}*\n` +
-    `📂 ${mdEsc(product.category || 'Product')}\n\n` +
+    `📂 Category: *${mdEsc(categoryName(product))}*\n` +
+    `🎮 Product: *${mdEsc(product.name)}*\n\n` +
     `~~${Number(oldPrice).toLocaleString()} KS~~  →  *${Number(newPrice).toLocaleString()} KS*\n` +
     `${diff < 0 ? `🎉 Save *${Math.abs(diff).toLocaleString()} KS* (${pct}% OFF)` : `📈 Price increased by *${pct}%*`}\n\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
@@ -106,8 +129,8 @@ function formatFlashSaleAnnouncement(product, salePrice, endsAt) {
   return (
     `⚡ *FLASH SALE*\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
-    `🎮 *${mdEsc(product.name)}*\n` +
-    `📂 ${mdEsc(product.category || 'Product')}\n\n` +
+    `📂 Category: *${mdEsc(categoryName(product))}*\n` +
+    `🎮 Product: *${mdEsc(product.name)}*\n\n` +
     `~~${originalPrice.toLocaleString()} KS~~  →  *${salePrice.toLocaleString()} KS*\n` +
     `🎉 You save *${savings.toLocaleString()} KS* (${pct}% OFF)\n` +
     (product.warrantyDays > 0 ? `🛡 Warranty: *${product.warrantyDays} days*\n` : ``) +
@@ -416,14 +439,16 @@ function groupedProductLine(product, style) {
   const price = Number(style === 'flash' ? product.flashSalePrice : product.finalPrice);
   if (style === 'flash' && Number(product.flashSalePrice) > 0) {
     const original = Number(product.finalPrice || 0);
-    return `🎮 *${name}*\n   ~~${original.toLocaleString()} KS~~ → *${price.toLocaleString()} KS*`;
+    return `📂 ${mdEsc(categoryName(product))}\n🎮 *${name}*\n   ~~${original.toLocaleString()} KS~~ → *${price.toLocaleString()} KS*`;
   }
-  return `🎮 *${name}*\n   💰 *${price.toLocaleString()} KS*`;
+  return `📂 ${mdEsc(categoryName(product))}\n🎮 *${name}*\n   💰 *${price.toLocaleString()} KS*`;
 }
 
 function formatGroupedProductAnnouncement(products, style = 'new') {
   const active = products.filter(Boolean);
   const title = style === 'flash' ? '⚡ *FLASH SALE — Limited Time!*' : '🆕 *NEW PRODUCTS*';
+  const categories = [...new Set(active.map((product) => categoryName(product)))];
+  const categoryLine = `📂 Category: *${categories.map(mdEsc).join(' · ')}*\n`;
   const lines = active.map((product) => groupedProductLine(product, style));
   const flashEnds = style === 'flash'
     ? active.map((p) => p.flashSaleEnd).filter(Boolean).map((d) => new Date(d).getTime()).filter(Number.isFinite)
@@ -431,7 +456,7 @@ function formatGroupedProductAnnouncement(products, style = 'new') {
   const endLine = flashEnds.length
     ? `\n⏰ Ends at: *${new Date(Math.min(...flashEnds)).toLocaleString('en-GB', { timeZone: 'Asia/Rangoon', hour: '2-digit', minute: '2-digit' })} MMT*\n`
     : '';
-  return `${title}\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n${lines.join('\n\n')}${endLine}\n\n_ဝယ်ယူရန် အောက်က product button ကိုနှိပ်ပါ။ Delivery အလိုအလျောက်ရပါမယ်။_\n\n🏪 Mental Gaming Store`;
+  return `${title}\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n${categoryLine}\n${lines.join('\n\n')}${endLine}\n\n_ဝယ်ယူရန် အောက်က product button ကိုနှိပ်ပါ။ ရွေးချယ်ထားသော product ကို Buy Now နှိပ်ပြီး မှာယူနိုင်ပါသည်။_\n\n🏪 *Mental Gaming Store*`;
 }
 
 function groupedProductKeyboard(products) {
@@ -442,7 +467,8 @@ function groupedProductKeyboard(products) {
 
 /** Send a single grouped message for a category or multi-product selection. */
 async function announceProductsEverywhere(products, style, telegram, options = {}) {
-  const eligible = (products || []).filter((p) => p && p.isActive !== false && (style !== 'flash' || Number(p.flashSalePrice) > 0));
+  const selected = (products || []).filter((p) => p && p.isActive !== false && (style !== 'flash' || Number(p.flashSalePrice) > 0));
+  const eligible = await Promise.all(selected.map(withMainCategory));
   if (!eligible.length) return { channelOk: false, channelError: 'ကြော်ငြာရန် product မရှိပါ။', sent: 0, failed: 0, selectedCount: 0 };
   const text = formatGroupedProductAnnouncement(eligible, style);
   const keyboard = groupedProductKeyboard(eligible);
@@ -492,17 +518,20 @@ async function announceRefCampaignEverywhere(campaign, telegram, options = {}) {
 }
 
 async function announceNewProduct(product, telegram) {
+  product = await withMainCategory(product);
   const text = formatNewProductAnnouncement(product);
   return sendToChannel(telegram, text, product._id, product.imageUrl ? { photo: product.imageUrl } : {});
 }
 
 async function announcePriceUpdate(product, oldPrice, newPrice, telegram) {
   if (Math.abs(newPrice - oldPrice) < 50) return null; // Skip tiny changes (<50 KS)
+  product = await withMainCategory(product);
   const text = formatPriceUpdateAnnouncement(product, oldPrice, newPrice);
   return sendToChannel(telegram, text, product._id, product.imageUrl ? { photo: product.imageUrl } : {});
 }
 
 async function announceFlashSale(product, salePrice, endsAt, telegram) {
+  product = await withMainCategory(product);
   const text = formatFlashSaleAnnouncement(product, salePrice, endsAt);
   return sendToChannel(telegram, text, product._id, product.imageUrl ? { photo: product.imageUrl } : {});
 }
@@ -548,8 +577,9 @@ async function sendStockAlert(product, telegram) {
  * @returns {Promise<{channelOk:boolean, sent:number, failed:number}>}
  */
 async function announceProductEverywhere(product, style, telegram, options = {}) {
+  product = await withMainCategory(product);
   const text = options.compact
-    ? `📦 *${mdEsc(product.name)}*\n\n🛒 အောက်က button ကိုနှိပ်ပြီး ဝယ်ယူနိုင်ပါသည်။`
+    ? `📂 *${mdEsc(categoryName(product))}*\n🎮 *${mdEsc(product.name)}*\n\n🛒 အောက်က button ကိုနှိပ်ပြီး ဝယ်ယူနိုင်ပါသည်။`
     : style === 'flash'
       ? formatFlashSaleAnnouncement(product, product.flashSalePrice, product.flashSaleEnd)
       : formatNewProductAnnouncement(product);
