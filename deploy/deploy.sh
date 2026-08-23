@@ -31,8 +31,11 @@ sudo cp -r artifacts/landing/dist/* /var/www/mgs/landing/
 echo "==> [5/5] PM2 restart (bot + api-server)..."
 # Use the ecosystem file as the source of truth. This avoids failures caused
 # by manually restarting an old process name such as `mental-bot`.
+# Remove the obsolete name if it was created by an older deployment.
+pm2 delete mental-bot >/dev/null 2>&1 || true
 pm2 startOrReload deploy/ecosystem.config.cjs --update-env
 pm2 save --force
+pm2 status
 
 echo ""
 echo "✅ Deploy ပြီးပါပြီ။"
