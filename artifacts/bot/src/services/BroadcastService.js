@@ -481,18 +481,18 @@ async function announceRefCampaignEverywhere(campaign, telegram, options = {}) {
 
 async function announceNewProduct(product, telegram) {
   const text = formatNewProductAnnouncement(product);
-  return sendToChannel(telegram, text, product._id);
+  return sendToChannel(telegram, text, product._id, product.imageUrl ? { photo: product.imageUrl } : {});
 }
 
 async function announcePriceUpdate(product, oldPrice, newPrice, telegram) {
   if (Math.abs(newPrice - oldPrice) < 50) return null; // Skip tiny changes (<50 KS)
   const text = formatPriceUpdateAnnouncement(product, oldPrice, newPrice);
-  return sendToChannel(telegram, text, product._id);
+  return sendToChannel(telegram, text, product._id, product.imageUrl ? { photo: product.imageUrl } : {});
 }
 
 async function announceFlashSale(product, salePrice, endsAt, telegram) {
   const text = formatFlashSaleAnnouncement(product, salePrice, endsAt);
-  return sendToChannel(telegram, text, product._id);
+  return sendToChannel(telegram, text, product._id, product.imageUrl ? { photo: product.imageUrl } : {});
 }
 
 /**
