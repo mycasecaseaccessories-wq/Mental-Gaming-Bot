@@ -27,6 +27,7 @@ const {
   announceProductEverywhere,
   announceProductsEverywhere,
   announceAccountProductEverywhere,
+  announceRefCampaignEverywhere,
   validateAnnouncementChannel,
   mdEsc,
 }                  = require('../services/BroadcastService');
@@ -39,6 +40,7 @@ const SystemStatus     = require('../models/SystemStatus');
 const AnnouncementSchedule = require('../models/AnnouncementSchedule');
 const AnnouncementAutomationService = require('../services/AnnouncementAutomationService');
 const AnnouncementRun = require('../models/AnnouncementRun');
+const RefCampaign = require('../models/RefCampaign');
 
 const PROVIDER_LABELS = {
   smileone:  '🎮 SmileOne (MLBB / Genshin / FF)',
@@ -293,6 +295,7 @@ module.exports = function registerApiManagement(bot) {
         ...Markup.inlineKeyboard([
           [Markup.button.callback('🛒 Shop Products', 'ann_category:shop')],
           [Markup.button.callback('🔐 Premium Accounts', 'ann_category:account')],
+          [Markup.button.callback('🎯 Ref Campaign', 'ann_ref_campaign')],
           [Markup.button.callback('📅 Schedule Manager', 'ann_schedule_menu')],
           [Markup.button.callback('📜 Announcement History', 'ann_history')],
           [Markup.button.callback('❌ မလုပ်တော့ပါ', 'ann_cancel')],
@@ -829,6 +832,22 @@ module.exports = function registerApiManagement(bot) {
       `👥 Bot users: ✅ ${sent} ယောက် ရောက်ပြီး` +
       `${blocked ? ` / 🚫 ${blocked} ယောက် (bot block လုပ်ထား — DB မှာ မှတ်ပြီး)` : ''}` +
       `${failed ? ` / ❌ ${failed} ယောက် မရောက်` : ''}`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  bot.action('ann_ref_campaign', requireRole('MANAGER'), async (ctx) => {
+    const campaign = await RefCampaign.getActive();
+    if (!campaign) return ctx.answerCbQuery('ဖွင့်ထားတဲ့ Ref Campaign မရှိပါ', { show_alert: true });
+    await ctx.answerCbQuery('📤 Campaign announce ပို့နေပါပြီ...');
+    try { await ctx.editMessageText('📤 Ref Campaign announcement ကို bot users နဲ့ channel ဆီ ပို့နေပါတယ်...'); } catch {}
+    const result = await announceRefCampaignEverywhere(campaign, ctx.telegram, { destination: 'both' });
+    await auditLog(ctx.from.id, 'REF_CAMPAIGN_ANNOUNCED', campaign._id.toString(), 'System', result);
+    return ctx.reply(
+      `✅ *Ref Campaign ကြေညာပြီးပါပြီ!*\n\n` +
+      `📢 Channel: ${result.channelOk ? '✅ တင်ပြီး' : `❌ ${mdEsc(result.channelError || 'မတင်နိုင်ပါ')}`}\n` +
+      `👥 Bot users: ✅ ${result.sent || 0} ယောက်\n` +
+      `❌ Failed: ${result.failed || 0}`,
       { parse_mode: 'Markdown' }
     );
   });

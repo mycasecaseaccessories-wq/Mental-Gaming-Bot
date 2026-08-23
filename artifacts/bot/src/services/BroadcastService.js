@@ -436,6 +436,34 @@ async function announceProductsEverywhere(products, style, telegram, options = {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+async function announceRefCampaignEverywhere(campaign, telegram, options = {}) {
+  if (!campaign) return { channelOk: false, channelError: 'Campaign မရှိပါ။', sent: 0, failed: 0 };
+  const reward = campaign.rewardType === 'product_price'
+    ? `${campaign.rewardLabel || 'Product'} ကို ${Number(campaign.campaignPrice || 0).toLocaleString()} KS နဲ့ ဝယ်ခွင့်`
+    : campaign.rewardType === 'product_free'
+      ? `${campaign.rewardLabel || 'Product'} အခမဲ့ ဝယ်ခွင့်`
+      : campaign.rewardType === 'ks'
+        ? `${Number(campaign.rewardAmount || 0).toLocaleString()} KS`
+        : campaign.rewardType === 'mc'
+          ? `${Number(campaign.rewardAmount || 0).toLocaleString()} MC`
+          : campaign.rewardLabel || 'Campaign reward';
+  const text = `🎯 *${mdEsc(campaign.title)}*\n\n` +
+    `သူငယ်ချင်း ${campaign.requiredRefs} ယောက်ကို valid referral အဖြစ် ဖိတ်ခေါ်ပြီး\n` +
+    `🏆 ဆု: *${mdEsc(reward)}* ရယူလိုက်ပါ!\n\n` +
+    (campaign.maxDailyInvites > 0 ? `📅 တစ်ရက်လျှင် အများဆုံး ${campaign.maxDailyInvites} ယောက်အထိ တွက်ပေးပါမယ်။\n` : '') +
+    `🔗 ပါဝင်ရန် /referral ကိုနှိပ်ပြီး သင့် referral link ကို မျှဝေပါ။`;
+  const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, {});
+  const userResult = options.destination === 'channel'
+    ? { sent: 0, failed: 0 }
+    : await broadcastToUsers(telegram, text, {}, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
+  return {
+    channelOk: !!channelMsg,
+    channelError: channelMsg ? null : (await validateAnnouncementChannel(telegram)).message,
+    sent: userResult.sent,
+    failed: userResult.failed,
+  };
+}
+
 async function announceNewProduct(product, telegram) {
   const text = formatNewProductAnnouncement(product);
   return sendToChannel(telegram, text, product._id);
@@ -517,6 +545,7 @@ async function announceProductEverywhere(product, style, telegram, options = {})
 }
 
 module.exports = {
+  announceRefCampaignEverywhere,
   announceNewProduct,
   announcePriceUpdate,
   announceFlashSale,
