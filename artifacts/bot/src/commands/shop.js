@@ -7,7 +7,7 @@ const Nav = require('../services/NavigationService');
 const Product = require('../models/Product');
 const Catalog = require('../models/Catalog');
 const CacheService = require('../services/CacheService');
-const { loadingMessage, resolveMessage } = require('../utils/animations');
+const { loadingMessage, resolveMessage, deleteRef } = require('../utils/animations');
 const { buildMessage, price, truncate } = require('../utils/ui');
 const { t } = require('../utils/i18n');
 
@@ -293,13 +293,19 @@ module.exports = function registerShop(bot) {
         : 'shop';
       const productBackRow = [withStyle(Markup.button.callback('🔙 Back', `nav:go:${shopReturnFolder}`), 'danger')];
 
-      await resolveMessage(ctx, ref, text, {
-        ...Markup.inlineKeyboard([
-          [orderButton],
-          ...(shareUrl ? [[withStyle(Markup.button.url('📤 Share', shareUrl), 'primary')]] : []),
-          productBackRow,
-        ]),
-      });
+      const productKeyboard = Markup.inlineKeyboard([
+        [orderButton],
+        ...(shareUrl ? [[withStyle(Markup.button.url('📤 Share', shareUrl), 'primary')]] : []),
+        productBackRow,
+      ]);
+      if (product.imageUrl) {
+        await deleteRef(ctx, ref);
+        return ctx.replyWithPhoto(
+          { source: product.imageUrl },
+          { caption: text, parse_mode: 'Markdown', ...productKeyboard }
+        );
+      }
+      await resolveMessage(ctx, ref, text, productKeyboard);
     } catch (err) {
       await resolveMessage(ctx, ref, `❌ Error: ${err.message}`);
     }

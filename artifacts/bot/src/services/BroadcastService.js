@@ -156,11 +156,10 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
     : null;
 
   try {
-    const msg = await telegram.sendMessage(channelId, text, {
-      parse_mode: 'Markdown',
-      ...(keyboard || {}),
-      ...extra,
-    });
+    const { photo, ...sendOptions } = extra || {};
+    const msg = photo
+      ? await telegram.sendPhoto(channelId, photo, { caption: text, parse_mode: 'Markdown', ...(keyboard || {}), ...sendOptions })
+      : await telegram.sendMessage(channelId, text, { parse_mode: 'Markdown', ...(keyboard || {}), ...sendOptions });
     return msg;
   } catch (err) {
     const description = String(err.response?.description || err.message || '');
@@ -171,10 +170,10 @@ async function sendToChannel(telegram, text, productId = null, extra = {}) {
     // formatting issue never prevents the actual announcement from posting.
     if (err.response?.error_code === 400 && /parse entities|can't parse|entity/i.test(description)) {
       try {
-        return await telegram.sendMessage(channelId, text, {
-          ...(keyboard || {}),
-          ...extra,
-        });
+        const { photo, ...sendOptions } = extra || {};
+        return photo
+          ? await telegram.sendPhoto(channelId, photo, { caption: text, ...(keyboard || {}), ...sendOptions })
+          : await telegram.sendMessage(channelId, text, { ...(keyboard || {}), ...sendOptions });
       } catch (retryErr) {
         console.error(`[BroadcastService] Plain-text channel retry failed (${channelId}):`, retryErr.message);
       }
@@ -200,7 +199,11 @@ function withTimeout(promise, ms = SEND_TIMEOUT) {
 }
 
 async function sendMessageWithTimeout(telegram, telegramId, text, extra) {
-  return withTimeout(telegram.sendMessage(telegramId, text, { parse_mode: 'Markdown', ...extra }));
+  const { photo, ...sendOptions } = extra || {};
+  const request = photo
+    ? telegram.sendPhoto(telegramId, photo, { caption: text, parse_mode: 'Markdown', ...sendOptions })
+    : telegram.sendMessage(telegramId, text, { parse_mode: 'Markdown', ...sendOptions });
+  return withTimeout(request);
 }
 
 /**
@@ -532,11 +535,12 @@ async function announceProductEverywhere(product, style, telegram, options = {})
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.url(`🛒 ${product.name} ဝယ်မယ်`, productDeepLink(product._id))],
   ]);
+  const media = product.imageUrl ? { photo: product.imageUrl } : {};
 
-  const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard });
+  const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard, ...media });
   const { sent, failed } = options.destination === 'channel'
     ? { sent: 0, failed: 0 }
-    : await broadcastToUsers(telegram, text, { ...keyboard }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
+    : await broadcastToUsers(telegram, text, { ...keyboard, ...media }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
 
   return {
     channelOk: !!channelMsg,
