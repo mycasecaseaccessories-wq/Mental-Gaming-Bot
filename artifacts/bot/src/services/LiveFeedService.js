@@ -85,11 +85,12 @@ async function post(telegram, text, {
 
     try {
       const extra = { parse_mode: 'Markdown' };
-      if (button?.label && button?.url) {
+      if (button?.label && (button.url || button.action)) {
         const { Markup } = require('telegraf');
-        Object.assign(extra, Markup.inlineKeyboard([[
-          Markup.button.url(button.label, button.url),
-        ]]));
+        const buttonConfig = button.url
+          ? Markup.button.url(button.label, button.url)
+          : Markup.button.callback(button.label, button.action);
+        Object.assign(extra, Markup.inlineKeyboard([[buttonConfig]]));
       }
       await telegram.sendMessage(destination.chatId, text, extra);
       await LiveFeedDelivery.updateOne({ _id: marker._id }, { $set: { sentAt: new Date() } });
@@ -134,7 +135,7 @@ async function postTopup(telegram, { user, amount, eventKey = null } = {}) {
   return post(
     telegram,
     `💰 *New Top Up*\n👤 User: ${name}\n💵 Amount: *${Number(amount).toLocaleString()} KS*\n✅ Completed`,
-    { eventKey: key, eventType: 'TOPUP_COMPLETED' }
+    { eventKey: key, eventType: 'TOPUP_COMPLETED', button: { label: '💰 Top Up', action: 'start_topup' } }
   );
 }
 

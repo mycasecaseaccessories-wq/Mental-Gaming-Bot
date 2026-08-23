@@ -452,10 +452,12 @@ async function announceRefCampaignEverywhere(campaign, telegram, options = {}) {
     `🏆 ဆု: *${mdEsc(reward)}* ရယူလိုက်ပါ!\n\n` +
     (campaign.maxDailyInvites > 0 ? `📅 တစ်ရက်လျှင် အများဆုံး ${campaign.maxDailyInvites} ယောက်အထိ တွက်ပေးပါမယ်။\n` : '') +
     `🔗 ပါဝင်ရန် /referral ကိုနှိပ်ပြီး သင့် referral link ကို မျှဝေပါ။`;
-  const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, {});
+  const { Markup } = require('telegraf');
+  const keyboard = Markup.inlineKeyboard([[Markup.button.callback('🎯 Get My Referral Link', 'rc_user')]]);
+  const channelMsg = options.destination === 'users' ? null : await sendToChannel(telegram, text, null, { ...keyboard });
   const userResult = options.destination === 'channel'
     ? { sent: 0, failed: 0 }
-    : await broadcastToUsers(telegram, text, {}, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
+    : await broadcastToUsers(telegram, text, { ...keyboard }, { ...options, trackDeliveries: Number(options.retentionSeconds) > 0 });
   return {
     channelOk: !!channelMsg,
     channelError: channelMsg ? null : (await validateAnnouncementChannel(telegram)).message,

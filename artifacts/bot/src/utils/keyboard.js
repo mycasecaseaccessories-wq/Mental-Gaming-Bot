@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const { t } = require('./i18n');
 
-function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = null) {
+function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = null, hasActiveRefCampaign = false) {
   const L = (k) => t(ctxOrLang, k);
   const rows = [];
   if (webAppConfig?.enabled && webAppConfig?.url) {
@@ -17,6 +17,7 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
   // It remains available even when no active giveaway is configured so the user
   // receives the same empty-state experience as the existing /freebie entrypoint.
   rows.push([L('menu.freebie')]);
+  if (hasActiveRefCampaign) rows.push(['🎯 Ref Campaign']);
 
   // Show Outline VPN as a standalone shortcut only when the VPN bot is configured.
   // It is always accessible via 🛍 Store → Outline VPN regardless.

@@ -24,6 +24,7 @@ const SystemStatus            = require('../models/SystemStatus');
 const User                    = require('../models/User');
 const Product                 = require('../models/Product');
 const AccountProduct          = require('../models/AccountProduct');
+const RefCampaign              = require('../models/RefCampaign');
 const AdminService            = require('../services/AdminService');
 const { mainMenuKeyboard, adminMenuKeyboard } = require('../utils/keyboard');
 const { price }               = require('../utils/ui');
@@ -195,6 +196,8 @@ module.exports = function registerStart(bot) {
     // ── Load SystemStatus (needed for mini app button URL) ────────────────────
     let sysStatus;
     try { sysStatus = await SystemStatus.get(); } catch (_) { sysStatus = {}; }
+    let hasActiveRefCampaign = false;
+    try { hasActiveRefCampaign = (await RefCampaign.countDocuments({ isActive: true })) > 0; } catch (_) {}
 
     // ── Build single welcome panel with PERSISTENT REPLY KEYBOARD ────────────
     if (!isAdmin && directProduct) {
@@ -279,7 +282,7 @@ module.exports = function registerStart(bot) {
 
     return ctx.reply(panel, {
       parse_mode: 'Markdown',
-      ...mainMenuKeyboard(ctx, buildWebAppConfig(sysStatus), sysStatus?.outlineBotUsername || null),
+      ...mainMenuKeyboard(ctx, buildWebAppConfig(sysStatus), sysStatus?.outlineBotUsername || null, hasActiveRefCampaign),
     });
   });
 };

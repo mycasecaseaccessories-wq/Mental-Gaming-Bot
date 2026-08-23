@@ -113,6 +113,9 @@ module.exports = function registerRefCampaign(bot) {
     await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   };
   bot.hears('🎯 Ref Campaign', adminOnly(), adminPanel);
+  // The same label is used by the customer menu when a campaign is active.
+  // adminOnly() passes non-admin users through to this customer handler.
+  bot.hears('🎯 Ref Campaign', showUserCampaign);
   bot.command('refcamp', adminOnly(), adminPanel);
 
   bot.action('rc_panel', adminOnly(), async (ctx) => {
