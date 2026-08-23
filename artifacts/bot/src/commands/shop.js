@@ -313,7 +313,15 @@ module.exports = function registerShop(bot) {
       }
       await resolveMessage(ctx, ref, text, productKeyboard);
     } catch (err) {
-      await resolveMessage(ctx, ref, `❌ Error: ${err.message}`);
+      console.error(`[Shop] Product detail photo/send failed for ${product?._id || 'unknown'}:`, err.message);
+      // A broken/expired remote image must not hide the product or its Buy Now action.
+      // Fall back to the normal text card while preserving the same keyboard.
+      try {
+        await resolveMessage(ctx, ref, text, productKeyboard);
+      } catch (fallbackErr) {
+        await resolveMessage(ctx, ref, `❌ Unable to load this product right now. Please try again.`, productKeyboard).catch(() => {});
+        console.error('[Shop] Product detail fallback failed:', fallbackErr.message);
+      }
     }
   });
 };
