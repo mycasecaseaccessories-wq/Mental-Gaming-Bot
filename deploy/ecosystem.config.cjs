@@ -5,7 +5,27 @@
 //   pm2 save && pm2 startup   (server reboot ဖြစ်ရင် အလိုအလျောက် ပြန်တက်)
 // =============================================================================
 
-require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
+
+// PM2 loads this file before workspace dependencies are resolved. Read the
+// project env file without requiring dotenv at PM2 configuration time.
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  for (const rawLine of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    let value = match[2].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[match[1]] === undefined) process.env[match[1]] = value;
+  }
+}
+
+loadEnvFile(process.env.MGS_ENV_FILE || path.resolve(__dirname, "../.env"));
 
 module.exports = {
   apps: [
