@@ -259,44 +259,36 @@ async function sendMessageWithTimeout(telegram, telegramId, text, extra) {
  * @returns {{status:'sent'|'blocked'|'failed', message?:object}}
  */
 async function _sendOne(telegram, User, telegramId, text, extra) {
-  try {
-    const message = await sendMessageWithTimeout(telegram, telegramId, text, extra);
-    return { status: 'sent', message };
-  } catch (err) {
-    const code    = err.response?.error_code ?? err.code;
-    const retryIn = err.response?.parameters?.retry_after;
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const message = await sendMessageWithTimeout(telegram, telegramId, text, extra);
+      return { status: 'sent', message };
+    } catch (err) {
+      lastError = err;
+      const code = err.response?.error_code ?? err.code;
+      const description = String(err.response?.description || err.message || '').toLowerCase();
 
-    // 429 Too Many Requests — wait retry_after seconds then retry once
-    if (code === 429 && retryIn) {
-      // Do not let one Telegram rate-limit response hold an admin action
-      // forever. Retry once, but cap the wait to a reasonable amount.
-      const waitMs = Math.min((Number(retryIn) + 1) * 1000, 15000);
-      await new Promise((r) => setTimeout(r, waitMs));
-      try {
-        const message = await sendMessageWithTimeout(telegram, telegramId, text, extra);
-        return { status: 'sent', message };
-      } catch {
-        return { status: 'failed' };
-      }
-    }
-
-    // 403 Forbidden — user blocked the bot; mark so future broadcasts skip them
-    if (code === 403) {
-      User.updateOne({ telegramId }, { $set: { isBlocked: true } }).catch(() => {});
-      return { status: 'blocked' };
-    }
-
-    // 400 Bad Request with "chat not found" — stale record; mark blocked too
-    if (code === 400) {
-      const desc = String(err.response?.description || '').toLowerCase();
-      if (desc.includes('chat not found') || desc.includes('user not found')) {
+      // These are permanent recipient failures; do not retry them.
+      if (code === 403 || (code === 400 && (description.includes('chat not found') || description.includes('user not found')))) {
         User.updateOne({ telegramId }, { $set: { isBlocked: true } }).catch(() => {});
         return { status: 'blocked' };
       }
-    }
 
-    return { status: 'failed' };
+      // Rate limits, Telegram 5xx responses, network errors and timeouts are
+      // transient. Retry with a bounded backoff so one temporary failure does
+      // not make a broadcast permanently miss that user.
+      const retryIn = Number(err.response?.parameters?.retry_after || 0);
+      const transient = code === 429 || code >= 500 || /timeout|network|socket|econn|fetch failed/i.test(description);
+      if (!transient || attempt >= 2) break;
+      const waitMs = retryIn > 0
+        ? Math.min((retryIn + 1) * 1000, 15000)
+        : Math.min((attempt + 1) * 1500, 4500);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
   }
+  console.warn(`[BroadcastService] delivery failed after retries for ${telegramId}:`, lastError?.message || 'unknown error');
+  return { status: 'failed' };
 }
 
 /**
