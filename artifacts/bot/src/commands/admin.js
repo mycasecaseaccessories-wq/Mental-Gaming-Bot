@@ -1449,6 +1449,7 @@ module.exports = function registerAdmin(bot) {
       region:      'Region (e.g. Global, SEA, MY)',
       maxQuantity: 'Max Qty per Order (1 = no selector, 10 = max 10, 0 = unlimited)',
       warrantyDays: 'Warranty Days (0 = none)',
+      waitingTime: 'Waiting Time (optional; send - to clear)',
       requirements: 'Account fields (key:label,key:label or skip)',
       deliveryMode: 'Delivery Mode (manual or auto)',
       refundPolicy: 'Refund Policy (full, manual, or none)',
@@ -1463,6 +1464,7 @@ module.exports = function registerAdmin(bot) {
       region:      p.region || 'Global',
       maxQuantity: p.maxQuantity ?? 'unlimited',
       warrantyDays: p.warrantyDays ?? 0,
+      waitingTime: p.waitingTime || 'not set',
       requirements: Array.isArray(p.checkoutFieldsOverride) ? p.checkoutFieldsOverride.map((f) => `${f.key}:${f.label}`).join(',') || 'none' : 'catalog defaults',
       deliveryMode: p.deliveryMode || 'Manual',
       refundPolicy: p.refundPolicy || 'full',
@@ -1936,6 +1938,10 @@ module.exports = function registerAdmin(bot) {
           const val = parseInt(text.replace(/,/g, ''), 10);
           if (isNaN(val) || val < 0) return ctx.reply('❌ Warranty days အတွက် 0 သို့မဟုတ် အပေါင်းဂဏန်း ထည့်ပါ။');
           p.warrantyDays = val;
+        } else if (field === 'waitingTime') {
+          if (text === '-') p.waitingTime = '';
+          else if (text.length > 80) return ctx.reply('❌ Waiting time စာသားသည် 80 characters ထက် မကျော်ရပါ။');
+          else p.waitingTime = text;
         } else if (field === 'requirements') {
           try {
             p.checkoutFieldsOverride = parseProductCheckoutFields(text);

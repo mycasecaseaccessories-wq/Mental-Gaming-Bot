@@ -89,6 +89,7 @@ function formatNewProductAnnouncement(product) {
     `${typeLine}\n` +
     (stockLine ? `${stockLine}\n` : ``) +
     (product.warrantyDays > 0 ? `🛡 Warranty: *${product.warrantyDays} days*\n` : ``) +
+    (product.waitingTime ? `⏱ Waiting time: *${mdEsc(product.waitingTime)}*\n` : ``) +
     (Array.isArray(product.checkoutFieldsOverride) && product.checkoutFieldsOverride.length ? `🧾 Account info required\n` : ``) +
     (product.description ? `\n📝 _${mdEsc(product.description)}_\n` : ``) +
     `\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
@@ -134,6 +135,7 @@ function formatFlashSaleAnnouncement(product, salePrice, endsAt) {
     `~~${originalPrice.toLocaleString()} KS~~  →  *${salePrice.toLocaleString()} KS*\n` +
     `🎉 You save *${savings.toLocaleString()} KS* (${pct}% OFF)\n` +
     (product.warrantyDays > 0 ? `🛡 Warranty: *${product.warrantyDays} days*\n` : ``) +
+    (product.waitingTime ? `⏱ Waiting time: *${mdEsc(product.waitingTime)}*\n` : ``) +
     `\n⏰ Ends: *${endsStr} MMT*\n\n` +
     `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
     `🛒 Limited-time offer — tap *Buy Now* below`

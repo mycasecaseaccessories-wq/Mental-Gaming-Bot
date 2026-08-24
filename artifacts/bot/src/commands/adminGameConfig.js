@@ -740,9 +740,18 @@ module.exports = function registerAdminGameConfig(bot) {
       if (addState.step === 'warranty') {
         const warrantyDays = parseInt(input.replace(/,/g, ''), 10);
         if (isNaN(warrantyDays) || warrantyDays < 0) return ctx.reply('❌ Warranty days အတွက် 0 သို့မဟုတ် အပေါင်းဂဏန်း ထည့်ပါ။');
-        ctx.session.adminAddProduct = { ...addState, step: 'requirements', warrantyDays };
+        ctx.session.adminAddProduct = { ...addState, step: 'waitingTime', warrantyDays };
         return ctx.reply(
-          `✅ Warranty: *${warrantyDays ? `${warrantyDays} days` : 'None'}*\n\nStep 7/9: Account လိုအပ်ချက်များ ထည့်ပါ။\n\`game_id:Game ID,email:Email\` ပုံစံသုံးပါ။ မလိုလျှင် \`skip\``,
+          `✅ Warranty: *${warrantyDays ? `${warrantyDays} days` : 'None'}*\n\nStep 7/10: Waiting Time ထည့်ပါ။\nဥပမာ: \`Instant\`, \`5 minutes\`, \`1-3 hours\`\nမလိုလျှင် \`skip\` ဟု ရိုက်ပါ။`,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ap_cancel')]]) }
+        );
+      }
+      if (addState.step === 'waitingTime') {
+        const waitingTime = input.toLowerCase() === 'skip' ? '' : input;
+        if (waitingTime.length > 80) return ctx.reply('❌ Waiting time စာသားသည် 80 characters ထက် မကျော်ရပါ။');
+        ctx.session.adminAddProduct = { ...addState, step: 'requirements', waitingTime };
+        return ctx.reply(
+          `✅ Waiting Time: *${waitingTime || 'မသတ်မှတ်ပါ'}*\n\nStep 8/10: Account လိုအပ်ချက်များ ထည့်ပါ။\n\`game_id:Game ID,email:Email\` ပုံစံသုံးပါ။ မလိုလျှင် \`skip\``,
           { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel', 'ap_cancel')]]) }
         );
       }
@@ -794,6 +803,7 @@ module.exports = function registerAdminGameConfig(bot) {
             description: addState.description || '',
             stockCount: addState.stockCount ?? -1,
             warrantyDays: addState.warrantyDays ?? 0,
+            waitingTime: addState.waitingTime || '',
             checkoutFieldsOverride,
             deliveryMode: addState.deliveryMode || 'Manual',
             refundPolicy,
@@ -806,6 +816,7 @@ module.exports = function registerAdminGameConfig(bot) {
             `✅ *Product Created!*\n\n📦 *${product.name}*\n📁 ${product.category}\n💰 ${price(product.finalPrice)}\n` +
             `📦 Stock: ${product.stockCount === -1 ? 'Unlimited' : product.stockCount}\n` +
             `🛡 Warranty: ${product.warrantyDays ? `${product.warrantyDays} days` : 'None'}\n` +
+            (product.waitingTime ? `⏱ Waiting time: ${product.waitingTime}\n` : '') +
             `🧾 Account fields: ${checkoutFieldsOverride?.length || 0}\n` +
             `🚚 Delivery: ${product.deliveryMode}\n` +
             `↩️ Refund: ${product.refundPolicy}` +

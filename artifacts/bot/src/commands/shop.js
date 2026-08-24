@@ -280,6 +280,7 @@ module.exports = function registerShop(bot) {
           `🌍 ${t(ctx, 'shop.region')}: ${product.region}`,
           `${theme.emoji.money} ${t(ctx, 'shop.price')}: ${theme.format.bold(price(product.finalPrice))}`,
           `📦 ${t(ctx, 'shop.stock')}: ${stockLabel}`,
+          product.waitingTime ? `⏱ Waiting time: ${product.waitingTime}` : null,
           product.description ? `\\n📝 ${product.description}` : null,
         ],
       }]);

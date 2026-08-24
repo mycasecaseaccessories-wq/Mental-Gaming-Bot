@@ -30,6 +30,7 @@ const productSchema = new mongoose.Schema(
     stockWarningThreshold: { type: Number, default: 5 },
     warrantyDays:          { type: Number, default: 0, min: 0, comment: '0 = no warranty' },
     warrantyNote:          { type: String, default: '' },
+    waitingTime:           { type: String, default: '', trim: true, comment: 'Optional customer-facing fulfilment estimate, e.g. Instant, 5 minutes, 1-3 hours' },
     refundPolicy: {
       type: String,
       enum: ['full', 'manual', 'none'],
