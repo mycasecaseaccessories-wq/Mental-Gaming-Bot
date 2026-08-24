@@ -21,6 +21,21 @@ function rewardText(c) {
   return c.rewardLabel || 'Product';
 }
 
+async function registerPendingReferralForCampaigns(referrer, referee) {
+  if (!referrer || !referee) return;
+  const campaigns = await RefCampaign.getActiveMany();
+  for (const camp of campaigns) {
+    await RefCampaignEntry.updateOne(
+      { campaignId: camp._id, telegramId: referrer.telegramId },
+      {
+        $setOnInsert: { userId: referrer._id, countedRefs: 0, totalRefs: 0, rewardsClaimed: 0 },
+        $addToSet: { participants: { refereeId: referee._id, telegramId: referee.telegramId, status: 'pending', joinedAt: new Date() } },
+      },
+      { upsert: true }
+    );
+  }
+}
+
 function myanmarDateKey(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Rangoon' }).format(date);
 }
@@ -33,6 +48,7 @@ async function onReferralCompletedForCampaign(referrer, telegram, referee = null
   try {
     const camp = campaignOverride || await RefCampaign.getActive();
     if (!camp) return null;
+    const participantFilter = referee ? { campaignId: camp._id, telegramId: referrer.telegramId, 'participants.refereeId': referee._id } : null;
 
     // Anti-gaming: invited user's first top-up must meet the campaign minimum
     if (camp.minRefereeTopup > 0 && topupAmount < camp.minRefereeTopup) {
@@ -47,6 +63,7 @@ async function onReferralCompletedForCampaign(referrer, telegram, referee = null
       await auditLog(referrer.telegramId, 'REF_CAMPAIGN_TOPUP_REJECT', camp._id.toString(), 'System', {
         refereeId: referee ? referee.telegramId : null, topupAmount, minRequired: camp.minRefereeTopup,
       });
+      if (participantFilter) await RefCampaignEntry.updateOne(participantFilter, { $set: { 'participants.$.status': 'rejected', 'participants.$.topupAmount': topupAmount, 'participants.$.reason': `topup_min_${camp.minRefereeTopup}` } });
       return null;
     }
 
@@ -65,9 +82,12 @@ async function onReferralCompletedForCampaign(referrer, telegram, referee = null
         await auditLog(referrer.telegramId, 'REF_CAMPAIGN_AGE_REJECT', camp._id.toString(), 'System', {
           refereeId: referee.telegramId, estAgeDays: ageDays, minRequired: camp.minRefereeAgeDays,
         });
+        if (participantFilter) await RefCampaignEntry.updateOne(participantFilter, { $set: { 'participants.$.status': 'rejected', 'participants.$.topupAmount': topupAmount, 'participants.$.reason': `account_age_${camp.minRefereeAgeDays}` } });
         return null;
       }
     }
+
+    if (participantFilter) await RefCampaignEntry.updateOne(participantFilter, { $set: { 'participants.$.status': 'qualified', 'participants.$.topupAmount': topupAmount, 'participants.$.reason': null } });
 
     // Ensure entry exists (idempotent upsert)
     await RefCampaignEntry.updateOne(
@@ -286,4 +306,4 @@ async function onReferralCompleted(referrer, telegram, referee = null, topupAmou
   return results.length ? { campaigns: results } : null;
 }
 
-module.exports = { onReferralCompleted, rewardText };
+module.exports = { onReferralCompleted, rewardText, registerPendingReferralForCampaigns };

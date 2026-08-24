@@ -23,6 +23,20 @@ function bar(cur, total, len = 10) {
   const filled = Math.min(len, Math.round((cur / total) * len));
   return '▰'.repeat(filled) + '▱'.repeat(len - filled);
 }
+function campaignReminder(camp) {
+  const reward = rewardText(camp);
+  const topup = Number(camp.minRefereeTopup || 0);
+  const topupLine = topup > 0
+    ? `💰 ${reward} ရရှိနိုင်ဖို့ ${topup.toLocaleString()} KS ငွေဖြည့်ဖို့ မမေ့နဲ့နော်။`
+    : `🎁 ${reward} ရရှိနိုင်ဖို့ ဒီ campaign မှာ ဆက်လက်ပါဝင်ပေးပါနော်။`;
+  return `🎯 *Referral Campaign Reminder*\n\n` +
+    `သင့်သူငယ်ချင်းက သင့်ကို referral campaign မှာ ဖိတ်ထားပါတယ်။\n` +
+    `👥 *${camp.requiredRefs} ယောက်* ပြည့်ရင်\n` +
+    `🏆 *${reward}* ရရှိနိုင်ပါတယ်။\n\n` +
+    topupLine +
+    (camp.minRefereeAgeDays > 0 ? `\n🛡️ Account သက်တမ်း အနည်းဆုံး ${camp.minRefereeAgeDays} ရက် လိုအပ်ပါတယ်။` : '') +
+    `\n\n✅ ငွေဖြည့်ပြီးနောက် campaign progress ထဲမှာ valid ref အဖြစ် တွက်ပေးပါမယ်။`;
+}
 
 // ── User view ────────────────────────────────────────────────────────────────
 
@@ -52,15 +66,14 @@ async function showUserCampaign(ctx) {
     const counted = entry?.countedRefs || 0;
     const claimed = entry?.rewardsClaimed || 0;
     const quotaLeft = camp.totalRewardLimit > 0 ? camp.totalRewardLimit - camp.totalRewardsClaimed : null;
-    // Pending means referrals created during this campaign window only;
-    // historical ordinary referrals must never appear in campaign UI.
-    const pending = user
-      ? await Referral.countDocuments({ referrerId: user._id, status: 'Pending', createdAt: { $gte: camp.createdAt } })
-      : 0;
+    const participants = entry?.participants || [];
+    const pending = participants.filter((p) => p.status === 'pending').length;
+    const rejected = participants.filter((p) => p.status === 'rejected').length;
+    const qualified = participants.filter((p) => p.status === 'qualified').length;
     return `🎯 *${esc(camp.title)}*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
       `🏆 ဆု: *${esc(rewardText(camp))}* (ref *${camp.requiredRefs} ယောက်* ပြည့်တိုင်း)\n` +
       `📊 Campaign progress: ${bar(counted, camp.requiredRefs)}  *${counted}/${camp.requiredRefs}*\n` +
-      `🕒 Campaign pending: *${pending}* ယောက်\n` +
+      `👥 Campaign refs: *${qualified} valid* · *${pending} pending*${rejected ? ` · *${rejected} rejected*` : ''}\n` +
       (claimed > 0 ? `🎁 ရပြီးသားဆု: *${claimed} ခု*\n` : '') +
       (camp.maxDailyInvites > 0 ? `📅 တစ်ရက် limit: ${camp.maxDailyInvites} ယောက်\n` : '') +
       (camp.maxRewardsPerUser > 0 ? `🎁 ဆုအများဆုံး: ${camp.maxRewardsPerUser} ခု\n` : '') +
@@ -73,6 +86,12 @@ async function showUserCampaign(ctx) {
   await ctx.reply(text, {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
+      ...campaigns.flatMap((camp) => {
+        const entry = entryByCampaign.get(String(camp._id));
+        return (entry?.participants || []).filter((p) => p.status === 'pending').slice(0, 10).map((p) => [
+          Markup.button.callback(`📨 Remind ref ${String(p.telegramId).slice(-4)}`, `rc_remind:${camp._id}:${p.telegramId}`),
+        ]);
+      }),
       [Markup.button.callback('📤 Share Campaign Link', 'rc_user_link')],
       [Markup.button.callback('🔄 Refresh Campaign', 'rc_user_refresh')],
     ]),
@@ -127,6 +146,22 @@ module.exports = function registerRefCampaign(bot) {
   bot.action('rc_user_refresh', async (ctx) => {
     await ctx.answerCbQuery('Refreshing...');
     return showUserCampaign(ctx);
+  });
+  bot.action(/^rc_remind:([^:]+):(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery('Reminder ပို့နေပါတယ်...');
+    const [, campaignId, refereeTelegramId] = ctx.match;
+    const entry = await RefCampaignEntry.findOne({ campaignId, telegramId: ctx.from.id });
+    const participant = entry?.participants?.find((p) => String(p.telegramId) === String(refereeTelegramId) && p.status === 'pending');
+    if (!participant) return ctx.reply('❌ ဒီ campaign ထဲမှာ pending referral မတွေ့ပါ။');
+    const camp = await RefCampaign.findById(campaignId);
+    if (!camp || !camp.isActive) return ctx.reply('❌ ဒီ campaign မရှိတော့ပါ။');
+    try {
+      await ctx.telegram.sendMessage(Number(refereeTelegramId), campaignReminder(camp), { parse_mode: 'Markdown' });
+      await RefCampaignEntry.updateOne({ _id: entry._id, 'participants.telegramId': Number(refereeTelegramId) }, { $set: { 'participants.$.lastNotifiedAt': new Date() } });
+      return ctx.reply(`✅ Ref ${String(refereeTelegramId).slice(-4)} ကို campaign reminder ပို့ပြီးပါပြီ။`);
+    } catch (err) {
+      return ctx.reply('❌ Reminder ပို့မရပါ။ ဖိတ်ခံရသူက bot ကို block လုပ်ထားခြင်း သို့မဟုတ် /start မလုပ်ရသေးခြင်း ဖြစ်နိုင်ပါတယ်။');
+    }
   });
   bot.action('rc_user_link', async (ctx) => {
     await ctx.answerCbQuery();

@@ -147,6 +147,14 @@ async function registerReferral(newUserId, refCode, telegram = null) {
     return null; // silently deny — no bonus notice to suspicious user
   }
 
+  // Keep campaign-specific pending participant state separate from ordinary referrals.
+  try {
+    const { registerPendingReferralForCampaigns } = require('./RefCampaignService');
+    await registerPendingReferralForCampaigns(referrer, referee);
+  } catch (err) {
+    console.error('[Referral] Campaign participant registration failed:', err.message);
+  }
+
   await auditLog(referee.telegramId, 'REFERRAL_REGISTERED', referral._id.toString(), 'System', {
     referrerId: referrer.telegramId,
     code: refCode,
