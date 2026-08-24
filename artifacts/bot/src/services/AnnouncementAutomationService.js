@@ -199,19 +199,47 @@ async function runDueSchedules(telegram) {
 }
 
 async function cleanupDeliveries(telegram) {
-  const due = await AnnouncementDelivery.find({ destination: 'user', status: 'sent', deleteAt: { $ne: null, $lte: new Date() } }).limit(500);
-  let deleted = 0, failed = 0;
+  const now = new Date();
+  // Only user messages are auto-deleted by schedule retention. Channel posts
+  // are intentionally preserved, matching the admin setting semantics.
+  const due = await AnnouncementDelivery.find({
+    destination: 'user',
+    status: { $in: ['sent', 'failed'] },
+    deleteAt: { $ne: null, $lte: now },
+  }).sort({ deleteAt: 1 }).limit(500);
+  let deleted = 0, alreadyGone = 0, failed = 0;
   for (const delivery of due) {
     try {
       await telegram.deleteMessage(delivery.chatId, delivery.messageId);
-      await AnnouncementDelivery.updateOne({ _id: delivery._id }, { $set: { status: 'deleted', attempts: (delivery.attempts || 0) + 1 } });
+      await AnnouncementDelivery.updateOne(
+        { _id: delivery._id },
+        { $set: { status: 'deleted', lastError: null }, $inc: { attempts: 1 } }
+      );
       deleted += 1;
     } catch (err) {
-      failed += 1;
-      await AnnouncementDelivery.updateOne({ _id: delivery._id }, { $set: { status: 'failed', lastError: err.message }, $inc: { attempts: 1 } });
+      const code = err.response?.error_code ?? err.code;
+      const description = String(err.response?.description || err.message || '').toLowerCase();
+      // Telegram returns 400 when a user already deleted the message or when
+      // it is no longer available. Treat that as successful cleanup.
+      if (code === 400 && /message to delete not found|message can't be deleted|message not found|chat not found/.test(description)) {
+        await AnnouncementDelivery.updateOne(
+          { _id: delivery._id },
+          { $set: { status: 'deleted', lastError: null }, $inc: { attempts: 1 } }
+        );
+        alreadyGone += 1;
+      } else {
+        failed += 1;
+        await AnnouncementDelivery.updateOne(
+          { _id: delivery._id },
+          { $set: { status: 'failed', lastError: String(err.message || err) }, $inc: { attempts: 1 } }
+        );
+      }
     }
   }
-  return { considered: due.length, deleted, failed };
+  if (due.length || failed) {
+    console.log(`[AnnouncementAutomation] cleanup due=${due.length} deleted=${deleted} alreadyGone=${alreadyGone} failed=${failed}`);
+  }
+  return { considered: due.length, deleted: deleted + alreadyGone, failed };
 }
 
 module.exports = { localParts, nextRunAt, resolveTargets, runDueSchedules, cleanupDeliveries };
