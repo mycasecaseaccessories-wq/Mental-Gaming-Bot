@@ -415,8 +415,6 @@ module.exports = function registerReferral(bot) {
         `\`──────────────────────\`\n` +
         `🎁 *Your Friend Gets:* +${stats.welcomeBonus.coins.toLocaleString()} MC\n` +
         `\`──────────────────────\`\n` +
-        `*Recent Referrals:*\n${recentLines}\n` +
-        `\`━━━━━━━━━━━━━━━━━━━━━━\`\n` +
         `🔗 *Your Link:*\n\`${stats.link}\``;
 
       await ctx.reply(text, {
@@ -424,7 +422,6 @@ module.exports = function registerReferral(bot) {
         ...Markup.inlineKeyboard([
           [Markup.button.url('📤 Telegram Share', `https://t.me/share/url?url=${encodeURIComponent(stats.shareLinks.telegram)}&text=${encodeURIComponent(buildShareText(stats, stats.shareLinks.telegram))}`)],
           [Markup.button.url('📘 Facebook Link', stats.shareLinks.facebook), Markup.button.url('🎵 TikTok Link', stats.shareLinks.tiktok)],
-          ...detailButtons,
           [
             Markup.button.callback('🏆 Leaderboard',   'ref_leaderboard'),
             Markup.button.callback('🔄 Refresh',       'ref_refresh'),

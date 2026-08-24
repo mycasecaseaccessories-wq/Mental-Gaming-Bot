@@ -39,38 +39,36 @@ async function showUserCampaign(ctx) {
       campaignId: { $in: campaigns.map((campaign) => campaign._id) },
       telegramId: ctx.from.id,
     }).lean(),
-    require('../models/User').findOne({ telegramId: ctx.from.id }).select('_id').lean(),
+    require('../models/User').findOne({ telegramId: ctx.from.id }).select('_id referralCode').lean(),
   ]);
-  const referralStats = user
-    ? await Referral.aggregate([
-        { $match: { referrerId: user._id } },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-      ])
-    : [];
-  const statusCounts = Object.fromEntries(referralStats.map((item) => [item._id, item.count]));
   let referralLink = null;
   if (user) {
-    const code = await getOrCreateCode(ctx.from.id);
+    const code = user.referralCode || await getOrCreateCode(ctx.from.id);
     referralLink = getReferralLink(code);
   }
   const entryByCampaign = new Map(entries.map((entry) => [String(entry.campaignId), entry]));
-  const sections = campaigns.map((camp) => {
+  const sections = await Promise.all(campaigns.map(async (camp) => {
     const entry = entryByCampaign.get(String(camp._id));
     const counted = entry?.countedRefs || 0;
     const claimed = entry?.rewardsClaimed || 0;
-    const totalRefs = entry?.totalRefs || 0;
     const quotaLeft = camp.totalRewardLimit > 0 ? camp.totalRewardLimit - camp.totalRewardsClaimed : null;
+    // Pending means referrals created during this campaign window only;
+    // historical ordinary referrals must never appear in campaign UI.
+    const pending = user
+      ? await Referral.countDocuments({ referrerId: user._id, status: 'Pending', createdAt: { $gte: camp.createdAt } })
+      : 0;
     return `🎯 *${esc(camp.title)}*\n\`━━━━━━━━━━━━━━━━━━━━━━\`\n\n` +
       `🏆 ဆု: *${esc(rewardText(camp))}* (ref *${camp.requiredRefs} ယောက်* ပြည့်တိုင်း)\n` +
-      `📊 တိုးတက်မှု: ${bar(counted, camp.requiredRefs)}  *${counted}/${camp.requiredRefs}*\n` +
+      `📊 Campaign progress: ${bar(counted, camp.requiredRefs)}  *${counted}/${camp.requiredRefs}*\n` +
+      `🕒 Campaign pending: *${pending}* ယောက်\n` +
       (claimed > 0 ? `🎁 ရပြီးသားဆု: *${claimed} ခု*\n` : '') +
       (camp.maxDailyInvites > 0 ? `📅 တစ်ရက် limit: ${camp.maxDailyInvites} ယောက်\n` : '') +
       (camp.maxRewardsPerUser > 0 ? `🎁 ဆုအများဆုံး: ${camp.maxRewardsPerUser} ခု\n` : '') +
       (quotaLeft !== null ? `⏳ ဆုလက်ကျန်: *${quotaLeft} ခု*\n` : '');
-  });
-    const text = `🎯 *Referral Campaigns*\n\n${sections.join('\n')}` +
-    `\n📌 သင့် referral စာရင်း: *${statusCounts.Pending || 0} pending* · *${statusCounts.Active || 0} active* · *${statusCounts.Completed || 0} completed*\n` +
-    `_Campaign progress က ဖိတ်ခံရသူက သတ်မှတ်ထားတဲ့ first top-up နှင့် account-age လိုအပ်ချက်များ ပြည့်မှသာ တက်ပါတယ်။_\n` +
+  }));
+  const text = `🎯 *Referral Campaigns*\n\n${sections.join('\n')}` +
+    `\n_Campaign pending က ဒီ campaign စပြီးနောက် ဝင်လာသော referral များကိုသာ ပြပါတယ်။_\n` +
+    `_Valid progress က first top-up နှင့် account-age rule များ ပြည့်မှသာ တက်ပါတယ်။_\n` +
     `🔗 သင့် Campaign Link: \`${referralLink || 'မရသေးပါ'}\``;
   await ctx.reply(text, {
     parse_mode: 'Markdown',
