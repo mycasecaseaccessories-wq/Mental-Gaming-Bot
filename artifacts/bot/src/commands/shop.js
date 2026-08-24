@@ -258,9 +258,14 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery();
     const productId = ctx.match[1];
     const ref = await loadingMessage(ctx, '⌛ Loading product\\.\\.\\.');
+    // Keep these outside the try block: image delivery can fail for one product,
+    // but the text card and Buy Now keyboard must still be available in catch.
+    let product = null;
+    let text = null;
+    let productKeyboard = null;
 
     try {
-      const product = await Product.findById(productId);
+      product = await Product.findById(productId);
       if (!product) return resolveMessage(ctx, ref, t(ctx, 'shop.product_not_found'));
 
       const theme = require('../services/ThemeService').getTheme(ctx.user);
@@ -268,58 +273,61 @@ module.exports = function registerShop(bot) {
         ? t(ctx, 'shop.stock_unlimited')
         : `${product.stockCount} ${t(ctx, 'shop.stock_left')}`;
 
-      const text = buildMessage(theme, [{
+      text = buildMessage(theme, [{
         title: product.name,
         lines: [
           `${theme.emoji.folder} ${t(ctx, 'shop.category')}: ${product.category}`,
           `🌍 ${t(ctx, 'shop.region')}: ${product.region}`,
           `${theme.emoji.money} ${t(ctx, 'shop.price')}: ${theme.format.bold(price(product.finalPrice))}`,
           `📦 ${t(ctx, 'shop.stock')}: ${stockLabel}`,
-          product.description ? `\n📝 ${product.description}` : null,
+          product.description ? `\\n📝 ${product.description}` : null,
         ],
       }]);
 
       const botUsername = ctx.botInfo?.username;
-      const shareUrl   = botUsername
+      const shareUrl = botUsername
         ? `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?start=product_${product._id}`)}&text=${encodeURIComponent(`🎮 ${product.name} — Mental Gaming Store`)}`
         : null;
-
       const inStock = isInStock(product);
       const orderButton = inStock
         ? withStyle(Markup.button.callback(t(ctx, 'shop.order_now'), `order_start:${product._id}`), 'success')
         : withStyle(Markup.button.callback('📦 Out of Stock', 'shop_out_of_stock'), 'danger');
 
-      // Product cards are not navigation folders, so generic nav:back would pop
-      // the current shop/category folder and could reveal an older Profile page.
-      // Return explicitly to the folder the user was browsing instead.
+      // Product cards return explicitly to the shop/category folder.
       const history = ctx.session?.nav?.history || [];
       const currentFolder = history[history.length - 1];
       const shopReturnFolder = currentFolder === 'shop' || String(currentFolder || '').startsWith('cat:')
         ? currentFolder
         : 'shop';
       const productBackRow = [withStyle(Markup.button.callback('🔙 Back', `nav:go:${shopReturnFolder}`), 'danger')];
-
-      const productKeyboard = Markup.inlineKeyboard([
+      productKeyboard = Markup.inlineKeyboard([
         [orderButton],
         ...(shareUrl ? [[withStyle(Markup.button.url('📤 Share', shareUrl), 'primary')]] : []),
         productBackRow,
       ]);
+
       if (product.imageUrl) {
         await deleteRef(ctx, ref);
-        return ctx.replyWithPhoto(
-          telegramPhotoInput(product.imageUrl),
-          { caption: text, parse_mode: 'Markdown', ...productKeyboard }
-        );
+        try {
+          return await ctx.replyWithPhoto(
+            telegramPhotoInput(product.imageUrl),
+            { caption: text, parse_mode: 'Markdown', ...productKeyboard }
+          );
+        } catch (photoErr) {
+          // Telegram file URLs can expire; retain the product card and buttons.
+          console.error(`[Shop] Product image failed for ${product._id}:`, photoErr.message);
+        }
       }
       await resolveMessage(ctx, ref, text, productKeyboard);
     } catch (err) {
-      console.error(`[Shop] Product detail photo/send failed for ${product?._id || 'unknown'}:`, err.message);
-      // A broken/expired remote image must not hide the product or its Buy Now action.
-      // Fall back to the normal text card while preserving the same keyboard.
+      console.error(`[Shop] Product detail failed for ${product?._id || productId}:`, err.message);
       try {
-        await resolveMessage(ctx, ref, text, productKeyboard);
+        if (text && productKeyboard) {
+          await resolveMessage(ctx, ref, text, productKeyboard);
+        } else {
+          await resolveMessage(ctx, ref, `❌ Unable to load this product right now. Please try again.`);
+        }
       } catch (fallbackErr) {
-        await resolveMessage(ctx, ref, `❌ Unable to load this product right now. Please try again.`, productKeyboard).catch(() => {});
         console.error('[Shop] Product detail fallback failed:', fallbackErr.message);
       }
     }
