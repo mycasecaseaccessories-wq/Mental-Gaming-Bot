@@ -694,6 +694,7 @@ module.exports = function registerAccountGiveaway(bot) {
       // Live feed notification (shop giveaway)
       require('../services/LiveFeedService').postGiveaway(ctx.telegram, {
         user: { username: ctx.from.username, firstName: ctx.from.first_name },
+        productId: p._id,
         productName: p.name,
         productEmoji: '🛍',
         eventKey: `giveaway:${ga._id}:${ctx.from.id}`,
@@ -793,6 +794,7 @@ module.exports = function registerAccountGiveaway(bot) {
       // Live feed notification (multi-slot giveaway)
       require('../services/LiveFeedService').postGiveaway(ctx.telegram, {
         user: { username: ctx.from.username, firstName: ctx.from.first_name },
+        accountProductId: p._id,
         productName: `${p.serviceName} ${p.planLabel}`,
         productEmoji: p.emoji || '🎁',
         eventKey: `giveaway:${ga._id}:${ctx.from.id}`,
@@ -870,6 +872,7 @@ module.exports = function registerAccountGiveaway(bot) {
     // Live feed notification (single account giveaway)
     require('../services/LiveFeedService').postGiveaway(ctx.telegram, {
       user: { username: ctx.from.username, firstName: ctx.from.first_name },
+      accountProductId: p._id,
       productName: `${p.serviceName} ${p.planLabel}`,
       productEmoji: p.emoji || '🎁',
       eventKey: `giveaway:${ga._id}:${ctx.from.id}`,

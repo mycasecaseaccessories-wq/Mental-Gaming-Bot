@@ -141,6 +141,8 @@ async function postTopup(telegram, { user, amount, eventKey = null } = {}) {
 
 async function postGiveaway(telegram, {
   user,
+  productId = null,
+  accountProductId = null,
   productName,
   productEmoji = '🎁',
   eventKey = null,
@@ -149,10 +151,21 @@ async function postGiveaway(telegram, {
   const key = eventKey || `giveaway:${user?._id || user?.telegramId}:${productName}`;
   const remainingLine = remaining === null ? '' : `\n🔥 Remaining: *${remaining}*`;
   const name = escapeMarkdown(maskedUser(user));
+  const button = accountProductId
+    ? {
+        label: '🔐 Buy Account Product',
+        url: require('./BroadcastService').accountProductDeepLink(accountProductId),
+      }
+    : productId
+      ? {
+          label: '🛒 Buy Now',
+          url: require('./BroadcastService').productDeepLink(productId),
+        }
+      : { label: '🎁 Open Giveaway', action: 'accga_list' };
   return post(
     telegram,
     `🎁 *Giveaway Claimed*\n👤 User: ${name}\n🎁 Reward: ${productEmoji} *${escapeMarkdown(productName)}*${remainingLine}`,
-    { eventKey: key, eventType: 'GIVEAWAY_CLAIMED' }
+    { eventKey: key, eventType: 'GIVEAWAY_CLAIMED', button }
   );
 }
 
