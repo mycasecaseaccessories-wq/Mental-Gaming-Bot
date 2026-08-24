@@ -297,7 +297,13 @@ topupScene.action(/^topup_pick:(.+)$/, async (ctx) => {
 // ── Action: cancel ─────────────────────────────────────────────────────────
 topupScene.action('topup_cancel', async (ctx) => {
   await ctx.answerCbQuery('Cancelled');
-  await ctx.editMessageText('❌ Top-up cancelled.');
+  try {
+    await ctx.editMessageText('❌ Top-up cancelled.');
+  } catch (err) {
+    // A callback may come from a message without an editable inline keyboard.
+    // Never let cancellation crash the bot; send a fresh confirmation instead.
+    await ctx.reply('❌ Top-up cancelled.').catch(() => {});
+  }
   ctx.session.topupSelectedMethod = null;
   ctx.session.topupAmount = null;
   await ctx.reply('🏠 Returned to main menu.', mainMenuKeyboard(ctx));

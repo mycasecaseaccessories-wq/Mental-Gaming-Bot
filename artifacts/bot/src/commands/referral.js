@@ -33,6 +33,10 @@ const Referral        = require('../models/Referral');
 const FraudFlag       = require('../models/FraudFlag');
 const SystemStatus    = require('../models/SystemStatus');
 const User            = require('../models/User');
+
+function escapeMarkdown(value) {
+  return String(value == null ? '' : value).replace(/([_*`[\\]])/g, '\\\\$1');
+}
 const { getReferralReport, reportToCsv } = require('../services/ReferralAnalyticsService');
 const WebhookEvent = require('../models/WebhookEvent');
 const { processEvent } = require('../services/WebhookProcessor');
@@ -518,11 +522,11 @@ module.exports = function registerReferral(bot) {
     const name = referral.refereeId?.username ? `@${referral.refereeId.username}` : referral.refereeId?.first_name || 'User';
     return ctx.editMessageText(
       `👤 *Referral Detail*\\n\\n` +
-      `User: *${name}*\\n` +
+      `User: *${escapeMarkdown(name)}*\\n` +
       `Status: *${STATUS_ICON[referral.status] || '•'} ${referral.status}*\\n` +
       `Joined: *${referral.createdAt.toLocaleString('en-GB', { timeZone: 'Asia/Rangoon' })} MMT*\\n` +
       `Commission earned: *${earned.toLocaleString()} MC*\\n` +
-      (referral.isFraudSuspected ? `\\n🔒 *Under fraud review:* ${referral.fraudReason || 'Review pending'}\\n` : ''),
+      (referral.isFraudSuspected ? `\\n🔒 *Under fraud review:* ${escapeMarkdown(referral.fraudReason || 'Review pending')}\\n` : ''),
       { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Back to Referral', 'ref_refresh')]]) }
     );
   });
