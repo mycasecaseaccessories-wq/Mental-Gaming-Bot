@@ -6,8 +6,10 @@ const { Markup } = require('telegraf');
 const { adminOnly } = require('../middlewares/adminCheck');
 const { auditLog } = require('../services/logger');
 const { rewardText } = require('../services/RefCampaignService');
+const { getOrCreateCode, getReferralLink } = require('../services/ReferralService');
 const RefCampaign = require('../models/RefCampaign');
 const RefCampaignEntry = require('../models/RefCampaignEntry');
+const Referral = require('../models/Referral');
 const Product = require('../models/Product');
 const { config } = require('../../config/settings');
 
@@ -32,10 +34,25 @@ async function showUserCampaign(ctx) {
       { parse_mode: 'Markdown' }
     );
   }
-  const entries = await RefCampaignEntry.find({
-    campaignId: { $in: campaigns.map((campaign) => campaign._id) },
-    telegramId: ctx.from.id,
-  }).lean();
+  const [entries, user] = await Promise.all([
+    RefCampaignEntry.find({
+      campaignId: { $in: campaigns.map((campaign) => campaign._id) },
+      telegramId: ctx.from.id,
+    }).lean(),
+    require('../models/User').findOne({ telegramId: ctx.from.id }).select('_id').lean(),
+  ]);
+  const referralStats = user
+    ? await Referral.aggregate([
+        { $match: { referrerId: user._id } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ])
+    : [];
+  const statusCounts = Object.fromEntries(referralStats.map((item) => [item._id, item.count]));
+  let referralLink = null;
+  if (user) {
+    const code = await getOrCreateCode(ctx.from.id);
+    referralLink = getReferralLink(code);
+  }
   const entryByCampaign = new Map(entries.map((entry) => [String(entry.campaignId), entry]));
   const sections = campaigns.map((camp) => {
     const entry = entryByCampaign.get(String(camp._id));
@@ -51,13 +68,16 @@ async function showUserCampaign(ctx) {
       (camp.maxRewardsPerUser > 0 ? `🎁 ဆုအများဆုံး: ${camp.maxRewardsPerUser} ခု\n` : '') +
       (quotaLeft !== null ? `⏳ ဆုလက်ကျန်: *${quotaLeft} ခု*\n` : '');
   });
-  const text = `🎯 *Referral Campaigns*\n\n${sections.join('\n')}` +
-    `\n_မိတ်ဆွေက သင့် link နဲ့ဝင်ပြီး ပထမဆုံး ငွေဖြည့်ရင် campaign တိုင်းမှာ valid ref အဖြစ် တွက်ပါတယ်။_\n` +
-    `🔗 သင့် link တစ်ခုတည်းကို campaign အားလုံးအတွက် အသုံးပြုနိုင်ပါတယ်။`;
-
+    const text = `🎯 *Referral Campaigns*\n\n${sections.join('\n')}` +
+    `\n📌 သင့် referral စာရင်း: *${statusCounts.Pending || 0} pending* · *${statusCounts.Active || 0} active* · *${statusCounts.Completed || 0} completed*\n` +
+    `_Campaign progress က ဖိတ်ခံရသူက သတ်မှတ်ထားတဲ့ first top-up နှင့် account-age လိုအပ်ချက်များ ပြည့်မှသာ တက်ပါတယ်။_\n` +
+    `🔗 သင့် Campaign Link: \`${referralLink || 'မရသေးပါ'}\``;
   await ctx.reply(text, {
     parse_mode: 'Markdown',
-    ...Markup.inlineKeyboard([[Markup.button.callback('👥 My Referral Link', 'ref_refresh')]]),
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('📤 Share Campaign Link', 'rc_user_link')],
+      [Markup.button.callback('🔄 Refresh Campaign', 'rc_user_refresh')],
+    ]),
   });
 }
 
@@ -106,6 +126,20 @@ module.exports = function registerRefCampaign(bot) {
   bot.command('campaign', showUserCampaign);
   bot.hears(['🎯 Campaign', '🎯 ကမ်ပိန်း'], showUserCampaign);
   bot.action('rc_user', async (ctx) => { await ctx.answerCbQuery(); return showUserCampaign(ctx); });
+  bot.action('rc_user_refresh', async (ctx) => {
+    await ctx.answerCbQuery('Refreshing...');
+    return showUserCampaign(ctx);
+  });
+  bot.action('rc_user_link', async (ctx) => {
+    await ctx.answerCbQuery();
+    const code = await getOrCreateCode(ctx.from.id);
+    const link = getReferralLink(code);
+    const shareText = '🎯 Referral Campaign မှာ ပါဝင်ပြီး ဆုရယူလိုက်ပါ!';
+    return ctx.reply(`🔗 *သင့် Referral Link*\n\n\`${link}\`\n\nဒီ link ကို သူငယ်ချင်းများထံ share လုပ်ပါ။`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([[Markup.button.url('📤 Share Now', `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`)]]),
+    });
+  });
 
   // ══ ADMIN (Owner) ══════════════════════════════════════════════════════════
   const adminPanel = async (ctx) => {
@@ -169,12 +203,16 @@ module.exports = function registerRefCampaign(bot) {
 
   bot.action('rc_top', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    const camp = await RefCampaign.getActive();
-    if (!camp) return ctx.reply('❌ ဖွင့်ထားတဲ့ campaign မရှိပါ။');
-    const top = await RefCampaignEntry.find({ campaignId: camp._id }).sort({ totalRefs: -1 }).limit(10);
-    if (!top.length) return ctx.reply('🙋 ဘယ်သူမှ မပါဝင်သေးပါ။');
-    const lines = top.map((e, i) => `${i + 1}. ID:${e.telegramId} — refs ${e.totalRefs}, ဆု ${e.rewardsClaimed} ခု`);
-    await ctx.reply(`📊 *Top ပါဝင်သူများ — ${esc(camp.title)}*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+    const camps = await RefCampaign.getActiveMany();
+    if (!camps.length) return ctx.reply('❌ ဖွင့်ထားတဲ့ campaign မရှိပါ။');
+    const blocks = [];
+    for (const camp of camps) {
+      const top = await RefCampaignEntry.find({ campaignId: camp._id }).sort({ totalRefs: -1, updatedAt: 1 }).limit(20).lean();
+      blocks.push(`🎯 *${esc(camp.title)}*\n` + (top.length
+        ? top.map((e, i) => `${i + 1}. ID: ${e.telegramId} — valid refs: ${e.totalRefs}, progress: ${e.countedRefs}/${camp.requiredRefs}, ဆု: ${e.rewardsClaimed}`).join('\n')
+        : '🙋 သတ်မှတ်ချက်ပြည့်ပြီး campaign ထဲဝင်ထားသူ မရှိသေးပါ။'));
+    }
+    await ctx.reply(`📊 *Campaign ပါဝင်သူများ*\n\n${blocks.join('\n\n')}`, { parse_mode: 'Markdown' });
   });
 
   // ── Admin wizard text steps ─────────────────────────────────────────────────
