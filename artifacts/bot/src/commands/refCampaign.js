@@ -112,10 +112,13 @@ module.exports = function registerRefCampaign(bot) {
     const { text, keyboard } = await buildAdminPanel();
     await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   };
-  bot.hears('🎯 Ref Campaign', adminOnly(), adminPanel);
-  // The same label is used by the customer menu when a campaign is active.
-  // adminOnly() passes non-admin users through to this customer handler.
-  bot.hears('🎯 Ref Campaign', showUserCampaign);
+  // The main menu uses the same label for everyone. Route admins to the
+  // management panel and regular users to the campaign/progress view; using
+  // adminOnly() as the first handler would stop regular users with Access denied.
+  bot.hears('🎯 Ref Campaign', async (ctx) => {
+    const isAdmin = await require('../services/AdminService').isAdmin(ctx.from?.id);
+    return isAdmin ? adminPanel(ctx) : showUserCampaign(ctx);
+  });
   bot.command('refcamp', adminOnly(), adminPanel);
 
   bot.action('rc_panel', adminOnly(), async (ctx) => {
