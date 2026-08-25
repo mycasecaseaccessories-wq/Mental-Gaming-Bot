@@ -53,11 +53,17 @@ async function withMainCategory(product) {
       if (!parent) break;
       catalog = parent;
     }
-    if (catalog?.name) return { ...product, mainCategory: catalog.name };
+    if (catalog?.name) {
+      // Mongoose documents should be converted before spreading. Spreading a
+      // document can omit schema fields, which caused NaN prices and undefined
+      // button labels in grouped Flash Sale announcements.
+      const plain = typeof product.toObject === 'function' ? product.toObject() : { ...product };
+      return { ...plain, mainCategory: catalog.name };
+    }
   } catch (err) {
     console.error('[BroadcastService] main category lookup failed:', err.message);
   }
-  return product;
+  return typeof product?.toObject === 'function' ? product.toObject() : product;
 }
 
 function categoryName(product) {
