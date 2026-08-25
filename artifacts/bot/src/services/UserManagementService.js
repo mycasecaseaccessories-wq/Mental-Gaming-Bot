@@ -85,12 +85,17 @@ async function unbanUser(targetIdentifier, adminId) {
   const user = await resolveUser(targetIdentifier);
   if (!user) throw new Error('User not found');
 
-  user.isBlocked = false;
-  user.warningsCount = 0;
-  await user.save();
+  // Use an atomic update so a stale document/save race cannot leave the user
+  // blocked after the admin has confirmed the action.
+  const updated = await User.findOneAndUpdate(
+    { _id: user._id },
+    { $set: { isBlocked: false, warningsCount: 0 } },
+    { new: true, runValidators: true }
+  );
+  if (!updated || updated.isBlocked === true) throw new Error('Unban update could not be confirmed');
 
-  await auditLog(adminId, 'UNBAN_USER', String(user.telegramId), 'User');
-  return user;
+  await auditLog(adminId, 'UNBAN_USER', String(updated.telegramId), 'User');
+  return updated;
 }
 
 // ── Bulk unban ────────────────────────────────────────────────────────────────
