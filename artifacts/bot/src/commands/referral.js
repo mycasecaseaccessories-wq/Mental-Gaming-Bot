@@ -140,7 +140,17 @@ module.exports = function registerReferral(bot) {
       [Markup.button.callback('🎯 Referral Campaign', 'rc_panel')],
       [Markup.button.callback('↩️ Admin Marketing', 'nav:go:admin_main')],
     ]);
-    if (edit && ctx.callbackQuery?.message) return ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    if (edit && ctx.callbackQuery?.message) {
+      try {
+        return await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+      } catch (err) {
+        // Refreshing an unchanged panel is a valid no-op in Telegram Bot API.
+        // Do not turn it into a crash report or send a duplicate panel.
+        const description = String(err?.description || err?.message || '');
+        if (description.includes('message is not modified')) return;
+        return ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+      }
+    }
     return ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   }
 
