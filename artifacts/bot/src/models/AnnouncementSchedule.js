@@ -3,9 +3,12 @@ const mongoose = require('mongoose');
 const announcementScheduleSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 120 },
   isActive: { type: Boolean, default: true, index: true },
-  targetType: { type: String, enum: ['category', 'product', 'account', 'all'], required: true },
+  targetType: { type: String, enum: ['category', 'product', 'account', 'all', 'all_categories'], required: true },
   category: { type: String, default: null, trim: true },
   categories: [{ type: String, trim: true }],
+  // Optional per-run category rotation. Kept additive for existing schedules.
+  rotationMode: { type: String, enum: ['none', 'round_robin', 'random'], default: 'none' },
+  rotationIndex: { type: Number, min: 0, default: 0 },
   productIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
   accountProductIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AccountProduct' }],
   style: { type: String, enum: ['new', 'flash', 'restock', 'price'], default: 'new' },

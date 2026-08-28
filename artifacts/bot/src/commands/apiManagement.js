@@ -325,6 +325,7 @@ module.exports = function registerApiManagement(bot) {
   async function showScheduleTarget(ctx) {
     const rows = [
       [Markup.button.callback('🌐 All Active Products', 'ann_sched_target:all')],
+      [Markup.button.callback('🔄 All Categories — တစ်ခုစီ Auto Announce', 'ann_sched_target:all_categories')],
       [Markup.button.callback('📦 Shop Product တစ်ခု', 'ann_sched_target:product')],
       [Markup.button.callback('🔐 Premium Account တစ်ခု', 'ann_sched_target:account')],
       [Markup.button.callback('📂 Category အများရွေးမယ်', 'ann_sched_categories')],
@@ -362,7 +363,8 @@ module.exports = function registerApiManagement(bot) {
       [Markup.button.callback('🕘 Daily', 'ann_sched_freq:daily'), Markup.button.callback('📅 Weekly', 'ann_sched_freq:weekly')],
       [Markup.button.callback('🗓 Monthly', 'ann_sched_freq:monthly')],
       [Markup.button.callback('⏱ Every 1 hour', 'ann_sched_freq:hourly'), Markup.button.callback('⏱ Every 6 hours', 'ann_sched_freq:every_6_hours')],
-      [Markup.button.callback('⏱ Every 12 hours', 'ann_sched_freq:interval:720')],
+      [Markup.button.callback('⏱ Every 2 hours', 'ann_sched_freq:interval:120'), Markup.button.callback('⏱ Every 4 hours', 'ann_sched_freq:interval:240')],
+      [Markup.button.callback('⏱ Every 8 hours', 'ann_sched_freq:interval:480'), Markup.button.callback('⏱ Every 12 hours', 'ann_sched_freq:interval:720')],
       [Markup.button.callback('❌ Cancel', 'ann_cancel')],
     ]));
   }
@@ -387,6 +389,8 @@ module.exports = function registerApiManagement(bot) {
       targetType: draft.targetType,
       category: draft.category || (draft.categories || [])[0] || null,
       categories: draft.categories || [],
+      rotationMode: draft.rotationMode || 'none',
+      rotationIndex: Number(draft.rotationIndex || 0),
       productIds: draft.productId ? [draft.productId] : [],
       accountProductIds: draft.accountProductId ? [draft.accountProductId] : [],
       frequency,
@@ -525,6 +529,22 @@ module.exports = function registerApiManagement(bot) {
   bot.action('ann_sched_target:all', requireRole('MANAGER'), async (ctx) => {
     await ctx.answerCbQuery();
     ctx.session.announceScheduleDraft = { name: 'All Active Products', targetType: 'all' };
+    return showScheduleFrequency(ctx);
+  });
+
+  bot.action('ann_sched_target:all_categories', requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.announceScheduleDraft = { name: 'All Categories Rotation', targetType: 'all_categories', rotationMode: 'round_robin', rotationIndex: 0 };
+    return ctx.reply('🔄 Category rotation mode ကို ရွေးပါ။', Markup.inlineKeyboard([
+      [Markup.button.callback('➡️ တစ်ခုချင်းစီ အစဉ်လိုက် (Round-robin)', 'ann_sched_rotation:round_robin')],
+      [Markup.button.callback('🎲 Random category', 'ann_sched_rotation:random')],
+      [Markup.button.callback('❌ Cancel', 'ann_cancel')],
+    ]));
+  });
+
+  bot.action(/^ann_sched_rotation:(round_robin|random)$/, requireRole('MANAGER'), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.announceScheduleDraft = { ...(ctx.session.announceScheduleDraft || {}), rotationMode: ctx.match[1] };
     return showScheduleFrequency(ctx);
   });
 

@@ -35,7 +35,10 @@ function nextRunAt(schedule, from = new Date()) {
         || !Array.isArray(schedule.weekdays) || !schedule.weekdays.length || schedule.weekdays.includes(weekday);
       const monthDayOk = schedule.frequency !== 'monthly'
         || candidate.getUTCDate() === Number(schedule.monthDay || 1);
-      if (weekdayOk && monthDayOk && candidate.getTime() > Date.now() + offsetMs) return new Date(candidate.getTime() - offsetMs);
+      // Compare against the supplied reference time in the same local-clock
+      // representation. Using Date.now() here made recovery/tests calculate a
+      // past run as nextRunAt when `from` was not the current wall clock.
+      if (weekdayOk && monthDayOk && candidate.getTime() > from.getTime() + offsetMs) return new Date(candidate.getTime() - offsetMs);
       candidate.setUTCDate(candidate.getUTCDate() + 1);
     }
   }
@@ -43,6 +46,18 @@ function nextRunAt(schedule, from = new Date()) {
     : schedule.frequency === 'every_6_hours' ? 360
       : Math.max(60, schedule.intervalMinutes || 60);
   return new Date(from.getTime() + minuteStep * 60_000);
+}
+
+async function getRotationCategories() {
+  const [mainCatalogs, legacyNames] = await Promise.all([
+    Catalog.find({ isActive: true, $or: [{ parentCategory: null }, { parentCategory: { $exists: false } }] })
+      .select('name').sort({ sortOrder: 1, name: 1 }).lean(),
+    Product.distinct('category', { isActive: true, catalogId: null }),
+  ]);
+  return [...new Set([
+    ...mainCatalogs.map((c) => String(c.name || '').trim()).filter(Boolean),
+    ...legacyNames.map((name) => String(name || '').trim()).filter(Boolean),
+  ])];
 }
 
 async function resolveTargets(schedule) {
@@ -121,19 +136,43 @@ async function releaseSchedule(id, token, patch = {}) {
 }
 
 async function runSchedule(schedule, token, telegram) {
-  const targets = await resolveTargets(schedule);
-  const fp = fingerprint(schedule, targets);
-  if (schedule.lastFingerprint === fp && schedule.style !== 'restock') {
+  let effectiveSchedule = schedule;
+  let rotationCategory = null;
+  let nextRotationIndex = Number(schedule.rotationIndex || 0);
+  if (schedule.targetType === 'all_categories') {
+    const categories = await getRotationCategories();
+    if (!categories.length) throw new Error('No active categories available for rotation');
+    if (schedule.rotationMode === 'random') {
+      nextRotationIndex = Math.floor(Math.random() * categories.length);
+    } else {
+      nextRotationIndex = ((Number(schedule.rotationIndex || 0) % categories.length) + categories.length) % categories.length;
+    }
+    rotationCategory = categories[nextRotationIndex];
+    effectiveSchedule = {
+      ...schedule,
+      targetType: 'category',
+      categories: [rotationCategory],
+      category: rotationCategory,
+    };
+  }
+  const targets = await resolveTargets(effectiveSchedule);
+  const fp = fingerprint({ ...schedule, rotationCategory }, targets);
+  // Fingerprints prevent duplicate one-time announcements only. Recurring
+  // schedules must run again even when product data is unchanged.
+  if (schedule.frequency === 'once' && schedule.lastFingerprint === fp && schedule.style !== 'restock') {
     await AnnouncementRun.create({ scheduleId: schedule._id, trigger: 'scheduled', fingerprint: fp, status: 'skipped_duplicate', selectedCount: targets.length, completedAt: new Date() });
     const next = schedule.frequency === 'once' ? null : nextRunAt(schedule);
-    await releaseSchedule(schedule._id, token, { lastRunAt: new Date(), nextRunAt: next, lastFingerprint: fp });
+    const rotationPatch = schedule.targetType === 'all_categories' && schedule.rotationMode !== 'random'
+      ? { rotationIndex: nextRotationIndex + 1 }
+      : {};
+    await releaseSchedule(schedule._id, token, { lastRunAt: new Date(), nextRunAt: next, lastFingerprint: fp, ...rotationPatch });
     return { skipped: true, selected: targets.length };
   }
 
   const run = await AnnouncementRun.create({ scheduleId: schedule._id, trigger: 'scheduled', fingerprint: fp, selectedCount: targets.length });
   let channelSent = 0, userSent = 0, failed = 0;
   try {
-    if (schedule.targetType === 'category') {
+    if (schedule.targetType === 'category' || schedule.targetType === 'all_categories') {
       const result = await BroadcastService.announceProductsEverywhere(targets, schedule.style === 'flash' ? 'flash' : 'new', telegram, {
         scheduleId: schedule._id, runId: run._id, retentionSeconds: schedule.retentionSeconds, destination: schedule.destination,
       });
@@ -163,6 +202,9 @@ async function runSchedule(schedule, token, telegram) {
           lastRunAt: new Date(),
           nextRunAt: schedule.frequency === 'once' ? null : nextRunAt(schedule),
           lastFingerprint: fp,
+          ...(schedule.targetType === 'all_categories' && schedule.rotationMode !== 'random'
+            ? { rotationIndex: nextRotationIndex + 1 }
+            : {}),
         },
         $inc: { sendCount: userSent, failedCount: failed },
         $unset: { claimedAt: 1, claimToken: 1 },
@@ -242,4 +284,4 @@ async function cleanupDeliveries(telegram) {
   return { considered: due.length, deleted: deleted + alreadyGone, failed };
 }
 
-module.exports = { localParts, nextRunAt, resolveTargets, runDueSchedules, cleanupDeliveries };
+module.exports = { localParts, nextRunAt, resolveTargets, runDueSchedules, cleanupDeliveries, getRotationCategories };
