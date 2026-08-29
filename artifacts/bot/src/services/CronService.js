@@ -563,6 +563,7 @@ async function sendMonthlyRevenueReport(telegram) {
 // ── Cron scheduler ────────────────────────────────────────────────────────────
 
 let scheduledJobs = [];
+let backgroundTimers = [];
 
 function startCronJobs(telegram) {
   if (scheduledJobs.length) {
@@ -620,6 +621,16 @@ function startCronJobs(telegram) {
     cron.schedule('*/10 * * * *', () => cleanupGiveaways(telegram).catch((e) => console.error('[Cron] giveaways:', e.message)), { timezone: 'UTC' })
   );
 
+  // Recovery tick for persisted announcement schedules. The node-cron job above
+  // remains the primary trigger, while this lightweight timer ensures a due
+  // schedule is picked up after a missed minute, event-loop stall, or VPS time
+  // boundary. claimSchedule() makes the two triggers safe against duplicates.
+  backgroundTimers.push(setInterval(() => {
+    require('./AnnouncementAutomationService').runDueSchedules(telegram).catch((err) => {
+      console.error('[CronService] ❌ Announcement recovery tick:', err.message);
+    });
+  }, 60_000));
+
   // 09:00 MMT = 02:30 UTC — premium account expiry reminders
   scheduledJobs.push(
     cron.schedule('30 2 * * *', () => notifyExpiringAccounts(telegram), { timezone: 'UTC' })
@@ -650,7 +661,9 @@ function startCronJobs(telegram) {
 
 function stopCronJobs() {
   scheduledJobs.forEach((j) => j.stop());
+  backgroundTimers.forEach((timer) => clearInterval(timer));
   scheduledJobs = [];
+  backgroundTimers = [];
   console.log('[CronService] 🛑 All cron jobs stopped');
 }
 
