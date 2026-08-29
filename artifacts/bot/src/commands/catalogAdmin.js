@@ -74,9 +74,109 @@ async function pinCatalogTop(catalogId) {
   return { ok: true };
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Hierarchical catalog UI helpers ───────────────────────────────────────────
+function pluralize(count, singular, plural = `${singular}s`) {
+  return count === 1 ? `1 ${singular}` : `${count} ${plural}`;
+}
+
+async function sendCatalogList(ctx, search = '') {
+  const filter = { parentCategory: null };
+  if (search) filter.name = { $regex: search.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&'), $options: 'i' };
+  const roots = await Catalog.find(filter).sort({ sortOrder: 1, name: 1 }).lean();
+  const rows = [];
+  for (const c of roots) {
+    const [subCount, productCount] = await Promise.all([
+      Catalog.countDocuments({ parentCategory: c._id }),
+      Product.countDocuments({ catalogId: c._id }),
+    ]);
+    const fieldCount = Array.isArray(c.checkoutFields) ? c.checkoutFields.length : 0;
+    const counts = `${pluralize(subCount, 'Sub-category')} · ${pluralize(productCount, 'Product')} · ${pluralize(fieldCount, 'Checkout Field')}`;
+    rows.push([Markup.button.callback(`${c.isActive ? '🟢' : '🔴'} ${c.emoji || '📁'} ${String(c.name).slice(0, 34)}\n   ${counts}`, `cat_view:${c._id}`)]);
+  }
+  rows.push([Markup.button.callback('🔎 Search Categories', 'cat_search')]);
+  rows.push([Markup.button.callback('➕ Add Category', 'cat_add')]);
+  rows.push([Markup.button.callback('◀️ Back', 'nav:go:admin_main')]);
+  const title = search ? `🔎 SEARCH RESULTS: ${search}` : '📂 STORE CATEGORIES';
+  return ctx.reply(`${title}\n\n${roots.length ? 'Select a top-level category to manage.' : 'No matching top-level categories found.'}`, Markup.inlineKeyboard(rows));
+}
+
+async function sendCatalogDashboard(ctx, catalog) {
+  const [productCount, subCount, parent, directFields] = await Promise.all([
+    Product.countDocuments({ catalogId: catalog._id }),
+    Catalog.countDocuments({ parentCategory: catalog._id }),
+    catalog.parentCategory ? Catalog.findById(catalog.parentCategory).select('name').lean() : null,
+    Array.isArray(catalog.checkoutFields) ? catalog.checkoutFields.length : 0,
+  ]);
+  const parentLabel = parent?.name ? `\n👨‍👩‍👧 Parent: ${parent.name}` : '';
+  const text = `${catalog.emoji || '📁'} *${String(catalog.name).toUpperCase()}*\n━━━━━━━━━━━━━━━━\n\n` +
+    `${catalog.isActive ? '🟢 Active' : '🔴 Inactive'}${parentLabel}\n\n` +
+    `📦 Products: ${productCount}\n` +
+    `📁 Sub-categories: ${subCount}\n` +
+    `📝 Checkout Fields: ${directFields}\n━━━━━━━━━━━━━━━━\n\n` +
+    `Choose a section to manage:`;
+  const back = catalog.parentCategory
+    ? Markup.button.callback('◀️ Back to Parent', `cat_view:${catalog.parentCategory}`)
+    : Markup.button.callback('◀️ Back to Store Categories', 'admin_catalogs_action');
+  return ctx.reply(text, { ...Markup.inlineKeyboard([
+    [Markup.button.callback(`📦 Products (${productCount})`, `cat_products:${catalog._id}`)],
+    [Markup.button.callback(`📁 Sub-categories (${subCount})`, `cat_subcategories:${catalog._id}`)],
+    [Markup.button.callback(`📝 Checkout Fields (${directFields})`, `cat_fields:${catalog._id}`)],
+    [Markup.button.callback('⚙️ Category Settings', `cat_settings:${catalog._id}`)],
+    [Markup.button.callback('🗑️ Delete Category', `cat_delete_confirm:${catalog._id}`)],
+    [back],
+  ])});
+}
+
+async function sendCategoryProducts(ctx, catalogId) {
+  const catalog = await Catalog.findById(catalogId).select('name parentCategory').lean();
+  if (!catalog) return ctx.reply('❌ Category not found.');
+  const products = await Product.find({ catalogId }).select('name finalPrice isActive').sort({ name: 1 }).lean();
+  const lines = products.length ? products.map((p) => `${p.isActive ? '🟢' : '🔴'} ${p.name} — ${price(p.finalPrice)} KS`) : ['No products in this category.'];
+  return ctx.reply(`📦 ${catalog.name} PRODUCTS\n━━━━━━━━━━━━━━━━\n\n${lines.join('\n')}\n\nTotal: ${products.length}`, Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Back to Category', `cat_view:${catalogId}`)],
+  ]));
+}
+
+async function sendCategorySubcategories(ctx, catalogId) {
+  const catalog = await Catalog.findById(catalogId).select('name').lean();
+  if (!catalog) return ctx.reply('❌ Category not found.');
+  const subs = await Catalog.find({ parentCategory: catalogId }).sort({ sortOrder: 1, name: 1 }).lean();
+  const rows = subs.map((s) => [Markup.button.callback(`${s.isActive ? '🟢' : '🔴'} ${s.emoji || '📁'} ${s.name}`, `cat_view:${s._id}`)]);
+  rows.push([Markup.button.callback('➕ Add Sub-category', `cat_addsub:${catalogId}`)]);
+  rows.push([Markup.button.callback('◀️ Back to Category', `cat_view:${catalogId}`)]);
+  return ctx.reply(`📁 ${String(catalog.name).toUpperCase()}\nSub-categories: ${subs.length}`, Markup.inlineKeyboard(rows));
+}
+
+async function sendCategoryFields(ctx, catalogId) {
+  const catalog = await Catalog.findById(catalogId).lean();
+  if (!catalog) return ctx.reply('❌ Category not found.');
+  const fields = (catalog.checkoutFields || []).slice().sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const lines = fields.length ? fields.map((f, i) => `${i + 1}. ${f.label}\n   Type: ${f.fieldType}\n   Required: ${f.required ? '✅' : '☑️'}`) : ['📝 No Checkout Fields'];
+  const rows = fields.map((f) => [Markup.button.callback(`✏️ ${f.label}`, `cat_field_edit:${catalogId}:${f.key}`), Markup.button.callback('🗑', `cat_field_del:${catalogId}:${f.key}`)]);
+  rows.push([Markup.button.callback('➕ Add Field', `cat_field_add:${catalogId}`)]);
+  rows.push([Markup.button.callback('◀️ Back to Category', `cat_view:${catalogId}`)]);
+  return ctx.reply(`📝 ${String(catalog.name).toUpperCase()} CHECKOUT FIELDS\n━━━━━━━━━━━━━━━━\n\n${lines.join('\n\n')}`, Markup.inlineKeyboard(rows));
+}
+
+async function sendCategorySettings(ctx, catalogId) {
+  const catalog = await Catalog.findById(catalogId).select('name emoji imageUrl description sortOrder isActive parentCategory').lean();
+  if (!catalog) return ctx.reply('❌ Category not found.');
+  return ctx.reply(`⚙️ CATEGORY SETTINGS\n\n${catalog.emoji || '📁'} ${catalog.name}\nStatus: ${catalog.isActive ? '🟢 Active' : '🔴 Inactive'}\nSort order: ${catalog.sortOrder || 0}\n${catalog.description ? `Description: ${catalog.description}` : 'Description: None'}`, { ...Markup.inlineKeyboard([
+    [Markup.button.callback('😀 Change Emoji', `cat_setemoji:${catalogId}`), Markup.button.callback('🖼 Change Image', `cat_setimage:${catalogId}`)],
+    [Markup.button.callback('⚡ Quick-Setup Fields', `cat_preset:${catalogId}`)],
+    [Markup.button.callback('🔀 Enable / Disable', `cat_toggle:${catalogId}`)],
+    [Markup.button.callback('👨‍👩‍👧 Set Parent', `cat_setparent:${catalogId}`)],
+    [Markup.button.callback('⬆️ Move Up', `cat_moveup:${catalogId}`), Markup.button.callback('⬇️ Move Down', `cat_movedown:${catalogId}`)],
+    [Markup.button.callback('◀️ Back to Category', `cat_view:${catalogId}`)],
+  ])});
+}
 
 async function sendCatalogView(ctx, catalog) {
+  return sendCatalogDashboard(ctx, catalog);
+}
+
+// ── Legacy detailed renderer retained for compatibility with old callbacks ─────
+async function sendLegacyCatalogView(ctx, catalog) {
   const fieldLines = catalog.checkoutFields.length
     ? catalog.checkoutFields
         .slice()
@@ -328,40 +428,46 @@ module.exports = (bot) => {
   // ── Catalog list ─────────────────────────────────────────────────────────────
   bot.action('admin_catalogs_action', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery();
-    // Top level only — sub-catalogs are shown inside each catalog's own view
-    const roots = await Catalog.find({ parentCategory: null }).sort({ sortOrder: 1, name: 1 });
-    if (!roots.length) {
-      return ctx.reply(
-        `📂 *Catalogs*\n\nNo catalogs yet.\nCatalogs group products and define what delivery info (Game ID, Player ID, etc.) is required during checkout.`,
-        {
-          parse_mode: 'Markdown',
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('➕ Add Catalog', 'cat_add')],
-            [Markup.button.callback('🔙 Back', 'nav:go:admin_main')],
-          ]),
-        }
-      );
-    }
-    // How many sub-catalogs each root has (one grouped query, not per-root)
-    const subCounts = await Catalog.aggregate([
-      { $match: { parentCategory: { $ne: null } } },
-      { $group: { _id: '$parentCategory', n: { $sum: 1 } } },
-    ]);
-    const subMap = new Map(subCounts.map((s) => [String(s._id), s.n]));
+    return sendCatalogList(ctx);
+  });
 
-    const rows = roots.map((c) => {
-      const subs = subMap.get(String(c._id)) || 0;
-      const meta = subs > 0 ? `${subs} sub${subs > 1 ? 's' : ''}` : `${c.checkoutFields.length} fields`;
-      return [
-        Markup.button.callback(`${c.isActive ? '✅' : '🔴'} ${c.emoji || '📁'} ${c.name} (${meta})`, `cat_view:${c._id}`),
-      ];
-    });
-    rows.push([Markup.button.callback('➕ Add Catalog', 'cat_add')]);
-    rows.push([Markup.button.callback('🔙 Back', 'nav:go:admin_main')]);
-    await ctx.reply(
-      `📂 *Catalogs (${roots.length} top-level)*\n\nSelect a category to manage.\n_Sub-categories appear inside each one._`,
-      { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
-    );
+  bot.action('cat_search', adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.catalogAction = 'search_categories';
+    return ctx.reply('🔎 Category name ရိုက်ထည့်ပါ။\n\n/cancel ဖြင့် ပြန်ထွက်နိုင်ပါတယ်။');
+  });
+
+  bot.action(/^cat_products:([a-f0-9]{24})$/i, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    return sendCategoryProducts(ctx, ctx.match[1]);
+  });
+
+  bot.action(/^cat_subcategories:([a-f0-9]{24})$/i, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    return sendCategorySubcategories(ctx, ctx.match[1]);
+  });
+
+  bot.action(/^cat_fields:([a-f0-9]{24})$/i, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    return sendCategoryFields(ctx, ctx.match[1]);
+  });
+
+  bot.action(/^cat_settings:([a-f0-9]{24})$/i, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    return sendCategorySettings(ctx, ctx.match[1]);
+  });
+
+  bot.action(/^cat_delete_confirm:([a-f0-9]{24})$/i, adminOnly(), async (ctx) => {
+    await ctx.answerCbQuery();
+    const catalog = await Catalog.findById(ctx.match[1]).lean();
+    if (!catalog) return ctx.reply('❌ Category not found.');
+    const [products, subs] = await Promise.all([
+      Product.countDocuments({ catalogId: catalog._id }),
+      Catalog.countDocuments({ parentCategory: catalog._id }),
+    ]);
+    return ctx.reply(`⚠️ DELETE CATEGORY?\n\n${catalog.emoji || '📁'} ${catalog.name}\n\n📦 Products: ${products}\n📁 Sub-categories: ${subs}\n\nThis action may affect related data.`, Markup.inlineKeyboard([
+      [Markup.button.callback('❌ Cancel', `cat_view:${catalog._id}`), Markup.button.callback('🗑️ Delete', `cat_del:${catalog._id}`)],
+    ]));
   });
 
   // ── View catalog ─────────────────────────────────────────────────────────────
@@ -735,6 +841,13 @@ module.exports = (bot) => {
       ctx.session.bulkProductsDraft = null;
       ctx.session.newCatalogParent = null;
       return ctx.reply('❌ Cancelled.');
+    }
+
+    // ── Search top-level categories ───────────────────────────────────────
+    if (action === 'search_categories') {
+      if (!text) return ctx.reply('Category name ရိုက်ထည့်ပါ။');
+      ctx.session.catalogAction = null;
+      return sendCatalogList(ctx, text);
     }
 
     // ── Set catalog/sub-category emoji ──────────────────────────────────
