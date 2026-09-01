@@ -827,10 +827,20 @@ module.exports = function registerUserManagement(bot) {
 
   bot.action('bans_unban_all', adminOnly(), async (ctx) => {
     await ctx.answerCbQuery('လုပ်နေပါပြီ...');
-    const result = await bulkUnbanUsers({ adminId: ctx.from.id });
-    ctx.session.bulkUnbanIds = [];
-    await ctx.reply(`✅ Banned user အားလုံးကို Unban လုပ်ပြီးပါပြီ။ (${result.count} ယောက်)`);
-    await sendBannedList(ctx, 1, false);
+    try {
+      const result = await bulkUnbanUsers({ adminId: ctx.from.id });
+      ctx.session.bulkUnbanIds = [];
+
+      // Refresh the same admin screen after the atomic bulk update. Creating a
+      // second list message made the old ban list look like the action failed.
+      // sendBannedList() now re-queries MongoDB, so an empty result renders the
+      // explicit “no banned users” state instead of stale rows.
+      await sendBannedList(ctx, 1, true);
+      await ctx.reply(`✅ Banned user အားလုံးကို Unban လုပ်ပြီးပါပြီ။ (${result.count} ယောက်)`).catch(() => {});
+    } catch (err) {
+      console.error('[UserManagement] bulk unban all failed:', err.message);
+      await ctx.reply(`❌ Unban All မအောင်မြင်ပါ။ ${err.message}`).catch(() => {});
+    }
   });
 
   bot.action('bans_bulk_cancel', adminOnly(), async (ctx) => {
