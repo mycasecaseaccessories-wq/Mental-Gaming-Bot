@@ -564,6 +564,7 @@ async function sendMonthlyRevenueReport(telegram) {
 
 let scheduledJobs = [];
 let backgroundTimers = [];
+let announcementTickInFlight = false;
 
 function startCronJobs(telegram) {
   if (scheduledJobs.length) {
@@ -625,11 +626,22 @@ function startCronJobs(telegram) {
   // remains the primary trigger, while this lightweight timer ensures a due
   // schedule is picked up after a missed minute, event-loop stall, or VPS time
   // boundary. claimSchedule() makes the two triggers safe against duplicates.
-  backgroundTimers.push(setInterval(() => {
-    require('./AnnouncementAutomationService').runDueSchedules(telegram).catch((err) => {
+  const runAnnouncementRecoveryTick = async () => {
+    if (announcementTickInFlight) return;
+    announcementTickInFlight = true;
+    try {
+      const result = await require('./AnnouncementAutomationService').runDueSchedules(telegram);
+      if (result.considered || result.completed || result.failed || result.skipped) {
+        console.log(`[CronService] 📅 Announcement recovery: ${JSON.stringify(result)}`);
+      }
+    } catch (err) {
       console.error('[CronService] ❌ Announcement recovery tick:', err.message);
-    });
-  }, 60_000));
+    } finally {
+      announcementTickInFlight = false;
+    }
+  };
+  runAnnouncementRecoveryTick();
+  backgroundTimers.push(setInterval(runAnnouncementRecoveryTick, 60_000));
 
   // 09:00 MMT = 02:30 UTC — premium account expiry reminders
   scheduledJobs.push(
@@ -664,6 +676,7 @@ function stopCronJobs() {
   backgroundTimers.forEach((timer) => clearInterval(timer));
   scheduledJobs = [];
   backgroundTimers = [];
+  announcementTickInFlight = false;
   console.log('[CronService] 🛑 All cron jobs stopped');
 }
 
