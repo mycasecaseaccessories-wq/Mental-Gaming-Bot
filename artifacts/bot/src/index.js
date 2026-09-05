@@ -373,17 +373,27 @@ async function bootstrap() {
   process.on('SIGTERM', () => { bot.stop('SIGTERM'); process.exit(0); });
 
   await bot.launch();
-  await registerBotCommands();
 
-  // Set the chat menu button to open the Mini App directly
-  await applyMiniAppMenuButton(bot.telegram);
+  // Start persisted schedules immediately after Telegram becomes ready. Do not
+  // place this after optional command/menu registration: if either setup call
+  // fails, bootstrapWithRetry() exits and recurring schedules never start.
+  const { startCronJobs } = require('./services/CronService');
+  startCronJobs(bot.telegram);
+  console.log('[CronService] ✅ Scheduler started after bot launch');
 
   // Global crash handler — must run AFTER launch so telegram client is ready
   setupGlobalErrorHandlers(bot.telegram);
 
-  // Cron jobs — daily archive, promo purge, screenshot audit, cache flush, backup
-  const { startCronJobs } = require('./services/CronService');
-  startCronJobs(bot.telegram);
+  // These are non-essential post-launch setup tasks. A Telegram API error here
+  // must not terminate the process or take down the recurring scheduler.
+  await registerBotCommands().catch((err) => {
+    console.error('[Bot] ⚠️ Command registration failed:', err.message);
+  });
+
+  // Set the chat menu button to open the Mini App directly
+  await applyMiniAppMenuButton(bot.telegram).catch((err) => {
+    console.error('[Bot] ⚠️ Mini App menu setup failed:', err.message);
+  });
 
   // Webhook event processor — polls every 30s for events written by api-server
   const { startWebhookProcessor } = require('./services/WebhookProcessor');
