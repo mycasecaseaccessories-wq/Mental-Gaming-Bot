@@ -23,7 +23,7 @@ const auditLogSchema = new mongoose.Schema(
       enum: [
         'User', 'Product', 'Order', 'Currency', 'System', 'Catalog',
           'Transaction', 'CheckIn', 'Promo', 'RewardItem', 'RedeemCode',
-        'Template', 'ChannelAutoPost', 'AccountProduct', 'Campaign', 'Game', 'GameConfig',
+        'Template', 'ChannelAutoPost', 'AccountProduct', 'Campaign', 'Referral', 'CustomerFeedback', 'Game', 'GameConfig',
       ],
       default: 'System',
     },

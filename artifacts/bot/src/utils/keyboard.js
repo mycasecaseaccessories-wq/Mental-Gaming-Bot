@@ -12,6 +12,7 @@ function mainMenuKeyboard(ctxOrLang, webAppConfig = null, outlineBotUsername = n
     [L('menu.rewards'),  L('menu.wallet')],
     [L('menu.orders'),   L('menu.referral')],
     [L('menu.promo'),    L('menu.help')],
+    ['💡 အကြံပြုစာ', '❤️ Feedback'],
   );
   // Keep the giveaway center as a top-level shortcut, directly above Settings.
   // It remains available even when no active giveaway is configured so the user
@@ -54,8 +55,8 @@ function adminSectionKeyboard(section, role = 'OWNER') {
   const r = role === 'STAFF' ? 'SUPPORT' : role;
   const sections = {
     orders: r === 'SUPPORT'
-      ? [['📦 Manage Orders', '🎫 Support Tickets']]
-      : [['📦 Manage Orders', '🎫 Support Tickets']],
+      ? [['📦 Manage Orders', '🎫 Support Tickets'], ['💬 Customer Feedback']]
+      : [['📦 Manage Orders', '🎫 Support Tickets'], ['💬 Customer Feedback']],
     store: [['🛍️ Manage Products', '🔐 Accounts'], ['🎮 Game News', '🔑 Outline VPN']],
     users: [['👥 Manage Users', '🪙 Coins & Tiers']],
     finance: [['💱 Manage Rates', '💳 Payment Gateways'], ['📈 Analytics']],
