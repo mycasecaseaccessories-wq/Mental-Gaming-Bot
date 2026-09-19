@@ -45,6 +45,7 @@ module.exports = {
         BOT_TOKEN: process.env.BOT_TOKEN,
         BOT_USERNAME: process.env.BOT_USERNAME,
         ADMIN_ID: process.env.ADMIN_ID,
+        MINI_APP_URL: process.env.MINI_APP_URL,
         MONGODB_URI: process.env.MONGODB_URI,
         AI_API_KEY: process.env.AI_API_KEY,
         SESSION_SECRET: process.env.SESSION_SECRET,
