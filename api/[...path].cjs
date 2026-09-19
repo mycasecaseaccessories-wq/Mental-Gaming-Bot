@@ -89610,3 +89610,6 @@ media-typer/index.js:
 safe-buffer/index.js:
   (*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
 */
+
+// Vercel expects the CommonJS module itself to be the request handler.
+module.exports = handler;
