@@ -64,12 +64,13 @@ const DEFAULT_MINI_APP_URL = 'https://mental-gaming-store.vercel.app/';
 function resolveWebAppUrl(status) {
   // DB override takes highest priority
   if (status?.miniAppButtonUrl) return status.miniAppButtonUrl;
+  // Explicit production URL must override any Replit workflow domain.
+  const explicit = process.env.MINI_APP_URL;
+  if (explicit) return explicit;
   // Only use env-based URL if it's a production .replit.app domain
   const domains = process.env.REPLIT_DOMAINS || '';
   const prodDomain = domains.split(',').map(d => d.trim()).find(d => d.endsWith('.replit.app'));
   if (prodDomain) return `https://${prodDomain}/`;
-  const explicit = process.env.MINI_APP_URL;
-  if (explicit) return explicit;
   return DEFAULT_MINI_APP_URL;
 }
 
