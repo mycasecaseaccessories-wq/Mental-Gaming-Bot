@@ -59,6 +59,8 @@ function buildInviteNotice(referrerName, welcomeKS, welcomeCoins) {
 
 // ── Build webAppConfig from SystemStatus + env ────────────────────────────────
 
+const DEFAULT_MINI_APP_URL = 'https://mental-gaming-store.vercel.app/';
+
 function resolveWebAppUrl(status) {
   // DB override takes highest priority
   if (status?.miniAppButtonUrl) return status.miniAppButtonUrl;
@@ -68,7 +70,7 @@ function resolveWebAppUrl(status) {
   if (prodDomain) return `https://${prodDomain}/`;
   const explicit = process.env.MINI_APP_URL;
   if (explicit) return explicit;
-  return null;
+  return DEFAULT_MINI_APP_URL;
 }
 
 function buildWebAppConfig(status) {

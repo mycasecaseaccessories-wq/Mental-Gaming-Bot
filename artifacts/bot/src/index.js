@@ -147,7 +147,7 @@ function loadCommands(bot) {
   bot.help = originalHelp;
 }
 
-async function registerBotCommands() {
+async function registerCommands() {
   const menu = [
     // ── User ──────────────────────────────────────────────────────────────────
     { command: 'start',         description: '🏠 Main Menu' },
@@ -272,12 +272,14 @@ async function registerBotCommands() {
   console.log(`[Bot] ✅ Command menu registered (${menu.length} commands)`);
 }
 
+const DEFAULT_MINI_APP_URL = 'https://mental-gaming-store.vercel.app/';
+
 function getMiniAppUrl() {
   if (process.env.MINI_APP_URL) return process.env.MINI_APP_URL;
   const domains = process.env.REPLIT_DOMAINS;
   if (domains) return `https://${domains.split(',')[0].trim()}/`;
   if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}/`;
-  return null;
+  return DEFAULT_MINI_APP_URL;
 }
 
 async function applyMiniAppMenuButton(telegram) {
