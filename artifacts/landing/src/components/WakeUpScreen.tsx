@@ -15,7 +15,8 @@ export default function WakeUpScreen({ onReady }: { onReady: () => void }) {
 
   useEffect(() => {
     let cancelled = false;
-    const apiBase = (import.meta.env.VITE_API_URL ?? "") + "/api/healthz";
+    const apiOrigin = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+    const apiBase = `${apiOrigin}/api/healthz`;
 
     async function ping() {
       try {

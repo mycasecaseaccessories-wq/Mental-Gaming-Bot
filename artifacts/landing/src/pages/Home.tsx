@@ -4,7 +4,7 @@ import { Sparkles, Wallet, ArrowRight, Flame, ChevronRight, Gamepad2, TrendingUp
 import { Layout } from "@/components/Layout";
 import { Glass } from "@/components/Glass";
 import { Skeleton } from "@/components/EmptyState";
-import { api, type Me, type ShopResponse, type Product, type Banner, type PopularResponse, type NotificationsResponse } from "@/lib/api";
+import { api, ApiError, type Me, type ShopResponse, type Product, type Banner, type PopularResponse, type NotificationsResponse } from "@/lib/api";
 import { ks, coin } from "@/lib/format";
 import { haptic } from "@/lib/telegram";
 import { useState, useEffect } from "react";
@@ -113,6 +113,23 @@ export default function HomePage() {
                 </Link>
               </div>
             </>
+          ) : meQ.isError ? (
+            <div className="space-y-2 text-sm text-white/80">
+              <div>
+                {meQ.error instanceof ApiError && meQ.error.status === 401
+                  ? "Please open this Mini App from the Telegram bot."
+                  : meQ.error instanceof ApiError && meQ.error.status === 503
+                    ? "The store server is not configured yet."
+                    : "Could not connect to the store server."}
+              </div>
+              <button
+                type="button"
+                onClick={() => void meQ.refetch()}
+                className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-medium hover:bg-white/25"
+              >
+                Retry
+              </button>
+            </div>
           ) : (
             <div className="text-sm text-white/80">Connecting to Telegram…</div>
           )}
