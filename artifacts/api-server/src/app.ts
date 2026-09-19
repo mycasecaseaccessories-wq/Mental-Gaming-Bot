@@ -38,6 +38,10 @@ const allowedOrigins = (process.env["CORS_ALLOWED_ORIGINS"] || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const productionStoreOrigin = "https://mental-gaming-store.vercel.app";
+if (!allowedOrigins.includes(productionStoreOrigin)) {
+  allowedOrigins.push(productionStoreOrigin);
+}
 
 app.use(
   cors({
