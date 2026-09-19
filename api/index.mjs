@@ -20751,7 +20751,7 @@ var require_route = __commonJS({
         sync = 0;
       }
     };
-    Route.prototype.all = function all(handler) {
+    Route.prototype.all = function all(handler2) {
       const callbacks = flatten.call(slice.call(arguments), Infinity);
       if (callbacks.length === 0) {
         throw new TypeError("argument handler is required");
@@ -20769,7 +20769,7 @@ var require_route = __commonJS({
       return this;
     };
     methods.forEach(function(method) {
-      Route.prototype[method] = function(handler) {
+      Route.prototype[method] = function(handler2) {
         const callbacks = flatten.call(slice.call(arguments), Infinity);
         if (callbacks.length === 0) {
           throw new TypeError("argument handler is required");
@@ -20972,17 +20972,17 @@ var require_router = __commonJS({
         }
       }
     };
-    Router13.prototype.use = function use(handler) {
+    Router13.prototype.use = function use(handler2) {
       let offset = 0;
       let path = "/";
-      if (typeof handler !== "function") {
-        let arg = handler;
+      if (typeof handler2 !== "function") {
+        let arg = handler2;
         while (Array.isArray(arg) && arg.length !== 0) {
           arg = arg[0];
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path = handler;
+          path = handler2;
         }
       }
       const callbacks = flatten.call(slice.call(arguments, offset), Infinity);
@@ -89290,9 +89290,16 @@ app.use((err, _req, res, _next) => {
 var app_default = app;
 
 // api/index.ts
-var index_default = app_default;
+function handler(req, res) {
+  const url = typeof req.url === "string" ? req.url : "/";
+  const [pathname, query = ""] = url.split("?", 2);
+  if (!pathname.startsWith("/api")) {
+    req.url = `/api${pathname === "/" ? "" : pathname}${query ? `?${query}` : ""}`;
+  }
+  return app_default(req, res);
+}
 export {
-  index_default as default
+  handler as default
 };
 /*! Bundled license information:
 
