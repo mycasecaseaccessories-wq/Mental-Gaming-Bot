@@ -3,6 +3,11 @@ import { initDataString } from "./telegram";
 const API_ORIGIN = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 const API_BASE = `${API_ORIGIN}/api/store`;
 
+function websiteLoginData(): string {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem("telegram-login-data") || "";
+}
+
 export class ApiError extends Error {
   status: number;
   data: unknown;
@@ -24,6 +29,8 @@ async function request<T>(
   }
   const initData = initDataString();
   if (initData) headers.set("X-Telegram-Init-Data", initData);
+  const loginData = websiteLoginData();
+  if (!initData && loginData) headers.set("X-Telegram-Login", loginData);
 
   // Dev-mode fallback when running in plain browser preview outside Telegram.
   if (!initData && import.meta.env.DEV) {
@@ -53,6 +60,8 @@ async function download(path: string, fallbackName: string): Promise<void> {
   const headers = new Headers();
   const initData = initDataString();
   if (initData) headers.set("X-Telegram-Init-Data", initData);
+  const loginData = websiteLoginData();
+  if (!initData && loginData) headers.set("X-Telegram-Login", loginData);
   if (!initData && import.meta.env.DEV) {
     const devId = localStorage.getItem("dev-telegram-id");
     const devName = localStorage.getItem("dev-telegram-name");

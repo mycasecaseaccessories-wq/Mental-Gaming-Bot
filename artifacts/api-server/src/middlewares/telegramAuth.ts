@@ -72,6 +72,39 @@ function verifyInitData(initData: string, botToken: string): TelegramUser | null
   }
 }
 
+function verifyLoginWidgetData(raw: string, botToken: string): TelegramUser | null {
+  try {
+    const payload = JSON.parse(raw) as Record<string, unknown>;
+    const hash = typeof payload.hash === "string" ? payload.hash : "";
+    const authDate = Number(payload.auth_date || 0);
+    const id = Number(payload.id || 0);
+    if (!hash || !authDate || !Number.isFinite(id) || id <= 0) return null;
+    if (Math.floor(Date.now() / 1000) - authDate > 60 * 60 * 24) return null;
+
+    const dataCheckString = Object.entries(payload)
+      .filter(([key, value]) => key !== "hash" && value !== undefined && value !== null)
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .sort()
+      .join("\n");
+    const secretKey = crypto.createHash("sha256").update(botToken).digest();
+    const calculated = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+    const expected = Buffer.from(hash, "hex");
+    const actual = Buffer.from(calculated, "hex");
+    if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) return null;
+
+    return {
+      id,
+      username: typeof payload.username === "string" ? payload.username : undefined,
+      first_name: typeof payload.first_name === "string" ? payload.first_name : undefined,
+      last_name: typeof payload.last_name === "string" ? payload.last_name : undefined,
+      photo_url: typeof payload.photo_url === "string" ? payload.photo_url : undefined,
+      language_code: typeof payload.language_code === "string" ? payload.language_code : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function telegramAuth(
   req: Request,
   res: Response,
@@ -88,11 +121,15 @@ export async function telegramAuth(
   const initData =
     (req.header("x-telegram-init-data") as string | undefined) ||
     "";
+  const loginWidgetData = (req.header("x-telegram-login") as string | undefined) || "";
 
   let tgUser: TelegramUser | null = null;
 
   if (initData) {
     tgUser = verifyInitData(initData, botToken);
+  }
+  if (!tgUser && loginWidgetData) {
+    tgUser = verifyLoginWidgetData(loginWidgetData, botToken);
   }
 
   // Dev fallback: gated behind explicit ALLOW_DEV_TELEGRAM_AUTH=true env var

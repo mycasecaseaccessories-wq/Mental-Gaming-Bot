@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { bootTelegram } from "@/lib/telegram";
+import { bootTelegram, getTg } from "@/lib/telegram";
 import WakeUpScreen from "@/components/WakeUpScreen";
+import WebsiteLogin from "@/components/WebsiteLogin";
 import Home from "@/pages/Home";
 import Shop from "@/pages/Shop";
 import ProductDetail from "@/pages/ProductDetail";
@@ -76,7 +77,11 @@ function Routes() {
 
 export default function App() {
   const [apiReady, setApiReady] = useState(false);
+  const [websiteAuthenticated, setWebsiteAuthenticated] = useState(() =>
+    typeof window !== "undefined" && Boolean(window.localStorage.getItem("telegram-login-data"))
+  );
   const handleReady = useCallback(() => setApiReady(true), []);
+  const isTelegramWebApp = Boolean(getTg()?.initData);
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
@@ -86,7 +91,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       {!apiReady && <WakeUpScreen onReady={handleReady} />}
-      {apiReady && (
+      {apiReady && !isTelegramWebApp && !websiteAuthenticated && (
+        <WebsiteLogin onAuthenticated={() => setWebsiteAuthenticated(true)} />
+      )}
+      {apiReady && (isTelegramWebApp || websiteAuthenticated) && (
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Routes />
         </WouterRouter>
