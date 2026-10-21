@@ -15,7 +15,7 @@ export function BottomNav() {
   const [loc] = useLocation();
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2"
+      className="fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2 md:hidden"
       data-testid="bottom-nav"
     >
       <div className="glass-strong rounded-3xl mx-auto max-w-md px-2 py-1.5 flex items-center justify-between">

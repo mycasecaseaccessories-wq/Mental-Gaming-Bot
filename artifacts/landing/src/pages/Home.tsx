@@ -1,366 +1,98 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { Sparkles, Wallet, ArrowRight, Flame, ChevronRight, Gamepad2, TrendingUp, Clock, Bell } from "lucide-react";
+import { ArrowRight, ChevronRight, Clock3, Search, ShieldCheck, ShoppingBag, Sparkles, WalletCards, Zap } from "lucide-react";
 import { Layout } from "@/components/Layout";
-import { Glass } from "@/components/Glass";
 import { Skeleton } from "@/components/EmptyState";
-import { api, ApiError, type Me, type ShopResponse, type Product, type Banner, type PopularResponse, type NotificationsResponse } from "@/lib/api";
-import { ks, coin } from "@/lib/format";
-import { haptic } from "@/lib/telegram";
-import { useState, useEffect } from "react";
+import { api, type Banner, type Product, type ShopResponse } from "@/lib/api";
+import { ks } from "@/lib/format";
 
-const TIER_EMOJI: Record<string, string> = {
-  Bronze: "🥉", Silver: "🥈", Gold: "🥇", Platinum: "🪙", Diamond: "💎",
+const CATEGORY_ICONS: Record<string, string> = {
+  "Mobile Legends": "⚔️",
+  "PUBG Mobile": "🎯",
+  "Free Fire": "🔥",
+  "Genshin Impact": "✨",
+  Valorant: "💥",
+  Steam: "🎮",
+  Google: "▶️",
+  Apple: "",
 };
 
+function categoryIcon(name: string) {
+  const match = Object.keys(CATEGORY_ICONS).find((key) => name.toLowerCase().includes(key.toLowerCase()));
+  return match ? CATEGORY_ICONS[match] : "🎮";
+}
+
 export default function HomePage() {
-  const meQ = useQuery({ queryKey: ["me"], queryFn: () => api.get<Me>("/me") });
-  const flashQ = useQuery({
-    queryKey: ["flashsale"],
-    queryFn: () => api.get<{ products: Product[] }>("/flashsale"),
-  });
+  const [, navigate] = useLocation();
+  const [search, setSearch] = useState("");
   const shopQ = useQuery({
     queryKey: ["shop"],
     queryFn: () => api.get<ShopResponse>("/products"),
+    staleTime: 60_000,
   });
   const bannersQ = useQuery({
     queryKey: ["banners"],
     queryFn: () => api.get<{ banners: Banner[] }>("/banners"),
     staleTime: 60_000,
   });
-  const popularQ = useQuery({
-    queryKey: ["popular"],
-    queryFn: () => api.get<PopularResponse>("/popular"),
-    staleTime: 120_000,
-  });
-  const notifQ = useQuery({
-    queryKey: ["notifications"],
-    queryFn: () => api.get<NotificationsResponse>("/notifications"),
-    staleTime: 30_000,
-  });
 
-  const [, nav] = useLocation();
-  const unread = notifQ.data?.unreadCount ?? 0;
+  const products = shopQ.data?.products ?? [];
+  const categories = shopQ.data?.categories ?? [];
+  const visibleProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => `${p.name} ${p.category} ${p.region}`.toLowerCase().includes(q));
+  }, [products, search]);
+  const featured = (bannersQ.data?.banners ?? [])[0];
 
   return (
-    <Layout showNav title="Mental Gaming">
-      <div className="space-y-5 pt-1">
-        {/* Notification bell */}
-        <div className="flex justify-end -mb-3">
-          <button
-            onClick={() => { haptic("light"); nav("/notifications"); }}
-            className="pressable relative flex items-center gap-1 text-xs text-muted-foreground px-2 py-1 rounded-lg"
-          >
-            <Bell className="h-4 w-4" />
-            {unread > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary text-[9px] font-bold flex items-center justify-center text-white">
-                {unread > 9 ? "9+" : unread}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Promotion Banners */}
-        {bannersQ.data && bannersQ.data.banners.length > 0 && (
-          <BannerCarousel banners={bannersQ.data.banners} />
-        )}
-
-        {/* Wallet card */}
-        <Glass variant="blue" className="p-5" data-testid="card-wallet">
-          {meQ.isLoading ? (
-            <Skeleton className="h-24" />
-          ) : meQ.data ? (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-white/70">
-                    Hi, {meQ.data.firstName || "there"}
-                  </div>
-                  <div className="text-3xl font-bold mt-1" data-testid="text-balance-ks">
-                    {ks(meQ.data.balanceKS)}
-                  </div>
-                  <div className="text-sm text-white/70 mt-0.5" data-testid="text-balance-coin">
-                    + {coin(meQ.data.balanceCoin)}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] uppercase tracking-wider text-white/60">Tier</div>
-                  <div className="text-base font-semibold">
-                    {TIER_EMOJI[meQ.data.activeTier ?? meQ.data.tier] ?? ""}{" "}
-                    {meQ.data.activeTier ?? meQ.data.tier}
-                  </div>
-                  {meQ.data.tierDiscountPct > 0 && (
-                    <div className="text-xs text-white/70 mt-0.5">
-                      −{meQ.data.tierDiscountPct}% all orders
-                    </div>
-                  )}
-                </div>
+    <Layout showNav={false}>
+      <div className="mx-auto max-w-6xl space-y-8 pb-14 pt-5 md:pt-9">
+        <section className="grid gap-5 lg:grid-cols-[1.45fr_.8fr]">
+          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 p-7 shadow-2xl shadow-blue-950/30 md:p-10">
+            <div className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/15 blur-3xl" />
+            <div className="relative max-w-xl">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90">
+                <Zap className="h-3.5 w-3.5" /> Fast digital delivery
               </div>
-              <div className="grid grid-cols-2 gap-2 mt-4">
-                <Link
-                  href="/topup"
-                  className="pressable glass-strong rounded-xl py-3 text-center text-sm font-medium flex items-center justify-center gap-1.5"
-                  data-testid="button-topup"
-                >
-                  <Wallet className="h-4 w-4" /> Top Up
-                </Link>
-                <Link
-                  href="/shop"
-                  className="pressable bg-white text-black rounded-xl py-3 text-center text-sm font-semibold flex items-center justify-center gap-1.5"
-                  data-testid="button-shop-now"
-                >
-                  <Sparkles className="h-4 w-4" /> Shop Now
-                </Link>
-              </div>
-            </>
-          ) : meQ.isError ? (
-            <div className="space-y-2 text-sm text-white/80">
-              <div>
-                {meQ.error instanceof ApiError && meQ.error.status === 401
-                  ? "Please open this Mini App from the Telegram bot."
-                  : meQ.error instanceof ApiError && meQ.error.status === 503
-                    ? "The store server is not configured yet."
-                    : "Could not connect to the store server."}
-              </div>
-              <button
-                type="button"
-                onClick={() => void meQ.refetch()}
-                className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-medium hover:bg-white/25"
-              >
-                Retry
+              <h1 className="text-3xl font-black tracking-tight text-white md:text-5xl">Top up. Play more. Pay less.</h1>
+              <p className="mt-4 max-w-md text-sm leading-6 text-blue-100 md:text-base">Game credits, gift cards and digital products delivered quickly by Mental Gaming Store.</p>
+              <button onClick={() => navigate("/shop")} className="pressable mt-7 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-blue-700 shadow-lg shadow-blue-950/20">
+                Browse products <ArrowRight className="h-4 w-4" />
               </button>
             </div>
-          ) : (
-            <div className="text-sm text-white/80">Connecting to Telegram…</div>
-          )}
-        </Glass>
-
-        {/* Play & Earn shortcuts */}
-        <section data-testid="section-play">
-          <div className="flex items-center justify-between mb-2 px-1">
-            <h2 className="text-sm font-semibold flex items-center gap-1.5">
-              <Gamepad2 className="h-4 w-4 text-primary" /> Play & Earn
-            </h2>
-            <Link href="/play" className="text-xs text-primary flex items-center">
-              All <ChevronRight className="h-3 w-3" />
-            </Link>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { href: "/spin",     emoji: "🎰", label: "Spin" },
-              { href: "/checkin",  emoji: "📅", label: "Check-In" },
-              { href: "/referral", emoji: "🤝", label: "Referral" },
-            ].map((item) => (
-              <Link key={item.href} href={item.href}>
-                <Glass className="pressable p-3 flex flex-col items-center gap-1 text-center">
-                  <span className="text-2xl">{item.emoji}</span>
-                  <span className="text-xs font-medium">{item.label}</span>
-                </Glass>
-              </Link>
-            ))}
+          <div className="rounded-[2rem] border border-white/10 bg-white/[.045] p-6">
+            <div className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="h-5 w-5 text-emerald-400" /> Safe and simple</div>
+            <div className="mt-6 space-y-5 text-sm text-muted-foreground">
+              <Feature icon={<Clock3 />} title="Quick delivery" text="Most products are delivered within minutes." />
+              <Feature icon={<WalletCards />} title="Easy top up" text="Add balance and checkout without friction." />
+              <Feature icon={<ShoppingBag />} title="Order history" text="Track your purchases from one place." />
+            </div>
           </div>
         </section>
 
-        {/* Flash sale */}
-        {flashQ.data && flashQ.data.products.length > 0 && (
-          <section data-testid="section-flashsale">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h2 className="text-sm font-semibold flex items-center gap-1.5">
-                <Flame className="h-4 w-4 text-orange-400" /> Flash Sale
-              </h2>
-              <Link href="/shop" className="text-xs text-primary flex items-center">
-                See all <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-1">
-              {flashQ.data.products.map((p) => (
-                <Link key={p.id} href={`/product/${p.id}`} className="shrink-0 w-40">
-                  <ProductMiniCard p={p} />
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
+        {featured && <FeaturedBanner banner={featured} onClick={() => navigate(featured.targetType === "product" && featured.targetId ? `/product/${featured.targetId}` : "/shop")} />}
 
-        {/* Popular Products */}
-        {popularQ.data && popularQ.data.popular.length > 0 && (
-          <section data-testid="section-popular">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h2 className="text-sm font-semibold flex items-center gap-1.5">
-                <TrendingUp className="h-4 w-4 text-green-400" /> Popular
-              </h2>
-              <Link href="/shop" className="text-xs text-primary flex items-center">
-                See all <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-1">
-              {popularQ.data.popular.slice(0, 6).map((p) => (
-                <Link key={p.id} href={`/product/${p.id}`} className="shrink-0 w-36">
-                  <ProductMiniCard p={p} />
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
+        <section className="space-y-3">
+          <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[.2em] text-primary">Explore</p><h2 className="mt-1 text-xl font-bold">Shop by category</h2></div><Link href="/shop" className="text-sm text-muted-foreground hover:text-white">View all <ChevronRight className="inline h-4 w-4" /></Link></div>
+          {shopQ.isLoading ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">{categories.slice(0, 12).map((cat) => <Link key={cat.name} href={`/shop?category=${encodeURIComponent(cat.name)}`} className="pressable rounded-2xl border border-white/10 bg-white/[.045] p-4 hover:border-primary/50 hover:bg-primary/10"><div className="text-2xl">{categoryIcon(cat.name)}</div><div className="mt-3 truncate text-sm font-semibold">{cat.name}</div><div className="mt-1 text-xs text-muted-foreground">{cat.count} items</div></Link>)}</div>}
+        </section>
 
-        {/* Recently Purchased */}
-        {popularQ.data && popularQ.data.recent.length > 0 && (
-          <section data-testid="section-recent">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h2 className="text-sm font-semibold flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-blue-400" /> Recently Purchased
-              </h2>
-            </div>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-1">
-              {popularQ.data.recent.slice(0, 5).map((p) => (
-                <Link key={p.id} href={`/product/${p.id}`} className="shrink-0 w-36">
-                  <ProductMiniCard p={p} />
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Categories */}
-        {shopQ.data && shopQ.data.categories.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h2 className="text-sm font-semibold">Categories</h2>
-              <Link href="/shop" className="text-xs text-primary flex items-center">
-                Browse <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {shopQ.data.categories.slice(0, 6).map((c) => (
-                <Link
-                  key={c.name}
-                  href={`/shop?category=${encodeURIComponent(c.name)}`}
-                  data-testid={`category-${c.name}`}
-                >
-                  <Glass className="pressable p-4 flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-sm">{c.name}</div>
-                      <div className="text-xs text-muted-foreground">{c.count} items</div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </Glass>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {shopQ.isLoading && (
-          <div className="grid grid-cols-2 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-20" />
-            ))}
-          </div>
-        )}
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.2em] text-primary">Storefront</p><h2 className="mt-1 text-xl font-bold">Popular products</h2></div><div className="flex w-full items-center gap-2 rounded-xl border border-white/10 bg-white/[.045] px-3 py-2 sm:max-w-xs"><Search className="h-4 w-4 text-muted-foreground" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" /></div></div>
+          {shopQ.isLoading ? <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"><ProductSkeleton /><ProductSkeleton /><ProductSkeleton /><ProductSkeleton /></div> : visibleProducts.length === 0 ? <div className="rounded-2xl border border-dashed border-white/15 py-14 text-center text-sm text-muted-foreground">No products found. Try another search.</div> : <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">{visibleProducts.slice(0, 12).map((product) => <ProductCard key={product.id} product={product} />)}</div>}
+        </section>
       </div>
     </Layout>
   );
 }
 
-// ── Banner Carousel ────────────────────────────────────────────────────────────
+function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) { return <div className="flex gap-3"><div className="rounded-xl bg-primary/15 p-2 text-primary">{icon}</div><div><div className="font-semibold text-foreground">{title}</div><div className="mt-1 text-xs leading-5">{text}</div></div></div>; }
 
-function BannerCarousel({ banners }: { banners: Banner[] }) {
-  const [active, setActive] = useState(0);
-  const [, nav] = useLocation();
+function FeaturedBanner({ banner, onClick }: { banner: Banner; onClick: () => void }) { return <button onClick={onClick} className="pressable relative h-44 w-full overflow-hidden rounded-[1.75rem] border border-white/10 text-left md:h-56" style={{ background: banner.imageUrl ? `url(${banner.imageUrl}) center/cover` : "linear-gradient(110deg,#172554,#312e81)" }}><div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/35 to-transparent" /><div className="absolute bottom-6 left-6 max-w-lg md:left-8"><div className="text-xs font-semibold uppercase tracking-[.18em] text-blue-200">Special offer</div><div className="mt-2 text-xl font-bold text-white md:text-2xl">{banner.title}</div>{banner.subtitle && <div className="mt-1 text-sm text-white/75">{banner.subtitle}</div>}</div></button>; }
 
-  useEffect(() => {
-    if (banners.length <= 1) return;
-    const id = setInterval(() => setActive((a) => (a + 1) % banners.length), 4000);
-    return () => clearInterval(id);
-  }, [banners.length]);
+function ProductCard({ product }: { product: Product }) { return <Link href={`/product/${product.id}`} className="pressable group rounded-2xl border border-white/10 bg-white/[.045] p-3 hover:-translate-y-0.5 hover:border-primary/50"><div className="relative aspect-square overflow-hidden rounded-xl bg-black/25">{product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center text-4xl">🎮</div>}{product.onSale && <span className="absolute left-2 top-2 rounded-md bg-rose-500 px-2 py-1 text-[10px] font-bold">SALE</span>}</div><div className="mt-3 line-clamp-2 min-h-10 text-sm font-semibold">{product.name}</div><div className="mt-2 flex items-baseline gap-2"><span className="font-bold text-primary">{ks(product.effectivePrice)}</span>{product.onSale && <span className="text-xs text-muted-foreground line-through">{ks(product.price)}</span>}</div><div className="mt-1 text-xs text-muted-foreground">{product.region || "Global"} · {product.inStock ? "Available" : "Out of stock"}</div></Link>; }
 
-  const b = banners[active];
-  if (!b) return null;
-
-  function handleBannerClick() {
-    haptic("light");
-    if (!b) return;
-    if (b.targetType === "product" && b.targetId) nav(`/product/${b.targetId}`);
-    else if (b.targetType === "category" && b.targetId)
-      nav(`/shop?category=${encodeURIComponent(b.targetId)}`);
-    else if (b.targetType === "shop") nav("/shop");
-    else if (b.targetType === "url" && b.targetId) window.open(b.targetId, "_blank");
-  }
-
-  return (
-    <div className="relative">
-      <div
-        className="pressable relative h-36 rounded-2xl overflow-hidden cursor-pointer"
-        style={{
-          background: b.imageUrl
-            ? `url(${b.imageUrl}) center/cover no-repeat`
-            : "linear-gradient(135deg, #1e3a5f 0%, #0f2240 100%)",
-        }}
-        onClick={handleBannerClick}
-      >
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 p-4">
-          <div className="text-white font-bold text-sm leading-tight">{b.title}</div>
-          {b.subtitle && (
-            <div className="text-white/80 text-xs mt-0.5 line-clamp-1">{b.subtitle}</div>
-          )}
-          {b.buttonText && (
-            <div className="mt-2 inline-flex items-center gap-1 text-xs bg-white text-black rounded-full px-3 py-1 font-semibold">
-              {b.buttonText} <ChevronRight className="h-3 w-3" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {banners.length > 1 && (
-        <div className="flex justify-center gap-1.5 mt-2">
-          {banners.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setActive(i)}
-              className={`h-1.5 rounded-full transition-all ${
-                i === active ? "w-4 bg-primary" : "w-1.5 bg-white/30"
-              }`}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Product Mini Card ──────────────────────────────────────────────────────────
-
-function ProductMiniCard({ p }: { p: Product }) {
-  const statusLabel =
-    p.status === "out_of_stock" ? "Sold Out" : p.status === "coming_soon" ? "Soon" : null;
-  return (
-    <Glass className="pressable p-3" data-testid={`mini-product-${p.id}`}>
-      <div className="aspect-square rounded-xl bg-white/5 mb-2 overflow-hidden flex items-center justify-center text-2xl relative">
-        {p.imageUrl ? (
-          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-        ) : (
-          <span>🎮</span>
-        )}
-        {statusLabel && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-            <span className="text-[10px] font-bold text-white/80">{statusLabel}</span>
-          </div>
-        )}
-      </div>
-      <div className="text-xs font-medium truncate">{p.name}</div>
-      <div className="mt-1 flex items-baseline gap-1">
-        <span
-          className={`text-sm font-bold ${
-            p.status === "out_of_stock" ? "text-muted-foreground" : ""
-          }`}
-        >
-          {p.status === "coming_soon" ? "Coming Soon" : ks(p.effectivePrice)}
-        </span>
-        {p.onSale && p.status === "active" && (
-          <span className="text-[10px] line-through text-muted-foreground">{ks(p.price)}</span>
-        )}
-      </div>
-    </Glass>
-  );
-}
+function ProductSkeleton() { return <div className="space-y-3"><Skeleton className="aspect-square" /><Skeleton className="h-4" /><Skeleton className="h-4 w-2/3" /></div>; }
