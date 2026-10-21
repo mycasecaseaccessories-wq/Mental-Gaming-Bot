@@ -67,6 +67,25 @@ interface OrderDoc {
   timestamp: Date;
 }
 
+interface ProductAdminDoc {
+  _id: ObjectId;
+  name: string;
+  category: string;
+  region: string;
+  productType: "DirectTopup" | "DigitalCode";
+  finalPrice: number;
+  flashSalePrice?: number | null;
+  flashSaleStart?: Date | null;
+  flashSaleEnd?: Date | null;
+  stockCount: number;
+  isActive: boolean;
+  status?: "active" | "out_of_stock" | "coming_soon" | "hidden";
+  imageUrl?: string | null;
+  description?: string;
+  catalogId?: ObjectId | null;
+  sortOrder?: number;
+}
+
 // ── Admin auth middleware ─────────────────────────────────────────────────────
 
 async function adminAuth(req: Request, res: Response, next: NextFunction) {
@@ -267,6 +286,94 @@ router.patch("/admin/orders/:id", telegramAuth, adminAuth, async (req, res) => {
     res.json({ ok: true, status });
   } catch (err) {
     logger.error({ err }, "admin order patch error");
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// GET /store/admin/products?search=&page=1
+router.get("/admin/products", telegramAuth, adminAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(String(req.query["page"] ?? "1")));
+    const limit = 24;
+    const search = String(req.query["search"] ?? "").trim();
+    const filter = search
+      ? { $or: [{ name: { $regex: search, $options: "i" } }, { category: { $regex: search, $options: "i" } }] }
+      : {};
+    const products = await getCollection<ProductAdminDoc>("products");
+    const [docs, total] = await Promise.all([
+      products.find(filter as never).sort({ sortOrder: 1, name: 1 }).skip((page - 1) * limit).limit(limit).toArray(),
+      products.countDocuments(filter as never),
+    ]);
+    res.json({
+      items: docs.map((p) => ({
+        id: p._id.toString(), name: p.name, category: p.category, region: p.region,
+        productType: p.productType, finalPrice: p.finalPrice, flashSalePrice: p.flashSalePrice ?? null,
+        stockCount: p.stockCount, isActive: p.isActive, status: p.status ?? (p.isActive ? "active" : "hidden"),
+        imageUrl: p.imageUrl ?? null, description: p.description ?? "", sortOrder: p.sortOrder ?? 0,
+      })),
+      total, page, pages: Math.max(1, Math.ceil(total / limit)),
+    });
+  } catch (err) {
+    logger.error({ err }, "admin products list error");
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// POST /store/admin/products
+router.post("/admin/products", telegramAuth, adminAuth, async (req, res) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const name = String(body["name"] ?? "").trim();
+    const category = String(body["category"] ?? "").trim();
+    const finalPrice = Number(body["finalPrice"]);
+    if (!name || !category || !Number.isFinite(finalPrice) || finalPrice < 0) {
+      res.status(400).json({ error: "Name, category and valid price are required" });
+      return;
+    }
+    const doc = {
+      name, category, region: String(body["region"] ?? "Global"),
+      productType: body["productType"] === "DigitalCode" ? "DigitalCode" : "DirectTopup",
+      finalPrice, flashSalePrice: body["flashSalePrice"] ? Number(body["flashSalePrice"]) : null,
+      flashSaleStart: null, flashSaleEnd: null,
+      stockCount: Number.isFinite(Number(body["stockCount"])) ? Number(body["stockCount"]) : -1,
+      isActive: body["isActive"] !== false,
+      status: (["active", "out_of_stock", "coming_soon", "hidden"] as const).includes(body["status"] as never)
+        ? body["status"] as ProductAdminDoc["status"]
+        : "active",
+      imageUrl: String(body["imageUrl"] ?? "").trim() || null,
+      description: String(body["description"] ?? ""), sortOrder: Number(body["sortOrder"] ?? 0),
+    } satisfies Omit<ProductAdminDoc, "_id">;
+    const products = await getCollection<ProductAdminDoc>("products");
+    const result = await products.insertOne(doc as ProductAdminDoc);
+    res.status(201).json({ ok: true, id: result.insertedId.toString() });
+  } catch (err) {
+    logger.error({ err }, "admin product create error");
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// PATCH /store/admin/products/:id
+router.patch("/admin/products/:id", telegramAuth, adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params["id"]);
+    if (!ObjectId.isValid(id)) { res.status(400).json({ error: "Invalid product id" }); return; }
+    const body = req.body as Record<string, unknown>;
+    const update: Record<string, unknown> = {};
+    for (const key of ["name", "category", "region", "productType", "imageUrl", "description", "status"]) {
+      if (body[key] !== undefined) update[key] = typeof body[key] === "string" ? String(body[key]).trim() : body[key];
+    }
+    for (const key of ["finalPrice", "flashSalePrice", "stockCount", "sortOrder"]) {
+      if (body[key] !== undefined && Number.isFinite(Number(body[key]))) update[key] = Number(body[key]);
+    }
+    if (body["isActive"] !== undefined) update.isActive = Boolean(body["isActive"]);
+    if (update.status === "hidden") update.isActive = false;
+    if (update.status === "active") update.isActive = true;
+    const products = await getCollection<ProductAdminDoc>("products");
+    const result = await products.updateOne({ _id: new ObjectId(id) }, { $set: update });
+    if (!result.matchedCount) { res.status(404).json({ error: "Product not found" }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "admin product update error");
     res.status(500).json({ error: "Internal error" });
   }
 });

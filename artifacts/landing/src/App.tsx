@@ -23,6 +23,7 @@ import Redeem from "@/pages/Redeem";
 import Support from "@/pages/Support";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminOrders from "@/pages/AdminOrders";
+import AdminProducts from "@/pages/AdminProducts";
 import AdminTopups from "@/pages/AdminTopups";
 import AdminUsers from "@/pages/AdminUsers";
 import AdminAnalytics from "@/pages/AdminAnalytics";
@@ -63,6 +64,7 @@ function Routes() {
       <Route path="/support" component={Support} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/orders" component={AdminOrders} />
+      <Route path="/admin/products" component={AdminProducts} />
       <Route path="/admin/topups" component={AdminTopups} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/analytics" component={AdminAnalytics} />

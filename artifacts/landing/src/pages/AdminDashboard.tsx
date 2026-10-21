@@ -104,6 +104,11 @@ export default function AdminDashboard() {
             badge={sumQ.data ? sumQ.data.pendingOrders + sumQ.data.processingOrders : undefined}
           />
           <NavRow
+            href="/admin/products"
+            icon={<Package className="h-4 w-4" />}
+            label="Product Management"
+          />
+          <NavRow
             href="/admin/topups"
             icon={<Wallet className="h-4 w-4" />}
             label="Topup Approvals"
