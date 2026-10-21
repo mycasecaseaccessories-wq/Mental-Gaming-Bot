@@ -82,6 +82,7 @@ export default function App() {
   );
   const handleReady = useCallback(() => setApiReady(true), []);
   const isTelegramWebApp = Boolean(getTg()?.initData);
+  const websiteLoginConfigured = Boolean(String(import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "").trim());
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
@@ -91,10 +92,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       {!apiReady && <WakeUpScreen onReady={handleReady} />}
-      {apiReady && !isTelegramWebApp && !websiteAuthenticated && (
+      {apiReady && websiteLoginConfigured && !isTelegramWebApp && !websiteAuthenticated && (
         <WebsiteLogin onAuthenticated={() => setWebsiteAuthenticated(true)} />
       )}
-      {apiReady && (isTelegramWebApp || websiteAuthenticated) && (
+      {apiReady && (isTelegramWebApp || websiteAuthenticated || !websiteLoginConfigured) && (
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Routes />
         </WouterRouter>
