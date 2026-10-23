@@ -10,7 +10,7 @@ const result = spawnSync(
     "@workspace/api-server",
     "exec",
     "esbuild",
-    "../../api/[...path].ts",
+    "../../scripts/api-vercel-entry.ts",
     "--bundle",
     "--platform=node",
     "--format=cjs",

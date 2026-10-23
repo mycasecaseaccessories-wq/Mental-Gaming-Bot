@@ -89592,7 +89592,7 @@ app.use((err, _req, res, _next) => {
 });
 var app_default = app;
 
-// ../../api/[...path].ts
+// ../../scripts/api-vercel-entry.ts
 function handler(req, res) {
   const url = typeof req.url === "string" ? req.url : "/";
   const [pathname, query = ""] = url.split("?", 2);
