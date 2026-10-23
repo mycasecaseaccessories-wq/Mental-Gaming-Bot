@@ -3,9 +3,11 @@ import type { Request, Response, NextFunction } from "express";
 import { ObjectId } from "mongodb";
 import { getCollection } from "../lib/mongodb";
 import { telegramAuth } from "../middlewares/telegramAuth";
+import { adminProductServiceAuth } from "../middlewares/adminProductServiceAuth";
 import { logger } from "../lib/logger";
 
 const router = Router();
+export const adminProductPortalRouter = Router();
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -290,14 +292,17 @@ router.patch("/admin/orders/:id", telegramAuth, adminAuth, async (req, res) => {
   }
 });
 
-// GET /store/admin/products?search=&page=1
-router.get("/admin/products", telegramAuth, adminAuth, async (req, res) => {
+// Product management handlers are shared by the existing Telegram admin API
+// and the narrowly scoped HMAC-authenticated website admin route.
+async function listAdminProducts(req: Request, res: Response): Promise<void> {
   try {
-    const page = Math.max(1, parseInt(String(req.query["page"] ?? "1")));
+    const requestedPage = Number(req.query["page"] ?? 1);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
     const limit = 24;
-    const search = String(req.query["search"] ?? "").trim();
+    const search = String(req.query["search"] ?? "").trim().slice(0, 120);
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const filter = search
-      ? { $or: [{ name: { $regex: search, $options: "i" } }, { category: { $regex: search, $options: "i" } }] }
+      ? { $or: [{ name: { $regex: escapedSearch, $options: "i" } }, { category: { $regex: escapedSearch, $options: "i" } }] }
       : {};
     const products = await getCollection<ProductAdminDoc>("products");
     const [docs, total] = await Promise.all([
@@ -317,31 +322,63 @@ router.get("/admin/products", telegramAuth, adminAuth, async (req, res) => {
     logger.error({ err }, "admin products list error");
     res.status(500).json({ error: "Internal error" });
   }
-});
+}
 
-// POST /store/admin/products
-router.post("/admin/products", telegramAuth, adminAuth, async (req, res) => {
+function isValidProductImageUrl(value: string): boolean {
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+const PRODUCT_STATUSES: ProductAdminDoc["status"][] = ["active", "out_of_stock", "coming_soon", "hidden"];
+const PRODUCT_TYPES: ProductAdminDoc["productType"][] = ["DirectTopup", "DigitalCode"];
+
+async function createAdminProduct(req: Request, res: Response): Promise<void> {
   try {
     const body = req.body as Record<string, unknown>;
     const name = String(body["name"] ?? "").trim();
     const category = String(body["category"] ?? "").trim();
     const finalPrice = Number(body["finalPrice"]);
-    if (!name || !category || !Number.isFinite(finalPrice) || finalPrice < 0) {
+    const region = String(body["region"] ?? "Global").trim() || "Global";
+    const productType = body["productType"] === undefined ? "DirectTopup" : body["productType"];
+    const status = body["status"] === undefined ? "active" : body["status"];
+    const imageUrl = String(body["imageUrl"] ?? "").trim();
+    const description = String(body["description"] ?? "");
+    const flashSaleValue = body["flashSalePrice"];
+    const flashSalePrice = flashSaleValue === null || flashSaleValue === undefined || flashSaleValue === ""
+      ? null
+      : Number(flashSaleValue);
+    const stockCount = body["stockCount"] === undefined || body["stockCount"] === ""
+      ? -1
+      : Number(body["stockCount"]);
+    const sortOrder = body["sortOrder"] === undefined ? 0 : Number(body["sortOrder"]);
+
+    if (
+      !name || name.length > 160 || !category || category.length > 100 || region.length > 100 ||
+      !PRODUCT_TYPES.includes(productType as ProductAdminDoc["productType"]) ||
+      !PRODUCT_STATUSES.includes(status as ProductAdminDoc["status"]) ||
+      !Number.isFinite(finalPrice) || finalPrice < 0 ||
+      (flashSalePrice !== null && (!Number.isFinite(flashSalePrice) || flashSalePrice < 0)) ||
+      !Number.isInteger(stockCount) || stockCount < -1 ||
+      !Number.isInteger(sortOrder) || description.length > 5000 || !isValidProductImageUrl(imageUrl)
+    ) {
       res.status(400).json({ error: "Name, category and valid price are required" });
       return;
     }
     const doc = {
-      name, category, region: String(body["region"] ?? "Global"),
-      productType: body["productType"] === "DigitalCode" ? "DigitalCode" : "DirectTopup",
-      finalPrice, flashSalePrice: body["flashSalePrice"] ? Number(body["flashSalePrice"]) : null,
+      name, category, region,
+      productType: productType as ProductAdminDoc["productType"],
+      finalPrice, flashSalePrice,
       flashSaleStart: null, flashSaleEnd: null,
-      stockCount: Number.isFinite(Number(body["stockCount"])) ? Number(body["stockCount"]) : -1,
-      isActive: body["isActive"] !== false,
-      status: (["active", "out_of_stock", "coming_soon", "hidden"] as const).includes(body["status"] as never)
-        ? body["status"] as ProductAdminDoc["status"]
-        : "active",
-      imageUrl: String(body["imageUrl"] ?? "").trim() || null,
-      description: String(body["description"] ?? ""), sortOrder: Number(body["sortOrder"] ?? 0),
+      stockCount,
+      isActive: status !== "hidden" && body["isActive"] !== false,
+      status: status as ProductAdminDoc["status"],
+      imageUrl: imageUrl || null,
+      description, sortOrder,
     } satisfies Omit<ProductAdminDoc, "_id">;
     const products = await getCollection<ProductAdminDoc>("products");
     const result = await products.insertOne(doc as ProductAdminDoc);
@@ -350,22 +387,48 @@ router.post("/admin/products", telegramAuth, adminAuth, async (req, res) => {
     logger.error({ err }, "admin product create error");
     res.status(500).json({ error: "Internal error" });
   }
-});
+}
 
-// PATCH /store/admin/products/:id
-router.patch("/admin/products/:id", telegramAuth, adminAuth, async (req, res) => {
+async function updateAdminProduct(req: Request, res: Response): Promise<void> {
   try {
     const id = String(req.params["id"]);
     if (!ObjectId.isValid(id)) { res.status(400).json({ error: "Invalid product id" }); return; }
     const body = req.body as Record<string, unknown>;
     const update: Record<string, unknown> = {};
     for (const key of ["name", "category", "region", "productType", "imageUrl", "description", "status"]) {
-      if (body[key] !== undefined) update[key] = typeof body[key] === "string" ? String(body[key]).trim() : body[key];
+      if (body[key] === undefined) continue;
+      if (typeof body[key] !== "string") { res.status(400).json({ error: `Invalid ${key}` }); return; }
+      const value = String(body[key]).trim();
+      if (key === "name" && (!value || value.length > 160)) { res.status(400).json({ error: "Invalid name" }); return; }
+      if (key === "category" && (!value || value.length > 100)) { res.status(400).json({ error: "Invalid category" }); return; }
+      if (key === "region" && value.length > 100) { res.status(400).json({ error: "Invalid region" }); return; }
+      if (key === "productType" && !PRODUCT_TYPES.includes(value as ProductAdminDoc["productType"])) { res.status(400).json({ error: "Invalid product type" }); return; }
+      if (key === "status" && !PRODUCT_STATUSES.includes(value as ProductAdminDoc["status"])) { res.status(400).json({ error: "Invalid status" }); return; }
+      if (key === "imageUrl" && !isValidProductImageUrl(value)) { res.status(400).json({ error: "Invalid image URL" }); return; }
+      if (key === "description" && value.length > 5000) { res.status(400).json({ error: "Invalid description" }); return; }
+      update[key] = key === "imageUrl" && !value ? null : value;
     }
     for (const key of ["finalPrice", "flashSalePrice", "stockCount", "sortOrder"]) {
-      if (body[key] !== undefined && Number.isFinite(Number(body[key]))) update[key] = Number(body[key]);
+      if (body[key] === undefined) continue;
+      if (key === "flashSalePrice" && (body[key] === null || body[key] === "")) {
+        update[key] = null;
+        continue;
+      }
+      const value = Number(body[key]);
+      if (!Number.isFinite(value) || ((key === "finalPrice" || key === "flashSalePrice") && value < 0)) {
+        res.status(400).json({ error: `Invalid ${key}` }); return;
+      }
+      if ((key === "stockCount" || key === "sortOrder") && !Number.isInteger(value)) {
+        res.status(400).json({ error: `Invalid ${key}` }); return;
+      }
+      if (key === "stockCount" && value < -1) { res.status(400).json({ error: "Invalid stock count" }); return; }
+      update[key] = value;
     }
-    if (body["isActive"] !== undefined) update.isActive = Boolean(body["isActive"]);
+    if (body["isActive"] !== undefined) {
+      if (typeof body["isActive"] !== "boolean") { res.status(400).json({ error: "Invalid active state" }); return; }
+      update.isActive = body["isActive"];
+    }
+    if (!Object.keys(update).length) { res.status(400).json({ error: "No fields to update" }); return; }
     if (update.status === "hidden") update.isActive = false;
     if (update.status === "active") update.isActive = true;
     const products = await getCollection<ProductAdminDoc>("products");
@@ -376,7 +439,17 @@ router.patch("/admin/products/:id", telegramAuth, adminAuth, async (req, res) =>
     logger.error({ err }, "admin product update error");
     res.status(500).json({ error: "Internal error" });
   }
-});
+}
+
+// Existing Telegram admin access remains unchanged.
+router.get("/admin/products", telegramAuth, adminAuth, listAdminProducts);
+router.post("/admin/products", telegramAuth, adminAuth, createAdminProduct);
+router.patch("/admin/products/:id", telegramAuth, adminAuth, updateAdminProduct);
+
+// The separate website receives access to these product operations only.
+adminProductPortalRouter.get("/products", adminProductServiceAuth, listAdminProducts);
+adminProductPortalRouter.post("/products", adminProductServiceAuth, createAdminProduct);
+adminProductPortalRouter.patch("/products/:id", adminProductServiceAuth, updateAdminProduct);
 
 // GET /store/admin/topups
 router.get("/admin/topups", telegramAuth, adminAuth, async (req, res) => {

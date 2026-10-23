@@ -4,7 +4,7 @@ import webhookRouter       from "./webhook";
 import storeRouter         from "./store";
 import gamificationRouter  from "./gamification";
 import supportRouter       from "./support";
-import adminRouter         from "./admin";
+import adminRouter, { adminProductPortalRouter } from "./admin";
 import promoRouter         from "./promo";
 import addressBookRouter   from "./addressBook";
 import faqRouter           from "./faq";
@@ -15,6 +15,8 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/webhook", webhookRouter);
+// The product portal uses a signed service credential, not a Telegram session.
+router.use("/store/admin-portal", adminProductPortalRouter);
 // Public routers MUST be mounted before storeRouter: storeRouter applies
 // telegramAuth as router-level middleware, which would otherwise 401 every
 // /store/* request (even ones destined for a later router) before Express can

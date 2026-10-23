@@ -1,12 +1,25 @@
-import { build } from "esbuild";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-await build({
-  entryPoints: ["api/index.ts"],
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  outfile: "api/index.mjs",
-  sourcemap: false,
-  packages: "bundle",
-  logLevel: "info",
-});
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const result = spawnSync(
+  "pnpm",
+  [
+    "--filter",
+    "@workspace/api-server",
+    "exec",
+    "esbuild",
+    "../../api/[...path].ts",
+    "--bundle",
+    "--platform=node",
+    "--format=cjs",
+    "--outfile=../../api/[...path].js",
+    "--packages=bundle",
+    "--log-level=info",
+  ],
+  { cwd: repositoryRoot, stdio: "inherit" },
+);
+
+if (result.error) throw result.error;
+process.exitCode = result.status ?? 1;
