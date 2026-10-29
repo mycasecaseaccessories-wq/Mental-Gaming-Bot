@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 import { getCollection } from "../lib/mongodb";
 import { telegramAuth } from "../middlewares/telegramAuth";
 import { adminProductServiceAuth } from "../middlewares/adminProductServiceAuth";
+import adminPortalAssetsRouter from "./adminPortalAssets";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -301,9 +302,29 @@ async function listAdminProducts(req: Request, res: Response): Promise<void> {
     const limit = 24;
     const search = String(req.query["search"] ?? "").trim().slice(0, 120);
     const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const filter = search
-      ? { $or: [{ name: { $regex: escapedSearch, $options: "i" } }, { category: { $regex: escapedSearch, $options: "i" } }] }
-      : {};
+    const clauses: Record<string, unknown>[] = [];
+    if (search) {
+      clauses.push({ $or: [{ name: { $regex: escapedSearch, $options: "i" } }, { category: { $regex: escapedSearch, $options: "i" } }] });
+    }
+    const requestedCatalogId = String(req.query["catalogId"] ?? "").trim();
+    if (requestedCatalogId) {
+      if (!ObjectId.isValid(requestedCatalogId)) {
+        res.status(400).json({ error: "Invalid catalog id" });
+        return;
+      }
+      const catalogs = await getCollection<{ _id: ObjectId; name: string }>("catalogs");
+      const catalog = await catalogs.findOne({ _id: new ObjectId(requestedCatalogId) });
+      if (!catalog) {
+        res.status(404).json({ error: "Catalog not found" });
+        return;
+      }
+      const catalogClauses: Record<string, unknown>[] = [{ catalogId: catalog._id }];
+      if (await catalogs.countDocuments({ name: catalog.name }) === 1) {
+        catalogClauses.push({ catalogId: null, category: catalog.name });
+      }
+      clauses.push({ $or: catalogClauses });
+    }
+    const filter = clauses.length > 1 ? { $and: clauses } : clauses[0] ?? {};
     const products = await getCollection<ProductAdminDoc>("products");
     const [docs, total] = await Promise.all([
       products.find(filter as never).sort({ sortOrder: 1, name: 1 }).skip((page - 1) * limit).limit(limit).toArray(),
@@ -315,6 +336,7 @@ async function listAdminProducts(req: Request, res: Response): Promise<void> {
         productType: p.productType, finalPrice: p.finalPrice, flashSalePrice: p.flashSalePrice ?? null,
         stockCount: p.stockCount, isActive: p.isActive, status: p.status ?? (p.isActive ? "active" : "hidden"),
         imageUrl: p.imageUrl ?? null, description: p.description ?? "", sortOrder: p.sortOrder ?? 0,
+        catalogId: p.catalogId?.toString() ?? null,
       })),
       total, page, pages: Math.max(1, Math.ceil(total / limit)),
     });
@@ -341,7 +363,23 @@ async function createAdminProduct(req: Request, res: Response): Promise<void> {
   try {
     const body = req.body as Record<string, unknown>;
     const name = String(body["name"] ?? "").trim();
-    const category = String(body["category"] ?? "").trim();
+    let category = String(body["category"] ?? "").trim();
+    let catalogId: ObjectId | null = null;
+    const requestedCatalogId = String(body["catalogId"] ?? "").trim();
+    if (requestedCatalogId) {
+      if (!ObjectId.isValid(requestedCatalogId)) {
+        res.status(400).json({ error: "Invalid catalog id" });
+        return;
+      }
+      const catalogs = await getCollection<{ _id: ObjectId; name: string; isActive: boolean }>("catalogs");
+      const catalog = await catalogs.findOne({ _id: new ObjectId(requestedCatalogId), isActive: true });
+      if (!catalog) {
+        res.status(400).json({ error: "Select an active catalog" });
+        return;
+      }
+      catalogId = catalog._id;
+      category = catalog.name;
+    }
     const finalPrice = Number(body["finalPrice"]);
     const region = String(body["region"] ?? "Global").trim() || "Global";
     const productType = body["productType"] === undefined ? "DirectTopup" : body["productType"];
@@ -378,6 +416,7 @@ async function createAdminProduct(req: Request, res: Response): Promise<void> {
       isActive: status !== "hidden" && body["isActive"] !== false,
       status: status as ProductAdminDoc["status"],
       imageUrl: imageUrl || null,
+      catalogId,
       description, sortOrder,
     } satisfies Omit<ProductAdminDoc, "_id">;
     const products = await getCollection<ProductAdminDoc>("products");
@@ -407,6 +446,24 @@ async function updateAdminProduct(req: Request, res: Response): Promise<void> {
       if (key === "imageUrl" && !isValidProductImageUrl(value)) { res.status(400).json({ error: "Invalid image URL" }); return; }
       if (key === "description" && value.length > 5000) { res.status(400).json({ error: "Invalid description" }); return; }
       update[key] = key === "imageUrl" && !value ? null : value;
+    }
+    if (body["catalogId"] !== undefined) {
+      const requestedCatalogId = body["catalogId"];
+      if (requestedCatalogId === null || requestedCatalogId === "") {
+        update.catalogId = null;
+      } else if (typeof requestedCatalogId === "string" && ObjectId.isValid(requestedCatalogId)) {
+        const catalogs = await getCollection<{ _id: ObjectId; name: string; isActive: boolean }>("catalogs");
+        const catalog = await catalogs.findOne({ _id: new ObjectId(requestedCatalogId), isActive: true });
+        if (!catalog) {
+          res.status(400).json({ error: "Select an active catalog" });
+          return;
+        }
+        update.catalogId = catalog._id;
+        update.category = catalog.name;
+      } else {
+        res.status(400).json({ error: "Invalid catalog id" });
+        return;
+      }
     }
     for (const key of ["finalPrice", "flashSalePrice", "stockCount", "sortOrder"]) {
       if (body[key] === undefined) continue;
@@ -450,6 +507,7 @@ router.patch("/admin/products/:id", telegramAuth, adminAuth, updateAdminProduct)
 adminProductPortalRouter.get("/products", adminProductServiceAuth, listAdminProducts);
 adminProductPortalRouter.post("/products", adminProductServiceAuth, createAdminProduct);
 adminProductPortalRouter.patch("/products/:id", adminProductServiceAuth, updateAdminProduct);
+adminProductPortalRouter.use(adminPortalAssetsRouter);
 
 // GET /store/admin/topups
 router.get("/admin/topups", telegramAuth, adminAuth, async (req, res) => {

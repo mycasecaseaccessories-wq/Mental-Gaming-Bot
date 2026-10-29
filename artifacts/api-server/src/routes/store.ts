@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { ObjectId, type Filter, type WithId } from "mongodb";
+import { GridFSBucket, ObjectId, type Filter, type WithId } from "mongodb";
 import multer from "multer";
-import { getClient, getCollection } from "../lib/mongodb";
+import { getClient, getCollection, getDb } from "../lib/mongodb";
 import { telegramAuth, type StoreUser } from "../middlewares/telegramAuth";
 import { deleteMessage, sendPhoto } from "../lib/telegramApi";
 import { logger } from "../lib/logger";
@@ -33,7 +33,7 @@ const router: IRouter = Router();
 // Store browsing is public; only account, wallet, order, and notification
 // operations need Telegram identity. Keeping this split here prevents a
 // missing bot token from turning the whole storefront into a 500 page.
-const PUBLIC_STORE_PATH = /^\/(?:catalogs(?:\/[^/]+)?|products(?:\/[^/]+)?|flashsale|payment-methods|banners|popular|feature-gates|mc\/config)$/;
+const PUBLIC_STORE_PATH = /^\/(?:catalogs(?:\/[^/]+)?|products(?:\/[^/]+)?|media\/[^/]+|flashsale|payment-methods|banners|popular|feature-gates|mc\/config)$/;
 router.use((req, res, next) => {
   if (PUBLIC_STORE_PATH.test(req.path)) return next();
   return telegramAuth(req, res, next);
@@ -236,6 +236,42 @@ function publicProduct(p: ProductDoc) {
 function safeId(s: string): ObjectId | null {
   return ObjectId.isValid(s) ? new ObjectId(s) : null;
 }
+
+// Product and catalog images are public, immutable assets; only the signed
+// Admin portal can create them in the corresponding GridFS bucket.
+router.get("/media/:id", async (req: Request, res: Response) => {
+  const id = safeId(String(req.params["id"] ?? ""));
+  if (!id) {
+    res.status(400).json({ error: "Invalid media id" });
+    return;
+  }
+  try {
+    const db = await getDb();
+    const file = await db.collection("adminImages.files").findOne({ _id: id });
+    const metadata = file?.["metadata"] as Record<string, unknown> | undefined;
+    const contentType = metadata?.["contentType"];
+    if (!file || !["image/webp", "image/png", "image/jpeg"].includes(String(contentType))) {
+      res.status(404).json({ error: "Image not found" });
+      return;
+    }
+    res.setHeader("Content-Type", String(contentType));
+    res.setHeader("Content-Length", String(file["length"]));
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    const bucket = new GridFSBucket(db, { bucketName: "adminImages" });
+    const stream = bucket.openDownloadStream(id);
+    stream.on("error", (err) => {
+      logger.error({ err, mediaId: id.toString() }, "admin image download error");
+      if (!res.headersSent) res.status(404).json({ error: "Image not found" });
+      else res.destroy(err);
+    });
+    stream.pipe(res);
+  } catch (err) {
+    logger.error({ err, mediaId: id.toString() }, "admin image read error");
+    if (!res.headersSent) res.status(500).json({ error: "Could not read image" });
+  }
+});
 
 function asUser(req: Request): StoreUser {
   return req.storeUser as StoreUser;

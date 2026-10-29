@@ -20800,27 +20800,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module2.exports = Router13;
+    module2.exports = Router14;
     module2.exports.Route = Route;
-    function Router13(options) {
-      if (!(this instanceof Router13)) {
-        return new Router13(options);
+    function Router14(options) {
+      if (!(this instanceof Router14)) {
+        return new Router14(options);
       }
       const opts = options || {};
-      function router13(req, res, next) {
-        router13.handle(req, res, next);
+      function router14(req, res, next) {
+        router14.handle(req, res, next);
       }
-      Object.setPrototypeOf(router13, this);
-      router13.caseSensitive = opts.caseSensitive;
-      router13.mergeParams = opts.mergeParams;
-      router13.params = {};
-      router13.strict = opts.strict;
-      router13.stack = [];
-      return router13;
+      Object.setPrototypeOf(router14, this);
+      router14.caseSensitive = opts.caseSensitive;
+      router14.mergeParams = opts.mergeParams;
+      router14.params = {};
+      router14.strict = opts.strict;
+      router14.stack = [];
+      return router14;
     }
-    Router13.prototype = function() {
+    Router14.prototype = function() {
     };
-    Router13.prototype.param = function param(name, fn) {
+    Router14.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20840,7 +20840,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router13.prototype.handle = function handle(req, res, callback) {
+    Router14.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20967,7 +20967,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router13.prototype.use = function use(handler2) {
+    Router14.prototype.use = function use(handler2) {
       let offset = 0;
       let path = "/";
       if (typeof handler2 !== "function") {
@@ -21000,7 +21000,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router13.prototype.route = function route(path) {
+    Router14.prototype.route = function route(path) {
       const route2 = new Route(path);
       const layer = new Layer(path, {
         sensitive: this.caseSensitive,
@@ -21015,7 +21015,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router13.prototype[method] = function(path) {
+      Router14.prototype[method] = function(path) {
         const route = this.route(path);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21198,13 +21198,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = require("node:path").resolve;
     var once = require_once();
-    var Router13 = require_router();
+    var Router14 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports2 = module2.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router13 = null;
+      var router14 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21213,13 +21213,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router13 === null) {
-            router13 = new Router13({
+          if (router14 === null) {
+            router14 = new Router14({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router13;
+          return router14;
         }
       });
     };
@@ -21290,15 +21290,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router13 = this.router;
+      var router14 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router13.use(path, fn2);
+          return router14.use(path, fn2);
         }
         debug(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router13.use(path, function mounted_app(req, res, next) {
+        router14.use(path, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23919,7 +23919,7 @@ var require_express = __commonJS({
     var EventEmitter = require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router13 = require_router();
+    var Router14 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -23941,8 +23941,8 @@ var require_express = __commonJS({
     exports2.application = proto;
     exports2.request = req;
     exports2.response = res;
-    exports2.Route = Router13.Route;
-    exports2.Router = Router13;
+    exports2.Route = Router14.Route;
+    exports2.Router = Router14;
     exports2.json = bodyParser.json;
     exports2.raw = bodyParser.raw;
     exports2.static = require_serve_static();
@@ -33328,7 +33328,7 @@ var require_bson = __commonJS({
     };
     var PROCESS_UNIQUE = null;
     var __idCache = /* @__PURE__ */ new WeakMap();
-    var ObjectId8 = class _ObjectId extends BSONValue {
+    var ObjectId9 = class _ObjectId extends BSONValue {
       get _bsontype() {
         return "ObjectId";
       }
@@ -33900,7 +33900,7 @@ var require_bson = __commonJS({
           const oid = ByteUtils.allocateUnsafe(12);
           for (let i2 = 0; i2 < 12; i2++)
             oid[i2] = buffer2[index + i2];
-          value = new ObjectId8(oid);
+          value = new ObjectId9(oid);
           index = index + 12;
         } else if (elementType === BSON_DATA_INT && promoteValues === false) {
           value = new Int32(NumberUtils.getInt32LE(buffer2, index));
@@ -34119,7 +34119,7 @@ var require_bson = __commonJS({
           const oidBuffer = ByteUtils.allocateUnsafe(12);
           for (let i2 = 0; i2 < 12; i2++)
             oidBuffer[i2] = buffer2[index + i2];
-          const oid = new ObjectId8(oidBuffer);
+          const oid = new ObjectId9(oidBuffer);
           index = index + 12;
           value = new DBRef(namespace, oid);
         } else {
@@ -34694,7 +34694,7 @@ var require_bson = __commonJS({
       return value != null && typeof value === "object" && "_bsontype" in value && typeof value._bsontype === "string";
     }
     var keysToCodecs = {
-      $oid: ObjectId8,
+      $oid: ObjectId9,
       $binary: Binary,
       $uuid: Binary,
       $symbol: BSONSymbol,
@@ -34880,7 +34880,7 @@ var require_bson = __commonJS({
       Long: (o) => Long.fromBits(o.low != null ? o.low : o.low_, o.low != null ? o.high : o.high_, o.low != null ? o.unsigned : o.unsigned_),
       MaxKey: () => new MaxKey(),
       MinKey: () => new MinKey(),
-      ObjectId: (o) => new ObjectId8(o),
+      ObjectId: (o) => new ObjectId9(o),
       BSONRegExp: (o) => new BSONRegExp(o.pattern, o.options),
       BSONSymbol: (o) => new BSONSymbol(o.value),
       Timestamp: (o) => Timestamp.fromBits(o.low, o.high)
@@ -35152,7 +35152,7 @@ var require_bson = __commonJS({
       MaxKey,
       MinKey,
       NumberUtils,
-      ObjectId: ObjectId8,
+      ObjectId: ObjectId9,
       Timestamp,
       UUID,
       bsonType,
@@ -35185,7 +35185,7 @@ var require_bson = __commonJS({
     exports2.MaxKey = MaxKey;
     exports2.MinKey = MinKey;
     exports2.NumberUtils = NumberUtils;
-    exports2.ObjectId = ObjectId8;
+    exports2.ObjectId = ObjectId9;
     exports2.Timestamp = Timestamp;
     exports2.UUID = UUID;
     exports2.bsonType = bsonType;
@@ -38378,10 +38378,10 @@ var require_utils4 = __commonJS({
     function squashError(_error) {
       return;
     }
-    var randomBytes = (size) => {
+    var randomBytes2 = (size) => {
       return Promise.resolve(crypto.getRandomValues(new Uint8Array(size)));
     };
-    exports2.randomBytes = randomBytes;
+    exports2.randomBytes = randomBytes2;
     async function once(ee, name, options) {
       options?.signal?.throwIfAborted();
       const { promise, resolve, reject } = promiseWithResolvers();
@@ -62607,7 +62607,7 @@ var require_gridfs = __commonJS({
       bucketName: "fs",
       chunkSizeBytes: 255 * 1024
     };
-    var GridFSBucket = class extends mongo_types_1.TypedEventEmitter {
+    var GridFSBucket3 = class extends mongo_types_1.TypedEventEmitter {
       static {
         this.INDEX = "index";
       }
@@ -62740,7 +62740,7 @@ var require_gridfs = __commonJS({
         }
       }
     };
-    exports2.GridFSBucket = GridFSBucket;
+    exports2.GridFSBucket = GridFSBucket3;
   }
 });
 
@@ -79871,7 +79871,7 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express13 = __toESM(require_express2(), 1);
+var import_express14 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 
 // ../../node_modules/.pnpm/helmet@8.2.0/node_modules/helmet/index.mjs
@@ -81373,7 +81373,7 @@ var rate_limit_default = rateLimit;
 var import_pino_http = __toESM(require_logger(), 1);
 
 // src/routes/index.ts
-var import_express12 = __toESM(require_express2(), 1);
+var import_express13 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -85735,7 +85735,7 @@ function adminChatId() {
   return Number.isFinite(n) ? n : null;
 }
 var router3 = (0, import_express3.Router)();
-var PUBLIC_STORE_PATH = /^\/(?:catalogs(?:\/[^/]+)?|products(?:\/[^/]+)?|flashsale|payment-methods|banners|popular|feature-gates|mc\/config)$/;
+var PUBLIC_STORE_PATH = /^\/(?:catalogs(?:\/[^/]+)?|products(?:\/[^/]+)?|media\/[^/]+|flashsale|payment-methods|banners|popular|feature-gates|mc\/config)$/;
 router3.use((req, res, next) => {
   if (PUBLIC_STORE_PATH.test(req.path)) return next();
   return telegramAuth(req, res, next);
@@ -85794,6 +85794,39 @@ function publicProduct(p) {
 function safeId(s) {
   return import_mongodb6.ObjectId.isValid(s) ? new import_mongodb6.ObjectId(s) : null;
 }
+router3.get("/media/:id", async (req, res) => {
+  const id = safeId(String(req.params["id"] ?? ""));
+  if (!id) {
+    res.status(400).json({ error: "Invalid media id" });
+    return;
+  }
+  try {
+    const db = await getDb();
+    const file = await db.collection("adminImages.files").findOne({ _id: id });
+    const metadata = file?.["metadata"];
+    const contentType = metadata?.["contentType"];
+    if (!file || !["image/webp", "image/png", "image/jpeg"].includes(String(contentType))) {
+      res.status(404).json({ error: "Image not found" });
+      return;
+    }
+    res.setHeader("Content-Type", String(contentType));
+    res.setHeader("Content-Length", String(file["length"]));
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    const bucket = new import_mongodb6.GridFSBucket(db, { bucketName: "adminImages" });
+    const stream = bucket.openDownloadStream(id);
+    stream.on("error", (err) => {
+      logger.error({ err, mediaId: id.toString() }, "admin image download error");
+      if (!res.headersSent) res.status(404).json({ error: "Image not found" });
+      else res.destroy(err);
+    });
+    stream.pipe(res);
+  } catch (err) {
+    logger.error({ err, mediaId: id.toString() }, "admin image read error");
+    if (!res.headersSent) res.status(500).json({ error: "Could not read image" });
+  }
+});
 function asUser(req) {
   return req.storeUser;
 }
@@ -87198,12 +87231,11 @@ router5.post("/tickets/:id/message", async (req, res) => {
 var support_default = router5;
 
 // src/routes/admin.ts
-var import_express6 = __toESM(require_express2(), 1);
-var import_mongodb12 = __toESM(require_lib6(), 1);
+var import_express7 = __toESM(require_express2(), 1);
+var import_mongodb14 = __toESM(require_lib6(), 1);
 
 // src/middlewares/adminProductServiceAuth.ts
 var import_node_crypto4 = require("node:crypto");
-var API_PRODUCT_PREFIX = "/api/store/admin-portal/products";
 var MAX_CLOCK_SKEW_SECONDS = 60;
 var NONCE_LIFETIME_MS = 2 * MAX_CLOCK_SKEW_SECONDS * 1e3;
 var MAX_TRACKED_NONCES = 1e4;
@@ -87239,6 +87271,33 @@ function signatureMatches(expectedHex, receivedHex) {
   const received = Buffer.from(receivedHex, "hex");
   return expected.length === received.length && (0, import_node_crypto4.timingSafeEqual)(expected, received);
 }
+function isAllowedPortalRoute(req) {
+  let url;
+  try {
+    url = new URL(req.originalUrl, "http://localhost");
+  } catch {
+    return false;
+  }
+  const path = url.pathname;
+  const method = req.method.toUpperCase();
+  const base = "/api/store/admin-portal";
+  if (path === `${base}/products`) {
+    if (method === "POST") return url.search === "";
+    if (method !== "GET") return false;
+    const allowedQuery = /* @__PURE__ */ new Set(["page", "search", "catalogId"]);
+    const keys = [...url.searchParams.keys()];
+    return keys.every((key, index) => allowedQuery.has(key) && keys.indexOf(key) === index);
+  }
+  if (path === `${base}/catalogs`) return method === "GET" && url.search === "";
+  if (/^\/api\/store\/admin-portal\/products\/[a-f0-9]{24}$/i.test(path)) {
+    return method === "PATCH" && url.search === "";
+  }
+  if (/^\/api\/store\/admin-portal\/catalogs\/[a-f0-9]{24}$/i.test(path)) {
+    return method === "PATCH" && url.search === "";
+  }
+  if (path === `${base}/media`) return method === "POST" && url.search === "";
+  return false;
+}
 function adminProductServiceAuth(req, res, next) {
   const secret = process.env["MG_PRODUCT_API_SECRET"] ?? "";
   if (Buffer.byteLength(secret, "utf8") < 32) {
@@ -87251,11 +87310,11 @@ function adminProductServiceAuth(req, res, next) {
   const signature = req.get("X-MG-Signature") ?? "";
   const signedAt = /^\d{10}$/.test(timestamp) ? Number(timestamp) : NaN;
   const nowSeconds = Math.floor(Date.now() / 1e3);
-  if (!Number.isFinite(signedAt) || Math.abs(nowSeconds - signedAt) > MAX_CLOCK_SKEW_SECONDS || !/^[A-Za-z0-9_-]{16,64}$/.test(nonce) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320 || !req.originalUrl.startsWith(API_PRODUCT_PREFIX) || !["GET", "POST", "PATCH"].includes(req.method)) {
+  if (!Number.isFinite(signedAt) || Math.abs(nowSeconds - signedAt) > MAX_CLOCK_SKEW_SECONDS || !/^[A-Za-z0-9_-]{16,64}$/.test(nonce) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320 || !isAllowedPortalRoute(req)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const bodyText = req.method === "GET" ? "" : JSON.stringify(req.body ?? {});
+  const bodyText = req.method.toUpperCase() === "GET" ? "" : JSON.stringify(req.body ?? {});
   const parts = {
     method: req.method,
     path: req.originalUrl,
@@ -87281,9 +87340,155 @@ function adminProductServiceAuth(req, res, next) {
   next();
 }
 
-// src/routes/admin.ts
+// src/routes/adminPortalAssets.ts
+var import_node_crypto5 = require("node:crypto");
+var import_express6 = __toESM(require_express2(), 1);
+var import_mongodb12 = __toESM(require_lib6(), 1);
+var STORE_ORIGIN = "https://mental-gaming-store.vercel.app";
+var MAX_IMAGE_BYTES = 900 * 1024;
+var MAX_BASE64_CHARS = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
 var router6 = (0, import_express6.Router)();
-var adminProductPortalRouter = (0, import_express6.Router)();
+function validHttpsImageUrl(value) {
+  if (!value) return true;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+function countProductsByCatalog(catalogs, products) {
+  const catalogIds = new Set(catalogs.map((catalog) => catalog._id.toString()));
+  const idsByName = /* @__PURE__ */ new Map();
+  for (const catalog of catalogs) {
+    const ids = idsByName.get(catalog.name) ?? [];
+    ids.push(catalog._id.toString());
+    idsByName.set(catalog.name, ids);
+  }
+  const counts = /* @__PURE__ */ new Map();
+  for (const product of products) {
+    const linkedId = product.catalogId?.toString();
+    const matchingIds = idsByName.get(product.category) ?? [];
+    const targetId = linkedId && catalogIds.has(linkedId) ? linkedId : matchingIds.length === 1 ? matchingIds[0] : void 0;
+    if (targetId) counts.set(targetId, (counts.get(targetId) ?? 0) + 1);
+  }
+  return counts;
+}
+async function listPortalCatalogs(_req, res) {
+  try {
+    const catalogsCollection = await getCollection("catalogs");
+    const productsCollection = await getCollection("products");
+    const [catalogs, products] = await Promise.all([
+      catalogsCollection.find({}).sort({ sortOrder: 1, name: 1 }).toArray(),
+      productsCollection.find({}, { projection: { category: 1, catalogId: 1 } }).toArray()
+    ]);
+    const counts = countProductsByCatalog(catalogs, products);
+    const byParent = /* @__PURE__ */ new Map();
+    for (const catalog of catalogs) {
+      const parent = catalog.parentCategory?.toString();
+      if (!parent) continue;
+      const children = byParent.get(parent) ?? [];
+      children.push(catalog);
+      byParent.set(parent, children);
+    }
+    const toItem = (catalog) => ({
+      id: catalog._id.toString(),
+      name: catalog.name,
+      imageUrl: catalog.imageUrl ?? null,
+      sortOrder: catalog.sortOrder ?? 0,
+      isActive: catalog.isActive,
+      parentCategoryId: catalog.parentCategory?.toString() ?? null,
+      productCount: counts.get(catalog._id.toString()) ?? 0
+    });
+    res.setHeader("Cache-Control", "no-store").json({
+      catalogs: catalogs.filter((catalog) => !catalog.parentCategory).map((catalog) => ({
+        ...toItem(catalog),
+        subCatalogs: (byParent.get(catalog._id.toString()) ?? []).map(toItem)
+      }))
+    });
+  } catch (err) {
+    logger.error({ err }, "admin portal catalog list error");
+    res.status(500).json({ error: "Could not load catalogs" });
+  }
+}
+async function updatePortalCatalog(req, res) {
+  try {
+    const id = String(req.params["id"] ?? "");
+    if (!import_mongodb12.ObjectId.isValid(id)) {
+      res.status(400).json({ error: "Invalid catalog id" });
+      return;
+    }
+    const body = req.body;
+    if (!Object.hasOwn(body, "imageUrl")) {
+      res.status(400).json({ error: "Image URL is required" });
+      return;
+    }
+    const rawImageUrl = body["imageUrl"];
+    if (rawImageUrl !== null && typeof rawImageUrl !== "string") {
+      res.status(400).json({ error: "Invalid image URL" });
+      return;
+    }
+    const imageUrl = typeof rawImageUrl === "string" ? rawImageUrl.trim() : "";
+    if (imageUrl.length > 2048 || !validHttpsImageUrl(imageUrl)) {
+      res.status(400).json({ error: "Invalid image URL" });
+      return;
+    }
+    const catalogs = await getCollection("catalogs");
+    const result = await catalogs.updateOne(
+      { _id: new import_mongodb12.ObjectId(id) },
+      { $set: { imageUrl: imageUrl || null } }
+    );
+    if (!result.matchedCount) {
+      res.status(404).json({ error: "Catalog not found" });
+      return;
+    }
+    res.json({ ok: true, imageUrl: imageUrl || null });
+  } catch (err) {
+    logger.error({ err }, "admin portal catalog update error");
+    res.status(500).json({ error: "Could not update catalog" });
+  }
+}
+function isWebp(buffer) {
+  return buffer.length >= 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
+}
+async function uploadPortalImage(req, res) {
+  try {
+    const body = req.body;
+    const dataBase64 = body["dataBase64"];
+    if (body["contentType"] !== "image/webp" || typeof dataBase64 !== "string" || dataBase64.length === 0 || dataBase64.length > MAX_BASE64_CHARS || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(dataBase64)) {
+      res.status(400).json({ error: "A valid compressed WebP image is required" });
+      return;
+    }
+    const buffer = Buffer.from(dataBase64, "base64");
+    if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES || buffer.toString("base64") !== dataBase64 || !isWebp(buffer)) {
+      res.status(400).json({ error: "Invalid image data or image size" });
+      return;
+    }
+    const bucket = new import_mongodb12.GridFSBucket(await getDb(), { bucketName: "adminImages" });
+    const filename = `mg-${(0, import_node_crypto5.randomBytes)(16).toString("hex")}.webp`;
+    const upload2 = bucket.openUploadStream(filename, {
+      metadata: { contentType: "image/webp", purpose: "store-catalog-image" }
+    });
+    await new Promise((resolve, reject) => {
+      upload2.once("error", reject);
+      upload2.once("finish", resolve);
+      upload2.end(buffer);
+    });
+    const id = upload2.id.toString();
+    const imageUrl = `${STORE_ORIGIN}/api/store/media/${id}`;
+    res.status(201).json({ ok: true, id, imageUrl });
+  } catch (err) {
+    logger.error({ err }, "admin portal image upload error");
+    res.status(500).json({ error: "Could not save image" });
+  }
+}
+router6.get("/catalogs", adminProductServiceAuth, (req, res) => void listPortalCatalogs(req, res));
+router6.patch("/catalogs/:id", adminProductServiceAuth, (req, res) => void updatePortalCatalog(req, res));
+router6.post("/media", adminProductServiceAuth, (req, res) => void uploadPortalImage(req, res));
+var adminPortalAssets_default = router6;
+
+// src/routes/admin.ts
+var router7 = (0, import_express7.Router)();
+var adminProductPortalRouter = (0, import_express7.Router)();
 async function adminAuth(req, res, next) {
   if (!req.tgUser) {
     res.status(401).json({ error: "Unauthorized" });
@@ -87313,7 +87518,7 @@ function calcTier(totalDeposited) {
   if (totalDeposited >= 5e5) return "Gold";
   return "Silver";
 }
-router6.get("/admin/me", telegramAuth, adminAuth, async (req, res) => {
+router7.get("/admin/me", telegramAuth, adminAuth, async (req, res) => {
   const tid = req.tgUser.id;
   const rawAdminId = process.env["ADMIN_ID"];
   if (rawAdminId && Number(rawAdminId) === tid) {
@@ -87324,7 +87529,7 @@ router6.get("/admin/me", telegramAuth, adminAuth, async (req, res) => {
   const rec = await admins.findOne({ telegramId: tid, isActive: true });
   res.json({ isAdmin: true, role: rec?.role ?? "Staff" });
 });
-router6.get("/admin/summary", telegramAuth, adminAuth, async (_req, res) => {
+router7.get("/admin/summary", telegramAuth, adminAuth, async (_req, res) => {
   try {
     const orders = await getCollection("orders");
     const txs = await getCollection("transactions");
@@ -87374,7 +87579,7 @@ router6.get("/admin/summary", telegramAuth, adminAuth, async (_req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.get("/admin/orders", telegramAuth, adminAuth, async (req, res) => {
+router7.get("/admin/orders", telegramAuth, adminAuth, async (req, res) => {
   try {
     const status = req.query["status"] || "Pending";
     const page = Math.max(1, parseInt(String(req.query["page"] ?? "1")));
@@ -87384,7 +87589,7 @@ router6.get("/admin/orders", telegramAuth, adminAuth, async (req, res) => {
     const users = await getCollection("users");
     const docs = await orders.find({ status }).sort({ timestamp: -1 }).skip(skip).limit(limit).toArray();
     const userObjIds = Array.from(new Set(docs.map((o) => o.userId.toString()))).map(
-      (s) => new import_mongodb12.ObjectId(s)
+      (s) => new import_mongodb14.ObjectId(s)
     );
     const userDocs = await users.find({ _id: { $in: userObjIds } }).toArray();
     const userMap = Object.fromEntries(userDocs.map((u) => [u._id.toString(), u]));
@@ -87418,7 +87623,7 @@ router6.get("/admin/orders", telegramAuth, adminAuth, async (req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.patch("/admin/orders/:id", telegramAuth, adminAuth, async (req, res) => {
+router7.patch("/admin/orders/:id", telegramAuth, adminAuth, async (req, res) => {
   try {
     const id = String(req.params["id"]);
     const { status, note } = req.body;
@@ -87428,7 +87633,7 @@ router6.patch("/admin/orders/:id", telegramAuth, adminAuth, async (req, res) => 
       return;
     }
     const orders = await getCollection("orders");
-    const order = await orders.findOne({ _id: new import_mongodb12.ObjectId(id) });
+    const order = await orders.findOne({ _id: new import_mongodb14.ObjectId(id) });
     if (!order) {
       res.status(404).json({ error: "Order not found" });
       return;
@@ -87463,7 +87668,29 @@ async function listAdminProducts(req, res) {
     const limit = 24;
     const search = String(req.query["search"] ?? "").trim().slice(0, 120);
     const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const filter = search ? { $or: [{ name: { $regex: escapedSearch, $options: "i" } }, { category: { $regex: escapedSearch, $options: "i" } }] } : {};
+    const clauses = [];
+    if (search) {
+      clauses.push({ $or: [{ name: { $regex: escapedSearch, $options: "i" } }, { category: { $regex: escapedSearch, $options: "i" } }] });
+    }
+    const requestedCatalogId = String(req.query["catalogId"] ?? "").trim();
+    if (requestedCatalogId) {
+      if (!import_mongodb14.ObjectId.isValid(requestedCatalogId)) {
+        res.status(400).json({ error: "Invalid catalog id" });
+        return;
+      }
+      const catalogs = await getCollection("catalogs");
+      const catalog = await catalogs.findOne({ _id: new import_mongodb14.ObjectId(requestedCatalogId) });
+      if (!catalog) {
+        res.status(404).json({ error: "Catalog not found" });
+        return;
+      }
+      const catalogClauses = [{ catalogId: catalog._id }];
+      if (await catalogs.countDocuments({ name: catalog.name }) === 1) {
+        catalogClauses.push({ catalogId: null, category: catalog.name });
+      }
+      clauses.push({ $or: catalogClauses });
+    }
+    const filter = clauses.length > 1 ? { $and: clauses } : clauses[0] ?? {};
     const products = await getCollection("products");
     const [docs, total] = await Promise.all([
       products.find(filter).sort({ sortOrder: 1, name: 1 }).skip((page - 1) * limit).limit(limit).toArray(),
@@ -87483,7 +87710,8 @@ async function listAdminProducts(req, res) {
         status: p.status ?? (p.isActive ? "active" : "hidden"),
         imageUrl: p.imageUrl ?? null,
         description: p.description ?? "",
-        sortOrder: p.sortOrder ?? 0
+        sortOrder: p.sortOrder ?? 0,
+        catalogId: p.catalogId?.toString() ?? null
       })),
       total,
       page,
@@ -87509,7 +87737,23 @@ async function createAdminProduct(req, res) {
   try {
     const body = req.body;
     const name = String(body["name"] ?? "").trim();
-    const category = String(body["category"] ?? "").trim();
+    let category = String(body["category"] ?? "").trim();
+    let catalogId = null;
+    const requestedCatalogId = String(body["catalogId"] ?? "").trim();
+    if (requestedCatalogId) {
+      if (!import_mongodb14.ObjectId.isValid(requestedCatalogId)) {
+        res.status(400).json({ error: "Invalid catalog id" });
+        return;
+      }
+      const catalogs = await getCollection("catalogs");
+      const catalog = await catalogs.findOne({ _id: new import_mongodb14.ObjectId(requestedCatalogId), isActive: true });
+      if (!catalog) {
+        res.status(400).json({ error: "Select an active catalog" });
+        return;
+      }
+      catalogId = catalog._id;
+      category = catalog.name;
+    }
     const finalPrice = Number(body["finalPrice"]);
     const region = String(body["region"] ?? "Global").trim() || "Global";
     const productType = body["productType"] === void 0 ? "DirectTopup" : body["productType"];
@@ -87537,6 +87781,7 @@ async function createAdminProduct(req, res) {
       isActive: status !== "hidden" && body["isActive"] !== false,
       status,
       imageUrl: imageUrl || null,
+      catalogId,
       description,
       sortOrder
     };
@@ -87551,7 +87796,7 @@ async function createAdminProduct(req, res) {
 async function updateAdminProduct(req, res) {
   try {
     const id = String(req.params["id"]);
-    if (!import_mongodb12.ObjectId.isValid(id)) {
+    if (!import_mongodb14.ObjectId.isValid(id)) {
       res.status(400).json({ error: "Invalid product id" });
       return;
     }
@@ -87594,6 +87839,24 @@ async function updateAdminProduct(req, res) {
       }
       update[key] = key === "imageUrl" && !value ? null : value;
     }
+    if (body["catalogId"] !== void 0) {
+      const requestedCatalogId = body["catalogId"];
+      if (requestedCatalogId === null || requestedCatalogId === "") {
+        update.catalogId = null;
+      } else if (typeof requestedCatalogId === "string" && import_mongodb14.ObjectId.isValid(requestedCatalogId)) {
+        const catalogs = await getCollection("catalogs");
+        const catalog = await catalogs.findOne({ _id: new import_mongodb14.ObjectId(requestedCatalogId), isActive: true });
+        if (!catalog) {
+          res.status(400).json({ error: "Select an active catalog" });
+          return;
+        }
+        update.catalogId = catalog._id;
+        update.category = catalog.name;
+      } else {
+        res.status(400).json({ error: "Invalid catalog id" });
+        return;
+      }
+    }
     for (const key of ["finalPrice", "flashSalePrice", "stockCount", "sortOrder"]) {
       if (body[key] === void 0) continue;
       if (key === "flashSalePrice" && (body[key] === null || body[key] === "")) {
@@ -87629,7 +87892,7 @@ async function updateAdminProduct(req, res) {
     if (update.status === "hidden") update.isActive = false;
     if (update.status === "active") update.isActive = true;
     const products = await getCollection("products");
-    const result = await products.updateOne({ _id: new import_mongodb12.ObjectId(id) }, { $set: update });
+    const result = await products.updateOne({ _id: new import_mongodb14.ObjectId(id) }, { $set: update });
     if (!result.matchedCount) {
       res.status(404).json({ error: "Product not found" });
       return;
@@ -87640,13 +87903,14 @@ async function updateAdminProduct(req, res) {
     res.status(500).json({ error: "Internal error" });
   }
 }
-router6.get("/admin/products", telegramAuth, adminAuth, listAdminProducts);
-router6.post("/admin/products", telegramAuth, adminAuth, createAdminProduct);
-router6.patch("/admin/products/:id", telegramAuth, adminAuth, updateAdminProduct);
+router7.get("/admin/products", telegramAuth, adminAuth, listAdminProducts);
+router7.post("/admin/products", telegramAuth, adminAuth, createAdminProduct);
+router7.patch("/admin/products/:id", telegramAuth, adminAuth, updateAdminProduct);
 adminProductPortalRouter.get("/products", adminProductServiceAuth, listAdminProducts);
 adminProductPortalRouter.post("/products", adminProductServiceAuth, createAdminProduct);
 adminProductPortalRouter.patch("/products/:id", adminProductServiceAuth, updateAdminProduct);
-router6.get("/admin/topups", telegramAuth, adminAuth, async (req, res) => {
+adminProductPortalRouter.use(adminPortalAssets_default);
+router7.get("/admin/topups", telegramAuth, adminAuth, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(String(req.query["page"] ?? "1")));
     const limit = 20;
@@ -87655,7 +87919,7 @@ router6.get("/admin/topups", telegramAuth, adminAuth, async (req, res) => {
     const users = await getCollection("users");
     const docs = await txs.find({ type: "Topup", status: "Pending" }).sort({ timestamp: -1 }).skip(skip).limit(limit).toArray();
     const userObjIds = Array.from(new Set(docs.map((t) => t.userId.toString()))).map(
-      (s) => new import_mongodb12.ObjectId(s)
+      (s) => new import_mongodb14.ObjectId(s)
     );
     const userDocs = await users.find({ _id: { $in: userObjIds } }).toArray();
     const userMap = Object.fromEntries(userDocs.map((u) => [u._id.toString(), u]));
@@ -87686,13 +87950,13 @@ router6.get("/admin/topups", telegramAuth, adminAuth, async (req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.patch("/admin/topups/:id/approve", telegramAuth, adminAuth, async (req, res) => {
+router7.patch("/admin/topups/:id/approve", telegramAuth, adminAuth, async (req, res) => {
   try {
     const id = String(req.params["id"]);
     const adminTid = req.tgUser.id;
     const txs = await getCollection("transactions");
     const users = await getCollection("users");
-    const tx = await txs.findOne({ _id: new import_mongodb12.ObjectId(id), type: "Topup", status: "Pending" });
+    const tx = await txs.findOne({ _id: new import_mongodb14.ObjectId(id), type: "Topup", status: "Pending" });
     if (!tx) {
       res.status(404).json({ error: "Pending top-up not found" });
       return;
@@ -87749,13 +88013,13 @@ router6.patch("/admin/topups/:id/approve", telegramAuth, adminAuth, async (req, 
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.patch("/admin/topups/:id/reject", telegramAuth, adminAuth, async (req, res) => {
+router7.patch("/admin/topups/:id/reject", telegramAuth, adminAuth, async (req, res) => {
   try {
     const id = String(req.params["id"]);
     const { reason } = req.body;
     const adminTid = req.tgUser.id;
     const txs = await getCollection("transactions");
-    const tx = await txs.findOne({ _id: new import_mongodb12.ObjectId(id), type: "Topup", status: "Pending" });
+    const tx = await txs.findOne({ _id: new import_mongodb14.ObjectId(id), type: "Topup", status: "Pending" });
     if (!tx) {
       res.status(404).json({ error: "Pending top-up not found" });
       return;
@@ -87821,7 +88085,7 @@ function publicUser(u) {
     joinDate: u.joinDate ?? u.createdAt ?? null
   };
 }
-router6.get("/admin/users", telegramAuth, adminAuth, async (req, res) => {
+router7.get("/admin/users", telegramAuth, adminAuth, async (req, res) => {
   try {
     const q = String(req.query["q"] ?? "").trim();
     const page = Math.max(1, parseInt(String(req.query["page"] ?? "1")));
@@ -87851,17 +88115,17 @@ router6.get("/admin/users", telegramAuth, adminAuth, async (req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.get("/admin/users/:id", telegramAuth, adminAuth, async (req, res) => {
+router7.get("/admin/users/:id", telegramAuth, adminAuth, async (req, res) => {
   try {
     const id = String(req.params["id"]);
-    if (!import_mongodb12.ObjectId.isValid(id)) {
+    if (!import_mongodb14.ObjectId.isValid(id)) {
       res.status(400).json({ error: "Invalid user id" });
       return;
     }
     const users = await getCollection("users");
     const orders = await getCollection("orders");
     const txs = await getCollection("transactions");
-    const user = await users.findOne({ _id: new import_mongodb12.ObjectId(id) });
+    const user = await users.findOne({ _id: new import_mongodb14.ObjectId(id) });
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -87887,10 +88151,10 @@ router6.get("/admin/users/:id", telegramAuth, adminAuth, async (req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.patch("/admin/users/:id", telegramAuth, adminAuth, async (req, res) => {
+router7.patch("/admin/users/:id", telegramAuth, adminAuth, async (req, res) => {
   try {
     const id = String(req.params["id"]);
-    if (!import_mongodb12.ObjectId.isValid(id)) {
+    if (!import_mongodb14.ObjectId.isValid(id)) {
       res.status(400).json({ error: "Invalid user id" });
       return;
     }
@@ -87898,7 +88162,7 @@ router6.patch("/admin/users/:id", telegramAuth, adminAuth, async (req, res) => {
     const body = req.body ?? {};
     const action = String(body.action ?? "");
     const users = await getCollection("users");
-    const user = await users.findOne({ _id: new import_mongodb12.ObjectId(id) });
+    const user = await users.findOne({ _id: new import_mongodb14.ObjectId(id) });
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -87974,7 +88238,7 @@ router6.patch("/admin/users/:id", telegramAuth, adminAuth, async (req, res) => {
       const txs = await getCollection("transactions");
       const txId = await uniqueTxId(txs);
       await txs.insertOne({
-        _id: new import_mongodb12.ObjectId(),
+        _id: new import_mongodb14.ObjectId(),
         userId: user._id,
         type: amount > 0 ? "AdminCredit" : "AdminDebit",
         wallet: "KS",
@@ -88023,7 +88287,7 @@ function analyticsDateRange(period) {
   const start = new Date(now.getTime() - 30 * 864e5);
   return { start, end: now, label: "Last 30 Days" };
 }
-router6.get("/admin/analytics", telegramAuth, adminAuth, async (req, res) => {
+router7.get("/admin/analytics", telegramAuth, adminAuth, async (req, res) => {
   try {
     const allowed = /* @__PURE__ */ new Set(["today", "yesterday", "week", "month"]);
     const period = allowed.has(String(req.query["period"])) ? String(req.query["period"]) : "month";
@@ -88114,7 +88378,7 @@ router6.get("/admin/analytics", telegramAuth, adminAuth, async (req, res) => {
         { $sort: { count: -1 } }
       ]).toArray()
     ]);
-    const pids = [...new Set(successOrders.map((o) => o.productId?.toString()).filter(Boolean))].map((s) => new import_mongodb12.ObjectId(s));
+    const pids = [...new Set(successOrders.map((o) => o.productId?.toString()).filter(Boolean))].map((s) => new import_mongodb14.ObjectId(s));
     const prodDocs = pids.length ? await products.find({ _id: { $in: pids } }).toArray() : [];
     const profitById = new Map(prodDocs.map((p) => [p._id.toString(), p]));
     let grossRevenue = 0;
@@ -88201,7 +88465,7 @@ var SPIN_WEIGHT_DEFAULTS = {
   spinWeightFreeSpin: 1
 };
 var SPIN_PRIZE_TYPES = ["coin", "ks", "spin", "none"];
-router6.get("/admin/config", telegramAuth, adminAuth, async (_req, res) => {
+router7.get("/admin/config", telegramAuth, adminAuth, async (_req, res) => {
   try {
     const statusColl = await getCollection("systemstatuses");
     const gameColl = await getCollection("gameconfigs");
@@ -88242,7 +88506,7 @@ router6.get("/admin/config", telegramAuth, adminAuth, async (_req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.put("/admin/config/referral-tiers", telegramAuth, adminAuth, async (req, res) => {
+router7.put("/admin/config/referral-tiers", telegramAuth, adminAuth, async (req, res) => {
   try {
     const body = req.body;
     if (!Array.isArray(body.tiers) || body.tiers.length === 0) {
@@ -88289,7 +88553,7 @@ router6.put("/admin/config/referral-tiers", telegramAuth, adminAuth, async (req,
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.put("/admin/config/spin", telegramAuth, adminAuth, async (req, res) => {
+router7.put("/admin/config/spin", telegramAuth, adminAuth, async (req, res) => {
   try {
     const body = req.body;
     const update = {};
@@ -88336,7 +88600,7 @@ router6.put("/admin/config/spin", telegramAuth, adminAuth, async (req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.post("/admin/config/spin/prizes", telegramAuth, adminAuth, async (req, res) => {
+router7.post("/admin/config/spin/prizes", telegramAuth, adminAuth, async (req, res) => {
   try {
     const body = req.body;
     const label = String(body.label ?? "").trim();
@@ -88360,7 +88624,7 @@ router6.post("/admin/config/spin/prizes", telegramAuth, adminAuth, async (req, r
       return;
     }
     const prize = {
-      _id: new import_mongodb12.ObjectId(),
+      _id: new import_mongodb14.ObjectId(),
       label,
       type,
       value,
@@ -88389,17 +88653,17 @@ router6.post("/admin/config/spin/prizes", telegramAuth, adminAuth, async (req, r
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.delete("/admin/config/spin/prizes/:prizeId", telegramAuth, adminAuth, async (req, res) => {
+router7.delete("/admin/config/spin/prizes/:prizeId", telegramAuth, adminAuth, async (req, res) => {
   try {
     const prizeId = String(req.params["prizeId"]);
-    if (!import_mongodb12.ObjectId.isValid(prizeId)) {
+    if (!import_mongodb14.ObjectId.isValid(prizeId)) {
       res.status(400).json({ error: "Invalid prize id" });
       return;
     }
     const gameColl = await getCollection("gameconfigs");
     const result = await gameColl.updateOne(
       { _id: "global" },
-      { $pull: { customSpinPrizes: { _id: new import_mongodb12.ObjectId(prizeId) } } }
+      { $pull: { customSpinPrizes: { _id: new import_mongodb14.ObjectId(prizeId) } } }
     );
     if (result.modifiedCount === 0) {
       res.status(404).json({ error: "Prize not found" });
@@ -88420,7 +88684,7 @@ var GATEWAY_FIELDS = {
   aya: "ayaStatus",
   cb: "cbStatus"
 };
-router6.get("/admin/gateways", telegramAuth, adminAuth, async (_req, res) => {
+router7.get("/admin/gateways", telegramAuth, adminAuth, async (_req, res) => {
   try {
     const statusColl = await getCollection("systemstatuses");
     const doc = await statusColl.findOne({ _id: "global" });
@@ -88438,7 +88702,7 @@ router6.get("/admin/gateways", telegramAuth, adminAuth, async (_req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-router6.put("/admin/gateways", telegramAuth, adminAuth, async (req, res) => {
+router7.put("/admin/gateways", telegramAuth, adminAuth, async (req, res) => {
   try {
     const body = req.body;
     const update = {};
@@ -88510,7 +88774,7 @@ function csvEsc(val) {
 function csvRow(...cols) {
   return cols.map(csvEsc).join(",");
 }
-router6.get("/admin/export", telegramAuth, adminAuth, async (req, res) => {
+router7.get("/admin/export", telegramAuth, adminAuth, async (req, res) => {
   try {
     const period = String(req.query["period"] ?? "month");
     const allowed = ["today", "week", "month", "custom"];
@@ -88708,13 +88972,13 @@ router6.get("/admin/export", telegramAuth, adminAuth, async (req, res) => {
     res.status(500).json({ error: "Internal error" });
   }
 });
-var admin_default = router6;
+var admin_default = router7;
 
 // src/routes/promo.ts
-var import_express7 = __toESM(require_express2(), 1);
-var router7 = (0, import_express7.Router)();
-router7.use(telegramAuth);
-router7.post("/promo/validate", async (req, res) => {
+var import_express8 = __toESM(require_express2(), 1);
+var router8 = (0, import_express8.Router)();
+router8.use(telegramAuth);
+router8.post("/promo/validate", async (req, res) => {
   const u = req.storeUser;
   const body = req.body;
   const code = typeof body.code === "string" ? body.code.trim() : "";
@@ -88738,14 +89002,14 @@ router7.post("/promo/validate", async (req, res) => {
     description: p.description || ""
   });
 });
-var promo_default = router7;
+var promo_default = router8;
 
 // src/routes/addressBook.ts
-var import_express8 = __toESM(require_express2(), 1);
-var import_mongodb14 = __toESM(require_lib6(), 1);
+var import_express9 = __toESM(require_express2(), 1);
+var import_mongodb16 = __toESM(require_lib6(), 1);
 var MAX_PER_GAME = 5;
-var router8 = (0, import_express8.Router)();
-router8.use(telegramAuth);
+var router9 = (0, import_express9.Router)();
+router9.use(telegramAuth);
 function pub(a) {
   return {
     id: a._id.toString(),
@@ -88756,7 +89020,7 @@ function pub(a) {
     isDefault: !!a.isDefault
   };
 }
-router8.get("/addresses", async (req, res) => {
+router9.get("/addresses", async (req, res) => {
   const u = req.storeUser;
   const col = await getCollection("addressbooks");
   const filter = { userId: u._id };
@@ -88767,7 +89031,7 @@ router8.get("/addresses", async (req, res) => {
   const docs = await col.find(filter).sort({ isDefault: -1, createdAt: -1 }).toArray();
   res.json({ addresses: docs.map(pub) });
 });
-router8.post("/addresses", async (req, res) => {
+router9.post("/addresses", async (req, res) => {
   const u = req.storeUser;
   const body = req.body;
   const gameName = (body.gameName ?? "").trim();
@@ -88792,7 +89056,7 @@ router8.post("/addresses", async (req, res) => {
   }
   const now = /* @__PURE__ */ new Date();
   const doc = {
-    _id: new import_mongodb14.ObjectId(),
+    _id: new import_mongodb16.ObjectId(),
     userId: u._id,
     gameName,
     gameId,
@@ -88805,30 +89069,30 @@ router8.post("/addresses", async (req, res) => {
   await col.insertOne(doc);
   res.json({ address: pub(doc) });
 });
-router8.delete("/addresses/:id", async (req, res) => {
+router9.delete("/addresses/:id", async (req, res) => {
   const u = req.storeUser;
   const idStr = String(req.params["id"] ?? "");
-  if (!import_mongodb14.ObjectId.isValid(idStr)) {
+  if (!import_mongodb16.ObjectId.isValid(idStr)) {
     res.status(400).json({ error: "Bad id" });
     return;
   }
   const col = await getCollection("addressbooks");
-  const del = await col.findOneAndDelete({ _id: new import_mongodb14.ObjectId(idStr), userId: u._id });
+  const del = await col.findOneAndDelete({ _id: new import_mongodb16.ObjectId(idStr), userId: u._id });
   if (!del) {
     res.status(404).json({ error: "Entry not found" });
     return;
   }
   res.json({ ok: true });
 });
-router8.patch("/addresses/:id/default", async (req, res) => {
+router9.patch("/addresses/:id/default", async (req, res) => {
   const u = req.storeUser;
   const idStr = String(req.params["id"] ?? "");
-  if (!import_mongodb14.ObjectId.isValid(idStr)) {
+  if (!import_mongodb16.ObjectId.isValid(idStr)) {
     res.status(400).json({ error: "Bad id" });
     return;
   }
   const col = await getCollection("addressbooks");
-  const entry = await col.findOne({ _id: new import_mongodb14.ObjectId(idStr), userId: u._id });
+  const entry = await col.findOne({ _id: new import_mongodb16.ObjectId(idStr), userId: u._id });
   if (!entry) {
     res.status(404).json({ error: "Entry not found" });
     return;
@@ -88837,11 +89101,11 @@ router8.patch("/addresses/:id/default", async (req, res) => {
   await col.updateOne({ _id: entry._id }, { $set: { isDefault: true } });
   res.json({ ok: true });
 });
-var addressBook_default = router8;
+var addressBook_default = router9;
 
 // src/routes/faq.ts
-var import_express9 = __toESM(require_express2(), 1);
-var router9 = (0, import_express9.Router)();
+var import_express10 = __toESM(require_express2(), 1);
+var router10 = (0, import_express10.Router)();
 function pub2(f) {
   return {
     faqId: f.faqId,
@@ -88855,7 +89119,7 @@ function pub2(f) {
     viewCount: f.viewCount ?? 0
   };
 }
-router9.get("/faqs", async (req, res) => {
+router10.get("/faqs", async (req, res) => {
   const col = await getCollection("faqs");
   const category = typeof req.query["category"] === "string" ? req.query["category"].trim() : "";
   const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
@@ -88881,7 +89145,7 @@ router9.get("/faqs", async (req, res) => {
   const docs = await col.find(filter).sort({ category: 1, sortOrder: 1, viewCount: -1 }).toArray();
   res.json({ faqs: docs.map(pub2) });
 });
-router9.post("/faqs/:faqId/view", async (req, res) => {
+router10.post("/faqs/:faqId/view", async (req, res) => {
   const faqId = String(req.params["faqId"] ?? "");
   if (!faqId) {
     res.status(400).json({ error: "Bad faqId" });
@@ -88891,21 +89155,21 @@ router9.post("/faqs/:faqId/view", async (req, res) => {
   await col.updateOne({ faqId }, { $inc: { viewCount: 1 } });
   res.json({ ok: true });
 });
-var faq_default = router9;
+var faq_default = router10;
 
 // src/routes/reviews.ts
-var import_express10 = __toESM(require_express2(), 1);
-var import_mongodb17 = __toESM(require_lib6(), 1);
-var router10 = (0, import_express10.Router)();
+var import_express11 = __toESM(require_express2(), 1);
+var import_mongodb19 = __toESM(require_lib6(), 1);
+var router11 = (0, import_express11.Router)();
 function safeId2(s) {
-  return import_mongodb17.ObjectId.isValid(s) ? new import_mongodb17.ObjectId(s) : null;
+  return import_mongodb19.ObjectId.isValid(s) ? new import_mongodb19.ObjectId(s) : null;
 }
 function displayName(u) {
   if (!u) return "Anonymous";
   if (u.username) return `@${u.username}`;
   return u.first_name || "Anonymous";
 }
-router10.get("/reviews", async (req, res) => {
+router11.get("/reviews", async (req, res) => {
   const limit = Math.min(Math.max(parseInt(String(req.query["limit"] ?? "10"), 10) || 10, 1), 30);
   const col = await getCollection("reviews");
   const docs = await col.find({ isPublic: true, rating: { $gte: 4 }, comment: { $ne: null } }).sort({ rating: -1, createdAt: -1 }).limit(limit).toArray();
@@ -88941,7 +89205,7 @@ router10.get("/reviews", async (req, res) => {
     }
   });
 });
-router10.get("/reviews/mine", telegramAuth, async (req, res) => {
+router11.get("/reviews/mine", telegramAuth, async (req, res) => {
   const u = req.storeUser;
   const col = await getCollection("reviews");
   const docs = await col.find({ userId: u._id }).sort({ createdAt: -1 }).limit(50).toArray();
@@ -88956,7 +89220,7 @@ router10.get("/reviews/mine", telegramAuth, async (req, res) => {
     }))
   });
 });
-router10.get("/reviews/ratable", telegramAuth, async (req, res) => {
+router11.get("/reviews/ratable", telegramAuth, async (req, res) => {
   const u = req.storeUser;
   const orders = await getCollection("orders");
   const reviews = await getCollection("reviews");
@@ -88969,7 +89233,7 @@ router10.get("/reviews/ratable", telegramAuth, async (req, res) => {
   const orderIds = successOrders.map((o) => o._id);
   const existing = await reviews.find({ orderId: { $in: orderIds }, rating: { $ne: null } }).toArray();
   const ratedSet = new Set(existing.map((r) => r.orderId.toString()));
-  const productIds = [...new Set(successOrders.map((o) => o.productId?.toString()).filter(Boolean))].map((s) => new import_mongodb17.ObjectId(s));
+  const productIds = [...new Set(successOrders.map((o) => o.productId?.toString()).filter(Boolean))].map((s) => new import_mongodb19.ObjectId(s));
   const prodDocs = productIds.length ? await products.find({ _id: { $in: productIds } }).toArray() : [];
   const nameById = new Map(prodDocs.map((p) => [p._id.toString(), p.name]));
   const ratable = successOrders.filter((o) => !ratedSet.has(o._id.toString())).map((o) => ({
@@ -88979,7 +89243,7 @@ router10.get("/reviews/ratable", telegramAuth, async (req, res) => {
   }));
   res.json({ orders: ratable });
 });
-router10.post("/reviews", telegramAuth, async (req, res) => {
+router11.post("/reviews", telegramAuth, async (req, res) => {
   const u = req.storeUser;
   const body = req.body ?? {};
   const orderId = safeId2(body.orderId ?? "");
@@ -89038,13 +89302,13 @@ router10.post("/reviews", telegramAuth, async (req, res) => {
   );
   res.json({ ok: true, rating, isPublic });
 });
-var reviews_default = router10;
+var reviews_default = router11;
 
 // src/routes/rewards.ts
-var import_express11 = __toESM(require_express2(), 1);
-var import_mongodb19 = __toESM(require_lib6(), 1);
-var router11 = (0, import_express11.Router)();
-router11.use(telegramAuth);
+var import_express12 = __toESM(require_express2(), 1);
+var import_mongodb21 = __toESM(require_lib6(), 1);
+var router12 = (0, import_express12.Router)();
+router12.use(telegramAuth);
 function asUser4(req) {
   return req.storeUser;
 }
@@ -89109,7 +89373,7 @@ async function debitCoins(userId, cost, note, balanceBefore) {
   const now = /* @__PURE__ */ new Date();
   const txs = await getCollection("transactions");
   await txs.insertOne({
-    _id: new import_mongodb19.ObjectId(),
+    _id: new import_mongodb21.ObjectId(),
     userId,
     type: "Debit",
     wallet: "Coin",
@@ -89133,7 +89397,7 @@ async function creditCoins(userId, amount, note) {
   const now = /* @__PURE__ */ new Date();
   const txs = await getCollection("transactions");
   await txs.insertOne({
-    _id: new import_mongodb19.ObjectId(),
+    _id: new import_mongodb21.ObjectId(),
     userId,
     type: "Refund",
     wallet: "Coin",
@@ -89152,7 +89416,7 @@ async function issuePersonalCoupon(userId, spec, source) {
   const code = await uniqueCouponCode();
   const now = /* @__PURE__ */ new Date();
   const doc = {
-    _id: new import_mongodb19.ObjectId(),
+    _id: new import_mongodb21.ObjectId(),
     code,
     discountType: spec.discountType,
     value: spec.value,
@@ -89191,7 +89455,7 @@ async function createRedemptionOrder(userId, product, checkoutData, coinCost, so
       coinDebited = true;
     }
     const now = /* @__PURE__ */ new Date();
-    const orderId = new import_mongodb19.ObjectId();
+    const orderId = new import_mongodb21.ObjectId();
     const orders = await getCollection("orders");
     await orders.insertOne({
       _id: orderId,
@@ -89230,7 +89494,7 @@ function userCount(list, userId) {
   if (!list) return 0;
   return list.filter((e) => e.userId?.toString() === userId.toString()).length;
 }
-router11.get("/items", async (req, res) => {
+router12.get("/items", async (req, res) => {
   const u = asUser4(req);
   const items = await getCollection("rewarditems");
   const products = await getCollection("products");
@@ -89272,12 +89536,12 @@ router11.get("/items", async (req, res) => {
   );
   res.json({ coinBalance: u.balanceCoin, items: out });
 });
-router11.post("/items/:id/redeem", async (req, res) => {
+router12.post("/items/:id/redeem", async (req, res) => {
   const u = asUser4(req);
   const idParam = String(req.params["id"] ?? "");
-  if (!idParam || !import_mongodb19.ObjectId.isValid(idParam)) return res.status(400).json({ error: "Invalid reward id" });
+  if (!idParam || !import_mongodb21.ObjectId.isValid(idParam)) return res.status(400).json({ error: "Invalid reward id" });
   const items = await getCollection("rewarditems");
-  const item = await items.findOne({ _id: new import_mongodb19.ObjectId(idParam) });
+  const item = await items.findOne({ _id: new import_mongodb21.ObjectId(idParam) });
   if (!item) return res.status(404).json({ error: "Reward not found." });
   const inStock = item.stockCount === -1 || (typeof item.stockCount === "number" ? item.stockCount > 0 : true);
   if (item.status !== "active" || !inStock) return res.status(409).json({ error: "This reward is not available right now." });
@@ -89340,7 +89604,7 @@ async function recordItemRedemption(item, userId) {
   if (item.stockCount !== -1) update["$inc"]["stockCount"] = -1;
   await items.updateOne({ _id: item._id }, update);
 }
-router11.get("/codes/:code/preview", async (req, res) => {
+router12.get("/codes/:code/preview", async (req, res) => {
   const u = asUser4(req);
   const raw = String(req.params["code"] ?? "").toUpperCase().trim();
   if (!raw) return res.status(400).json({ error: "Enter a code." });
@@ -89376,7 +89640,7 @@ router11.get("/codes/:code/preview", async (req, res) => {
     }))
   });
 });
-router11.post("/codes/redeem", async (req, res) => {
+router12.post("/codes/redeem", async (req, res) => {
   const u = asUser4(req);
   const raw = String(req.body.code ?? "").toUpperCase().trim();
   if (!raw) return res.status(400).json({ error: "Enter a code." });
@@ -89477,26 +89741,26 @@ function collectCheckout(fields, body) {
   }
   return { values };
 }
-var rewards_default = router11;
+var rewards_default = router12;
 
 // src/routes/index.ts
-var router12 = (0, import_express12.Router)();
-router12.use(health_default);
-router12.use("/webhook", webhook_default);
-router12.use("/store/admin-portal", adminProductPortalRouter);
-router12.use("/store", faq_default);
-router12.use("/store", reviews_default);
-router12.use("/store/rewards", rewards_default);
-router12.use("/store", store_default);
-router12.use("/store", gamification_default);
-router12.use("/store", support_default);
-router12.use("/store", admin_default);
-router12.use("/store", promo_default);
-router12.use("/store", addressBook_default);
-var routes_default = router12;
+var router13 = (0, import_express13.Router)();
+router13.use(health_default);
+router13.use("/webhook", webhook_default);
+router13.use("/store/admin-portal", adminProductPortalRouter);
+router13.use("/store", faq_default);
+router13.use("/store", reviews_default);
+router13.use("/store/rewards", rewards_default);
+router13.use("/store", store_default);
+router13.use("/store", gamification_default);
+router13.use("/store", support_default);
+router13.use("/store", admin_default);
+router13.use("/store", promo_default);
+router13.use("/store", addressBook_default);
+var routes_default = router13;
 
 // src/app.ts
-var app = (0, import_express13.default)();
+var app = (0, import_express14.default)();
 app.set("trust proxy", 1);
 app.use(helmet());
 app.use(
@@ -89564,8 +89828,9 @@ app.use("/api/webhook", (req, res, next) => {
     next();
   });
 });
-app.use(import_express13.default.json());
-app.use(import_express13.default.urlencoded({ extended: true }));
+app.use("/api/store/admin-portal/media", import_express14.default.json({ limit: "1.4mb" }));
+app.use(import_express14.default.json());
+app.use(import_express14.default.urlencoded({ extended: true }));
 var webhookLimiter = rate_limit_default({
   windowMs: 60 * 1e3,
   max: 300,

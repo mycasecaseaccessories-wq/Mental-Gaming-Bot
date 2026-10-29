@@ -92,6 +92,9 @@ app.use("/api/webhook", (req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+// Admin image uploads arrive as validated, compressed WebP encoded in JSON.
+// Keep the larger body limit scoped to that single authenticated endpoint.
+app.use("/api/store/admin-portal/media", express.json({ limit: "1.4mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

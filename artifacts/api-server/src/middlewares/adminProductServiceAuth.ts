@@ -1,20 +1,19 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 
-const API_PRODUCT_PREFIX = "/api/store/admin-portal/products";
 const MAX_CLOCK_SKEW_SECONDS = 60;
 const NONCE_LIFETIME_MS = 2 * MAX_CLOCK_SKEW_SECONDS * 1000;
 const MAX_TRACKED_NONCES = 10_000;
 const usedNonces = new Map<string, number>();
 
-type SignedRequestParts = {
+interface SignedRequestParts {
   method: string;
   path: string;
   timestamp: string;
   nonce: string;
   email: string;
   bodyText: string;
-};
+}
 
 export function productServiceSigningPayload(parts: SignedRequestParts): string {
   const bodyHash = createHash("sha256").update(parts.bodyText).digest("hex");
@@ -33,7 +32,7 @@ export function signProductServiceRequest(secret: string, parts: SignedRequestPa
   return createHmac("sha256", secret).update(productServiceSigningPayload(parts)).digest("hex");
 }
 
-function pruneNonces(now: number) {
+function pruneNonces(now: number): void {
   for (const [key, expiry] of usedNonces) {
     if (expiry <= now) usedNonces.delete(key);
   }
@@ -51,7 +50,37 @@ function signatureMatches(expectedHex: string, receivedHex: string): boolean {
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
-export function adminProductServiceAuth(req: Request, res: Response, next: NextFunction) {
+function isAllowedPortalRoute(req: Request): boolean {
+  let url: URL;
+  try {
+    url = new URL(req.originalUrl, "http://localhost");
+  } catch {
+    return false;
+  }
+
+  const path = url.pathname;
+  const method = req.method.toUpperCase();
+  const base = "/api/store/admin-portal";
+
+  if (path === `${base}/products`) {
+    if (method === "POST") return url.search === "";
+    if (method !== "GET") return false;
+    const allowedQuery = new Set(["page", "search", "catalogId"]);
+    const keys = [...url.searchParams.keys()];
+    return keys.every((key, index) => allowedQuery.has(key) && keys.indexOf(key) === index);
+  }
+  if (path === `${base}/catalogs`) return method === "GET" && url.search === "";
+  if (/^\/api\/store\/admin-portal\/products\/[a-f0-9]{24}$/i.test(path)) {
+    return method === "PATCH" && url.search === "";
+  }
+  if (/^\/api\/store\/admin-portal\/catalogs\/[a-f0-9]{24}$/i.test(path)) {
+    return method === "PATCH" && url.search === "";
+  }
+  if (path === `${base}/media`) return method === "POST" && url.search === "";
+  return false;
+}
+
+export function adminProductServiceAuth(req: Request, res: Response, next: NextFunction): void {
   const secret = process.env["MG_PRODUCT_API_SECRET"] ?? "";
   if (Buffer.byteLength(secret, "utf8") < 32) {
     res.status(503).json({ error: "Product service authentication is not configured" });
@@ -71,14 +100,13 @@ export function adminProductServiceAuth(req: Request, res: Response, next: NextF
     !/^[A-Za-z0-9_-]{16,64}$/.test(nonce) ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
     email.length > 320 ||
-    !req.originalUrl.startsWith(API_PRODUCT_PREFIX) ||
-    !["GET", "POST", "PATCH"].includes(req.method)
+    !isAllowedPortalRoute(req)
   ) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
-  const bodyText = req.method === "GET" ? "" : JSON.stringify(req.body ?? {});
+  const bodyText = req.method.toUpperCase() === "GET" ? "" : JSON.stringify(req.body ?? {});
   const parts = {
     method: req.method,
     path: req.originalUrl,
