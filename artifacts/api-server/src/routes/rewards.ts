@@ -12,6 +12,7 @@ import { ObjectId } from "mongodb";
 import { getCollection } from "../lib/mongodb";
 import { telegramAuth, type StoreUser } from "../middlewares/telegramAuth";
 import { logger } from "../lib/logger";
+import { safePublicImageUrl } from "../lib/publicImageUrl";
 
 const router: IRouter = Router();
 router.use(telegramAuth);
@@ -322,7 +323,7 @@ router.get("/items", async (req: Request, res: Response) => {
         id: it._id.toString(),
         name: it.name,
         description: it.description ?? "",
-        imageUrl: it.imageUrl ?? null,
+        imageUrl: safePublicImageUrl(it.imageUrl),
         coinPrice: it.coinPrice,
         rewardType: it.rewardType,
         productName,

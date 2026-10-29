@@ -85715,6 +85715,30 @@ async function validatePromo(code, userId, amount) {
   return { valid: true, promo, discount: calcPromoDiscount(promo, amount) };
 }
 
+// src/lib/publicImageUrl.ts
+var TELEGRAM_BOT_TOKEN_PATTERN = /(?:^|[/?#&=])bot\d{5,}:[A-Za-z0-9_-]{20,}(?=$|[/?#&=])/i;
+function safePublicImageUrl(value) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    if (url.hostname.toLowerCase() === "api.telegram.org" && url.pathname.startsWith("/file/bot")) {
+      return null;
+    }
+    let decoded = url.href;
+    try {
+      decoded = decodeURIComponent(url.href);
+    } catch {
+    }
+    if (TELEGRAM_BOT_TOKEN_PATTERN.test(url.href) || TELEGRAM_BOT_TOKEN_PATTERN.test(decoded)) {
+      return null;
+    }
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
 // src/routes/store.ts
 var upload = (0, import_multer.default)({
   storage: import_multer.default.memoryStorage(),
@@ -85783,7 +85807,7 @@ function publicProduct(p) {
     onSale,
     flashSaleEnd: onSale ? p.flashSaleEnd : null,
     inStock: p.stockCount === -1 || p.stockCount > 0,
-    imageUrl: p.imageUrl,
+    imageUrl: safePublicImageUrl(p.imageUrl),
     description: p.description,
     catalogId: p.catalogId?.toString() ?? null,
     sortOrder: p.sortOrder ?? 0,
@@ -85908,7 +85932,7 @@ router3.get("/catalogs", async (req, res) => {
   const toItem = (c) => ({
     id: c._id.toString(),
     name: c.name,
-    imageUrl: c.imageUrl ?? null,
+    imageUrl: safePublicImageUrl(c.imageUrl),
     sortOrder: c.sortOrder,
     parentCategoryId: c.parentCategory?.toString() ?? null,
     checkoutFields: c.checkoutFields,
@@ -85951,13 +85975,13 @@ router3.get("/catalogs/:id", async (req, res) => {
   res.json({
     id: cat._id.toString(),
     name: cat.name,
-    imageUrl: cat.imageUrl ?? null,
+    imageUrl: safePublicImageUrl(cat.imageUrl),
     parentCategoryId: cat.parentCategory?.toString() ?? null,
     checkoutFields: effectiveFields,
     subCatalogs: subDocs.map((s) => ({
       id: s._id.toString(),
       name: s.name,
-      imageUrl: s.imageUrl ?? null,
+      imageUrl: safePublicImageUrl(s.imageUrl),
       sortOrder: s.sortOrder,
       parentCategoryId: id.toString(),
       checkoutFields: s.checkoutFields,
@@ -86264,7 +86288,7 @@ router3.get("/orders", async (req, res) => {
       id: o._id.toString(),
       shortId: o._id.toString().slice(-6).toUpperCase(),
       productName: pMap.get(o.productId.toString())?.name || o.gameName || "Order",
-      productImage: pMap.get(o.productId.toString())?.imageUrl || null,
+      productImage: safePublicImageUrl(pMap.get(o.productId.toString())?.imageUrl),
       amount: o.amount,
       status: o.status,
       gameId: o.gameId,
@@ -86554,7 +86578,7 @@ router3.get("/banners", async (_req, res) => {
       id: b._id.toString(),
       title: b.title,
       subtitle: b.subtitle,
-      imageUrl: b.imageUrl,
+      imageUrl: safePublicImageUrl(b.imageUrl),
       targetType: b.targetType,
       targetId: b.targetId,
       buttonText: b.buttonText,
@@ -86580,7 +86604,7 @@ router3.get("/notifications", async (req, res) => {
       type: n.type,
       title: n.title,
       body: n.body,
-      imageUrl: n.imageUrl,
+      imageUrl: safePublicImageUrl(n.imageUrl),
       targetType: n.targetType,
       targetId: n.targetId,
       isRead: n.isRead,
@@ -89515,7 +89539,7 @@ router12.get("/items", async (req, res) => {
         id: it._id.toString(),
         name: it.name,
         description: it.description ?? "",
-        imageUrl: it.imageUrl ?? null,
+        imageUrl: safePublicImageUrl(it.imageUrl),
         coinPrice: it.coinPrice,
         rewardType: it.rewardType,
         productName,

@@ -7,6 +7,7 @@ import { telegramAuth, type StoreUser } from "../middlewares/telegramAuth";
 import { deleteMessage, sendPhoto } from "../lib/telegramApi";
 import { logger } from "../lib/logger";
 import { validatePromo, calcPromoDiscount, type PromoDoc } from "../lib/promo";
+import { safePublicImageUrl } from "../lib/publicImageUrl";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -224,7 +225,7 @@ function publicProduct(p: ProductDoc) {
     onSale,
     flashSaleEnd: onSale ? p.flashSaleEnd : null,
     inStock: p.stockCount === -1 || p.stockCount > 0,
-    imageUrl: p.imageUrl,
+    imageUrl: safePublicImageUrl(p.imageUrl),
     description: p.description,
     catalogId: p.catalogId?.toString() ?? null,
     sortOrder: p.sortOrder ?? 0,
@@ -380,7 +381,7 @@ router.get("/catalogs", async (req: Request, res: Response) => {
   const toItem = (c: (typeof docs)[0]) => ({
     id: c._id.toString(),
     name: c.name,
-    imageUrl: c.imageUrl ?? null,
+    imageUrl: safePublicImageUrl(c.imageUrl),
     sortOrder: c.sortOrder,
     parentCategoryId: c.parentCategory?.toString() ?? null,
     checkoutFields: c.checkoutFields,
@@ -436,13 +437,13 @@ router.get("/catalogs/:id", async (req: Request, res: Response) => {
   res.json({
     id: cat._id.toString(),
     name: cat.name,
-    imageUrl: cat.imageUrl ?? null,
+    imageUrl: safePublicImageUrl(cat.imageUrl),
     parentCategoryId: cat.parentCategory?.toString() ?? null,
     checkoutFields: effectiveFields,
     subCatalogs: subDocs.map((s) => ({
       id: s._id.toString(),
       name: s.name,
-      imageUrl: s.imageUrl ?? null,
+      imageUrl: safePublicImageUrl(s.imageUrl),
       sortOrder: s.sortOrder,
       parentCategoryId: id.toString(),
       checkoutFields: s.checkoutFields,
@@ -865,7 +866,7 @@ router.get("/orders", async (req: Request, res: Response) => {
       id: o._id.toString(),
       shortId: o._id.toString().slice(-6).toUpperCase(),
       productName: pMap.get(o.productId.toString())?.name || o.gameName || "Order",
-      productImage: pMap.get(o.productId.toString())?.imageUrl || null,
+      productImage: safePublicImageUrl(pMap.get(o.productId.toString())?.imageUrl),
       amount: o.amount,
       status: o.status,
       gameId: o.gameId,
@@ -1255,7 +1256,7 @@ router.get("/banners", async (_req: Request, res: Response) => {
       id: b._id.toString(),
       title: b.title,
       subtitle: b.subtitle,
-      imageUrl: b.imageUrl,
+      imageUrl: safePublicImageUrl(b.imageUrl),
       targetType: b.targetType,
       targetId: b.targetId,
       buttonText: b.buttonText,
@@ -1293,7 +1294,7 @@ router.get("/notifications", async (req: Request, res: Response) => {
       type: n.type,
       title: n.title,
       body: n.body,
-      imageUrl: n.imageUrl,
+      imageUrl: safePublicImageUrl(n.imageUrl),
       targetType: n.targetType,
       targetId: n.targetId,
       isRead: n.isRead,
