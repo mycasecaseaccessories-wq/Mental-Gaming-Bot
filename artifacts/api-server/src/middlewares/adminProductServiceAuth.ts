@@ -129,10 +129,30 @@ export async function adminProductServiceAuth(
     const nonces = await getCollection<AdminPortalNonce>(NONCE_COLLECTION);
     // MongoDB's unique _id index makes the replay check atomic across API
     // instances; a process-local Map cannot provide this guarantee.
-    await nonces.insertOne({
+    const nonceDocument = {
       _id: nonceKey,
       expiresAt: new Date(now + NONCE_LIFETIME_MS),
-    });
+    };
+    try {
+      await nonces.insertOne(nonceDocument);
+    } catch (insertError) {
+      const code =
+        typeof insertError === "object" && insertError !== null && "code" in insertError
+          ? insertError.code
+          : undefined;
+      if (code !== 11000) throw insertError;
+
+      // Permit reuse only after the previous nonce record has expired. The
+      // conditional replacement remains atomic under concurrent requests.
+      const replaced = await nonces.replaceOne(
+        { _id: nonceKey, expiresAt: { $lte: new Date(now) } },
+        nonceDocument,
+      );
+      if (replaced.modifiedCount !== 1) {
+        res.status(409).json({ error: "Request already used" });
+        return;
+      }
+    }
 
     // Opportunistic cleanup avoids requiring a TTL-index migration. This is
     // cleanup only; replay protection relies on the atomic insert above.
