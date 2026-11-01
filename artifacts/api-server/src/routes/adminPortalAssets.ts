@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { GridFSBucket, ObjectId } from "mongodb";
 import { getCollection, getDb } from "../lib/mongodb";
@@ -183,63 +183,8 @@ async function uploadPortalImage(req: Request, res: Response): Promise<void> {
   }
 }
 
-async function purgeStoreDataOnce(req: Request, res: Response): Promise<void> {
-  const expectedHex = process.env["MG_PURGE_TOKEN_HASH_20261101"] ?? "";
-  const token = req.get("X-MG-Purge-Token") ?? "";
-  if (
-    req.get("X-MG-Purge-Confirmation") !== "DELETE ALL PRODUCTS CATALOGS AND ADMINIMAGES" ||
-    !/^[a-f0-9]{64}$/i.test(expectedHex) ||
-    token.length < 40 ||
-    token.length > 512
-  ) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  const expected = Buffer.from(expectedHex, "hex");
-  const received = createHash("sha256").update(token, "utf8").digest();
-  if (!timingSafeEqual(expected, received)) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  try {
-    const db = await getDb();
-    const products = db.collection("products");
-    const catalogs = db.collection("catalogs");
-    const imageFiles = db.collection("adminImages.files");
-    const imageChunks = db.collection("adminImages.chunks");
-    const before = {
-      products: await products.countDocuments({}),
-      catalogs: await catalogs.countDocuments({}),
-      imageFiles: await imageFiles.countDocuments({}),
-      imageChunks: await imageChunks.countDocuments({}),
-    };
-
-    const deleted = {
-      products: (await products.deleteMany({})).deletedCount,
-      catalogs: (await catalogs.deleteMany({})).deletedCount,
-      imageFiles: (await imageFiles.deleteMany({})).deletedCount,
-      imageChunks: (await imageChunks.deleteMany({})).deletedCount,
-    };
-    const remaining = {
-      products: await products.countDocuments({}),
-      catalogs: await catalogs.countDocuments({}),
-      imageFiles: await imageFiles.countDocuments({}),
-      imageChunks: await imageChunks.countDocuments({}),
-    };
-    const ok = Object.values(remaining).every((count) => count === 0);
-    res.setHeader("Cache-Control", "no-store");
-    res.status(ok ? 200 : 500).json({ ok, before, deleted, remaining });
-  } catch (err) {
-    logger.error({ err }, "one-time admin store purge failed");
-    res.status(500).json({ error: "Could not clear store data" });
-  }
-}
-
 router.get("/catalogs", adminProductServiceAuth, (req, res) => void listPortalCatalogs(req, res));
 router.patch("/catalogs/:id", adminProductServiceAuth, (req, res) => void updatePortalCatalog(req, res));
 router.post("/media", adminProductServiceAuth, (req, res) => void uploadPortalImage(req, res));
-router.post("/catalogs/purge", (req, res) => void purgeStoreDataOnce(req, res));
 
 export default router;
