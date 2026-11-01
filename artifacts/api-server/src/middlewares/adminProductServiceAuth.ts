@@ -66,10 +66,10 @@ function isAllowedPortalRoute(req: Request): boolean {
     return keys.every((key, index) => allowedQuery.has(key) && keys.indexOf(key) === index);
   }
   if (path === `${base}/catalogs`) return method === "GET" && url.search === "";
-  if (/^\\/api\\/store\\/admin-portal\\/products\\/[a-f0-9]{24}$/i.test(path)) {
+  if (/^\/api\/store\/admin-portal\/products\/[a-f0-9]{24}$/i.test(path)) {
     return method === "PATCH" && url.search === "";
   }
-  if (/^\\/api\\/store\\/admin-portal\\/catalogs\\/[a-f0-9]{24}$/i.test(path)) {
+  if (/^\/api\/store\/admin-portal\/catalogs\/[a-f0-9]{24}$/i.test(path)) {
     return method === "PATCH" && url.search === "";
   }
   if (path === `${base}/media`) return method === "POST" && url.search === "";
@@ -91,14 +91,14 @@ export async function adminProductServiceAuth(
   const nonce = req.get("X-MG-Nonce") ?? "";
   const email = req.get("X-MG-Admin-Email") ?? "";
   const signature = req.get("X-MG-Signature") ?? "";
-  const signedAt = /^\\d{10}$/.test(timestamp) ? Number(timestamp) : NaN;
+  const signedAt = /^\d{10}$/.test(timestamp) ? Number(timestamp) : NaN;
   const nowSeconds = Math.floor(Date.now() / 1000);
 
   if (
     !Number.isFinite(signedAt) ||
     Math.abs(nowSeconds - signedAt) > MAX_CLOCK_SKEW_SECONDS ||
     !/^[A-Za-z0-9_-]{16,64}$/.test(nonce) ||
-    !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
     email.length > 320 ||
     !isAllowedPortalRoute(req)
   ) {
