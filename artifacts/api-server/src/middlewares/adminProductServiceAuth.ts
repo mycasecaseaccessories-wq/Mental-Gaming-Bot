@@ -1,10 +1,12 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
+import { getCollection } from "../lib/mongodb";
+import { logger } from "../lib/logger";
 
 const MAX_CLOCK_SKEW_SECONDS = 60;
 const NONCE_LIFETIME_MS = 2 * MAX_CLOCK_SKEW_SECONDS * 1000;
-const MAX_TRACKED_NONCES = 10_000;
-const usedNonces = new Map<string, number>();
+const NONCE_COLLECTION = "admin_portal_nonces";
+let nonceCleanupCounter = 0;
 
 interface SignedRequestParts {
   method: string;
@@ -13,6 +15,11 @@ interface SignedRequestParts {
   nonce: string;
   email: string;
   bodyText: string;
+}
+
+interface AdminPortalNonce {
+  _id: string;
+  expiresAt: Date;
 }
 
 export function productServiceSigningPayload(parts: SignedRequestParts): string {
@@ -30,17 +37,6 @@ export function productServiceSigningPayload(parts: SignedRequestParts): string 
 
 export function signProductServiceRequest(secret: string, parts: SignedRequestParts): string {
   return createHmac("sha256", secret).update(productServiceSigningPayload(parts)).digest("hex");
-}
-
-function pruneNonces(now: number): void {
-  for (const [key, expiry] of usedNonces) {
-    if (expiry <= now) usedNonces.delete(key);
-  }
-  while (usedNonces.size >= MAX_TRACKED_NONCES) {
-    const oldest = usedNonces.keys().next().value as string | undefined;
-    if (!oldest) break;
-    usedNonces.delete(oldest);
-  }
 }
 
 function signatureMatches(expectedHex: string, receivedHex: string): boolean {
@@ -70,17 +66,21 @@ function isAllowedPortalRoute(req: Request): boolean {
     return keys.every((key, index) => allowedQuery.has(key) && keys.indexOf(key) === index);
   }
   if (path === `${base}/catalogs`) return method === "GET" && url.search === "";
-  if (/^\/api\/store\/admin-portal\/products\/[a-f0-9]{24}$/i.test(path)) {
+  if (/^\\/api\\/store\\/admin-portal\\/products\\/[a-f0-9]{24}$/i.test(path)) {
     return method === "PATCH" && url.search === "";
   }
-  if (/^\/api\/store\/admin-portal\/catalogs\/[a-f0-9]{24}$/i.test(path)) {
+  if (/^\\/api\\/store\\/admin-portal\\/catalogs\\/[a-f0-9]{24}$/i.test(path)) {
     return method === "PATCH" && url.search === "";
   }
   if (path === `${base}/media`) return method === "POST" && url.search === "";
   return false;
 }
 
-export function adminProductServiceAuth(req: Request, res: Response, next: NextFunction): void {
+export async function adminProductServiceAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   const secret = process.env["MG_PRODUCT_API_SECRET"] ?? "";
   if (Buffer.byteLength(secret, "utf8") < 32) {
     res.status(503).json({ error: "Product service authentication is not configured" });
@@ -91,14 +91,14 @@ export function adminProductServiceAuth(req: Request, res: Response, next: NextF
   const nonce = req.get("X-MG-Nonce") ?? "";
   const email = req.get("X-MG-Admin-Email") ?? "";
   const signature = req.get("X-MG-Signature") ?? "";
-  const signedAt = /^\d{10}$/.test(timestamp) ? Number(timestamp) : NaN;
+  const signedAt = /^\\d{10}$/.test(timestamp) ? Number(timestamp) : NaN;
   const nowSeconds = Math.floor(Date.now() / 1000);
 
   if (
     !Number.isFinite(signedAt) ||
     Math.abs(nowSeconds - signedAt) > MAX_CLOCK_SKEW_SECONDS ||
     !/^[A-Za-z0-9_-]{16,64}$/.test(nonce) ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ||
     email.length > 320 ||
     !isAllowedPortalRoute(req)
   ) {
@@ -121,14 +121,41 @@ export function adminProductServiceAuth(req: Request, res: Response, next: NextF
     return;
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
   const now = Date.now();
-  pruneNonces(now);
-  const nonceKey = `${email.trim().toLowerCase()}:${nonce}`;
-  if (usedNonces.has(nonceKey)) {
-    res.status(409).json({ error: "Request already used" });
+  const nonceKey = `${normalizedEmail}:${nonce}`;
+
+  try {
+    const nonces = await getCollection<AdminPortalNonce>(NONCE_COLLECTION);
+    // MongoDB's unique _id index makes the replay check atomic across API
+    // instances; a process-local Map cannot provide this guarantee.
+    await nonces.insertOne({
+      _id: nonceKey,
+      expiresAt: new Date(now + NONCE_LIFETIME_MS),
+    });
+
+    // Opportunistic cleanup avoids requiring a TTL-index migration. This is
+    // cleanup only; replay protection relies on the atomic insert above.
+    nonceCleanupCounter += 1;
+    if (nonceCleanupCounter >= 100) {
+      nonceCleanupCounter = 0;
+      try {
+        await nonces.deleteMany({ expiresAt: { $lte: new Date(now) } });
+      } catch (cleanupError) {
+        logger.error({ err: cleanupError }, "admin portal nonce cleanup failed");
+      }
+    }
+  } catch (err) {
+    const code = typeof err === "object" && err !== null && "code" in err ? err.code : undefined;
+    if (code === 11000) {
+      res.status(409).json({ error: "Request already used" });
+      return;
+    }
+    logger.error({ err }, "admin portal nonce persistence failed");
+    res.status(503).json({ error: "Admin request verification is temporarily unavailable" });
     return;
   }
-  usedNonces.set(nonceKey, now + NONCE_LIFETIME_MS);
-  res.locals.productServiceAdminEmail = email.trim().toLowerCase();
+
+  res.locals.productServiceAdminEmail = normalizedEmail;
   next();
 }
