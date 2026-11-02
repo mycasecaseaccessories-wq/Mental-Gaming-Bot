@@ -60,6 +60,18 @@ The original process-local nonce Map was unsafe for multi-instance/serverless re
 
 Four API unit tests cover concurrent duplicate claims, unexpired replay rejection, expired nonce reuse and database-unavailable failure. The tests use a deterministic in-memory fake collection; they do not replace a live MongoDB multi-instance integration test.
 
+### Admin A Preview isolation — implemented in draft PR #1
+
+The Admin A product proxy previously used a hard-coded production Storefront origin, including in Preview deployments. Draft PR #1 adds `MG_PRODUCT_API_ORIGIN` and changes the default behavior:
+
+- Production uses the existing Storefront origin only when `VERCEL_ENV=production`.
+- Preview/local environments require an explicit `MG_PRODUCT_API_ORIGIN`.
+- The configured value must be an HTTPS origin only (no credentials, path, query or fragment).
+- If it is missing or invalid, the proxy returns HTTP 503 and does not call the upstream API.
+- Six new tests cover production default, Preview isolation, explicit origin, insecure URL rejection, local fail-closed behavior and the actual 503/no-upstream-call path.
+
+No Vercel environment variable was changed. Configure the Preview-only origin and verify the Preview HMAC secret before attempting Admin A product/catalog operations.
+
 ### Production dependency security — included in draft PR #24
 
 The previous production audit reported 32 findings (1 critical, 16 high, 14 moderate, 1 low). The dependency branch upgrades the affected Axios, Multer, Zod and transitive packages including `proxy-addr`, `body-parser`, `follow-redirects`, `qs` and `ip-address`.
