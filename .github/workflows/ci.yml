@@ -58,6 +58,9 @@ jobs:
       - name: Run bot tests
         run: pnpm run test:bot
 
+      - name: Run API security tests
+        run: pnpm run test:api
+
       - name: Build all packages
         run: pnpm run build
 
