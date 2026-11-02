@@ -21,7 +21,10 @@ router.get("/summary", adminProductServiceAuth, async (_req, res) => {
     const orders = await getCollection<Row>("orders");
     const txs = await getCollection<Row>("transactions");
     const users = await getCollection<Row>("users");
-    const day = new Date(); day.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const mmtNow = new Date(now.getTime() + 6.5 * 60 * 60 * 1000);
+    const mmtDate = mmtNow.toISOString().slice(0, 10);
+    const day = new Date(new Date(`${mmtDate}T00:00:00.000Z`).getTime() - 6.5 * 60 * 60 * 1000);
     const [pendingOrders, processingOrders, pendingTopups, ordersToday, sales, totalUsers, wallets] = await Promise.all([
       orders.countDocuments({ status: "Pending" }), orders.countDocuments({ status: "Processing" }),
       txs.countDocuments({ type: "Topup", status: "Pending" }), orders.countDocuments({ timestamp: { $gte: day } }),
@@ -29,7 +32,7 @@ router.get("/summary", adminProductServiceAuth, async (_req, res) => {
       users.countDocuments({}), users.aggregate([{ $group: { _id: null, balanceKS: { $sum: "$balanceKS" }, balanceCoin: { $sum: "$balanceCoin" } } }]).toArray(),
     ]);
     const w = (wallets[0] as { balanceKS?: number; balanceCoin?: number } | undefined) ?? {};
-    res.setHeader("Cache-Control", "no-store").json({ pendingOrders, processingOrders, pendingTopups, ordersToday, salesToday: (sales[0] as { total?: number } | undefined)?.total ?? 0, totalUsers, walletKS: w.balanceKS ?? 0, walletCoin: w.balanceCoin ?? 0, generatedAt: new Date().toISOString() });
+    res.setHeader("Cache-Control", "no-store").json({ pendingOrders, processingOrders, pendingTopups, ordersToday, salesToday: (sales[0] as { total?: number } | undefined)?.total ?? 0, totalUsers, walletKS: w.balanceKS ?? 0, walletCoin: w.balanceCoin ?? 0, generatedAt: new Date().toISOString(), timezone: "Asia/Rangoon" });
   } catch (err) { logger.error({ err }, "admin portal summary read error"); res.status(500).json({ error: "Could not load summary" }); }
 });
 
