@@ -61,10 +61,11 @@ function isAllowedPortalRoute(req: Request): boolean {
     return keys.every((key, index) => allowedQuery.has(key) && keys.indexOf(key) === index);
   }
   if (path === `${base}/catalogs`) return method === "GET" && url.search === "";
-  const readOnlyMatch = path.match(/^\/api\/store\/admin-portal\/(summary|orders|users|transactions|topups)$/);
+  const readOnlyMatch = path.match(/^\/api\/store\/admin-portal\/(summary|orders|users|transactions|topups|analytics|gateways)$/);
   if (readOnlyMatch && method === "GET") {
     const route = readOnlyMatch[1];
-    const allowed = route === "summary" ? new Set<string>()
+    const allowed = route === "summary" || route === "gateways" ? new Set<string>()
+      : route === "analytics" ? new Set(["period"])
       : route === "orders" ? new Set(["page", "status"])
       : route === "users" ? new Set(["page", "q"])
       : route === "transactions" ? new Set(["page", "type", "status"])
