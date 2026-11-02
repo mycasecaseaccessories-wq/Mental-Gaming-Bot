@@ -74,7 +74,7 @@ The isolated production audit now reports `No known vulnerabilities found`. GitH
 4. **Analytics semantics:** Existing profit/COGS calculations are estimates based on product profit fields, not audited accounting. Label them as estimates if surfaced.
 5. **Media upload validation:** The media route accepts base64 WebP inside the JSON body, so the HMAC body digest covers the uploaded bytes' encoded representation. The handler also checks canonical base64, the size limit and WebP signature before writing to GridFS. Preserve these checks and add route-level tests before expanding media access.
 6. **Secrets:** Vercel metadata shows the expected secret variable names, but the sensitive `MG_PRODUCT_API_SECRET` values could not be compared. Do not assume they match across Admin A, Storefront and API projects.
-7. **Vercel API build:** The API project's preview build logs emit `skip-api-build`; a READY deployment therefore does not prove that the API bundle was built or executed by Vercel. The serverless bundle command was separately run successfully in an isolated sandbox. The Vercel API build/ignore configuration and a safe runtime smoke test remain open.
+7. **Vercel API build:** The API project's preview build logs emit `skip-api-build`; a READY deployment therefore does not prove that the API bundle was built or executed by that Vercel project. The serverless bundle now compiles in GitHub CI run #131. The Vercel API build/ignore configuration and a safe runtime smoke test remain open.
 8. **Live business flows:** No live MongoDB customer/wallet/order records were read or mutated for this audit. Payment submission → manual review → wallet credit/order completion and Telegram notification delivery still need a controlled test environment.
 
 ## Phase gates
@@ -87,7 +87,7 @@ The isolated production audit now reports `No known vulnerabilities found`. GitH
 - [x] Add deterministic nonce-claim unit tests.
 - [x] Clear the production dependency audit on the security branch.
 - [x] Verify GitHub CI after the API test step is added (run #127 passed).
-- [ ] Verify Vercel API build configuration and run a non-production runtime smoke test.
+- [x] Compile the Vercel API serverless bundle in GitHub CI (run #131 passed).\n- [ ] Verify Vercel API build configuration and run a non-production runtime smoke test.
 - [ ] Run isolated MongoDB multi-instance replay tests.
 
 ### Gate B — Admin integration
