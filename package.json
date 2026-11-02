@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check package.json .prettierrc.json .github/workflows/ci.yml artifacts/*/package.json artifacts/mockup-sandbox/vite.config.ts",
     "audit:prod": "pnpm audit --prod --audit-level high",
-    "test:api": "pnpm --filter @workspace/api-server test"
+    "test:api": "pnpm --filter @workspace/api-server test",
+    "smoke:api-bundle": "node scripts/smoke-api-bundle.mjs"
   },
   "private": true,
   "devDependencies": {
