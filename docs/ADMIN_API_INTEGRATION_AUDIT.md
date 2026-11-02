@@ -129,13 +129,15 @@ Admin A is the only planned main web admin. The legacy Telegram admin routes rem
 ### Gate A — Audit and security baseline
 
 - [x] Map customer, legacy-admin and Admin A HMAC integration surfaces at source level.
-- [x] Document MongoDB/Supabase data ownership and no-dual-write rule.
-- [x] Replace process-local HMAC nonce replay tracking with durable atomic storage in draft PR #24.
-- [x] Add deterministic nonce-claim unit tests.
-- [x] Clear the production dependency audit on the security branch.
-- [x] Verify GitHub CI after the API test step is added (run #142 passed).
-- [x] Compile the Vercel API serverless bundle in GitHub CI (run #131 passed).\n- [ ] Verify Vercel API build configuration and run a non-production runtime smoke test.
-- [ ] Run isolated MongoDB multi-instance replay tests.
+- [x] Document MongoDB/Supabase data ownership and the no-dual-write rule.
+- [x] Replace process-local HMAC nonce replay tracking with durable atomic MongoDB storage in draft PR #24.
+- [x] Add four deterministic nonce-claim unit tests.
+- [x] Add two MongoDB cross-client integration tests using two independent MongoClient connections (run #142 passed).
+- [x] Clear the production dependency audit (run #142: no known vulnerabilities).
+- [x] Verify GitHub CI, full workspace build and Vercel serverless bundle health smoke test (run #142 passed).
+- [x] Complete the source-level financial write-path risk audit and document required atomicity/idempotency controls.
+- [x] Add Admin A Preview origin isolation and HTTPS-only validation in draft PR #1.
+- [ ] Verify the Vercel API project's build/ignore configuration and run a protected-preview runtime smoke test.
 
 ### Gate B — Admin integration
 
