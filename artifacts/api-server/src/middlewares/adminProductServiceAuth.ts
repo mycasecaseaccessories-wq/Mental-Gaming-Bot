@@ -2,9 +2,9 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import { getCollection } from "../lib/mongodb";
 import { logger } from "../lib/logger";
+import { claimAdminPortalNonce, type AdminPortalNonceRecord } from "./adminPortalNonceStore";
 
 const MAX_CLOCK_SKEW_SECONDS = 60;
-const NONCE_LIFETIME_MS = 2 * MAX_CLOCK_SKEW_SECONDS * 1000;
 const NONCE_COLLECTION = "admin_portal_nonces";
 let nonceCleanupCounter = 0;
 
@@ -15,11 +15,6 @@ interface SignedRequestParts {
   nonce: string;
   email: string;
   bodyText: string;
-}
-
-interface AdminPortalNonce {
-  _id: string;
-  expiresAt: Date;
 }
 
 export function productServiceSigningPayload(parts: SignedRequestParts): string {
@@ -126,32 +121,11 @@ export async function adminProductServiceAuth(
   const nonceKey = `${normalizedEmail}:${nonce}`;
 
   try {
-    const nonces = await getCollection<AdminPortalNonce>(NONCE_COLLECTION);
-    // MongoDB's unique _id index makes the replay check atomic across API
-    // instances; a process-local Map cannot provide this guarantee.
-    const nonceDocument = {
-      _id: nonceKey,
-      expiresAt: new Date(now + NONCE_LIFETIME_MS),
-    };
-    try {
-      await nonces.insertOne(nonceDocument);
-    } catch (insertError) {
-      const code =
-        typeof insertError === "object" && insertError !== null && "code" in insertError
-          ? insertError.code
-          : undefined;
-      if (code !== 11000) throw insertError;
-
-      // Permit reuse only after the previous nonce record has expired. The
-      // conditional replacement remains atomic under concurrent requests.
-      const replaced = await nonces.replaceOne(
-        { _id: nonceKey, expiresAt: { $lte: new Date(now) } },
-        nonceDocument,
-      );
-      if (replaced.modifiedCount !== 1) {
-        res.status(409).json({ error: "Request already used" });
-        return;
-      }
+    const nonces = await getCollection<AdminPortalNonceRecord>(NONCE_COLLECTION);
+    const claimed = await claimAdminPortalNonce(nonces, nonceKey, now);
+    if (!claimed) {
+      res.status(409).json({ error: "Request already used" });
+      return;
     }
 
     // Opportunistic cleanup avoids requiring a TTL-index migration. This is
