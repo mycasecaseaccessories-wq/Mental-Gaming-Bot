@@ -61,79 +61,17 @@ function isAllowedPortalRoute(req: Request): boolean {
     return keys.every((key, index) => allowedQuery.has(key) && keys.indexOf(key) === index);
   }
   if (path === `${base}/catalogs`) return method === "GET" && url.search === "";
-  const readOnlyRoutes: Record<string, Set<string>> = {
-    summary: new Set(), orders: new Set(["page", "status"]), users: new Set(["page", "q"]),
-    transactions: new Set(["page", "type", "status"]), topups: new Set(["page"]),
-  };
-  const readOnlyMatch = path.match(new RegExp(`^${base}/(summary|orders|users|transactions|topups)import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import type { NextFunction, Request, Response } from "express";
-import { getCollection } from "../lib/mongodb";
-import { logger } from "../lib/logger";
-import { claimAdminPortalNonce, type AdminPortalNonceRecord } from "./adminPortalNonceStore";
-
-const MAX_CLOCK_SKEW_SECONDS = 60;
-const NONCE_COLLECTION = "admin_portal_nonces";
-let nonceCleanupCounter = 0;
-
-interface SignedRequestParts {
-  method: string;
-  path: string;
-  timestamp: string;
-  nonce: string;
-  email: string;
-  bodyText: string;
-}
-
-export function productServiceSigningPayload(parts: SignedRequestParts): string {
-  const bodyHash = createHash("sha256").update(parts.bodyText).digest("hex");
-  return [
-    "v1",
-    parts.method.toUpperCase(),
-    parts.path,
-    parts.timestamp,
-    parts.nonce,
-    parts.email.trim().toLowerCase(),
-    bodyHash,
-  ].join("\n");
-}
-
-export function signProductServiceRequest(secret: string, parts: SignedRequestParts): string {
-  return createHmac("sha256", secret).update(productServiceSigningPayload(parts)).digest("hex");
-}
-
-function signatureMatches(expectedHex: string, receivedHex: string): boolean {
-  if (!/^[a-f0-9]{64}$/i.test(receivedHex)) return false;
-  const expected = Buffer.from(expectedHex, "hex");
-  const received = Buffer.from(receivedHex, "hex");
-  return expected.length === received.length && timingSafeEqual(expected, received);
-}
-
-function isAllowedPortalRoute(req: Request): boolean {
-  let url: URL;
-  try {
-    url = new URL(req.originalUrl, "http://localhost");
-  } catch {
-    return false;
-  }
-
-  const path = url.pathname;
-  const method = req.method.toUpperCase();
-  const base = "/api/store/admin-portal";
-
-  if (path === `${base}/products`) {
-    if (method === "POST") return url.search === "";
-    if (method !== "GET") return false;
-    const allowedQuery = new Set(["page", "search", "catalogId"]);
-    const keys = [...url.searchParams.keys()];
-    return keys.every((key, index) => allowedQuery.has(key) && keys.indexOf(key) === index);
-  }
-));
+  const readOnlyMatch = path.match(/^\/api\/store\/admin-portal\/(summary|orders|users|transactions|topups)$/);
   if (readOnlyMatch && method === "GET") {
-    const allowed = readOnlyRoutes[readOnlyMatch[1]!]!;
+    const route = readOnlyMatch[1];
+    const allowed = route === "summary" ? new Set<string>()
+      : route === "orders" ? new Set(["page", "status"])
+      : route === "users" ? new Set(["page", "q"])
+      : route === "transactions" ? new Set(["page", "type", "status"])
+      : new Set(["page"]);
     const keys = [...url.searchParams.keys()];
     return keys.every((key, index) => allowed.has(key) && keys.indexOf(key) === index);
   }
-
   if (/^\/api\/store\/admin-portal\/products\/[a-f0-9]{24}$/i.test(path)) {
     return method === "PATCH" && url.search === "";
   }
