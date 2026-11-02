@@ -161,12 +161,13 @@ router.get("/gateways", adminProductServiceAuth, async (_req, res) => {
     const doc = await status.findOne({ _id: "global" });
     res.setHeader("Cache-Control", "no-store").json({
       gateways: {
-        kpay: doc?.kpayStatus ?? "Online",
-        wave: doc?.waveStatus ?? "Online",
-        aya: doc?.ayaStatus ?? "Online",
-        cb: doc?.cbStatus ?? "Online",
+        kpay: doc?.kpayStatus ?? "Online (default)",
+        wave: doc?.waveStatus ?? "Online (default)",
+        aya: doc?.ayaStatus ?? "Online (default)",
+        cb: doc?.cbStatus ?? "Online (default)",
       },
       note: doc?.gatewayNote ?? null,
+      configured: Boolean(doc),
       readOnly: true,
     });
   } catch (err) {
