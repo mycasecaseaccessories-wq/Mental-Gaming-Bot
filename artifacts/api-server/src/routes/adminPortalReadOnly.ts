@@ -53,9 +53,9 @@ router.get("/users", adminProductServiceAuth, async (req, res) => {
     const page = pageOf(req.query["page"]), limit = 20, q = String(req.query["q"] ?? "").trim().slice(0, 80);
     const clauses: Record<string, unknown>[] = [];
     if (q) {
-      const escaped = q.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+      const escaped = q.replace(/[.*+?^${}()|[\\]\\]/g, "\\      const escaped = q.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");");
       const or: Record<string, unknown>[] = [{ username: { $regex: escaped, $options: "i" } }, { first_name: { $regex: escaped, $options: "i" } }, { firstName: { $regex: escaped, $options: "i" } }];
-      if (/^\\d+$/.test(q)) or.push({ telegramId: Number(q) });
+      if (/^\d+$/.test(q)) or.push({ telegramId: Number(q) });
       clauses.push({ $or: or });
     }
     const filter = clauses.length ? { $and: clauses } : {};
