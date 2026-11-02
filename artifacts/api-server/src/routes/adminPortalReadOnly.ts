@@ -97,4 +97,82 @@ router.get("/topups", adminProductServiceAuth, async (req, res) => {
   } catch (err) { logger.error({ err }, "admin portal topups read error"); res.status(500).json({ error: "Could not load pending top-ups" }); }
 });
 
+
+const MMT_OFFSET_MS = 6.5 * 60 * 60 * 1000;
+function analyticsRange(period: string): { start: Date; end: Date; label: string } {
+  const now = new Date();
+  const mmtDate = new Date(now.getTime() + MMT_OFFSET_MS).toISOString().slice(0, 10);
+  if (period === "today" || period === "yesterday") {
+    const date = period === "today" ? new Date(mmtDate + "T00:00:00.000Z") : new Date(new Date(mmtDate + "T00:00:00.000Z").getTime() - 86_400_000);
+    const start = new Date(date.getTime() - MMT_OFFSET_MS);
+    const end = period === "today" ? now : new Date(start.getTime() + 86_400_000 - 1);
+    return { start, end, label: period === "today" ? "Today (MMT)" : "Yesterday (MMT)" };
+  }
+  const days = period === "week" ? 7 : 30;
+  return { start: new Date(now.getTime() - days * 86_400_000), end: now, label: period === "week" ? "Last 7 Days" : "Last 30 Days" };
+}
+
+router.get("/analytics", adminProductServiceAuth, async (req, res) => {
+  try {
+    const requested = String(req.query["period"] ?? "month");
+    if (!["today", "yesterday", "week", "month"].includes(requested)) {
+      res.status(400).json({ error: "Invalid analytics period" });
+      return;
+    }
+    const { start, end, label } = analyticsRange(requested);
+    const range = { timestamp: { $gte: start, $lte: end } };
+    const orders = await getCollection<Row>("orders");
+    const txs = await getCollection<Row>("transactions");
+    const users = await getCollection<Row>("users");
+    const [successOrders, refunds, topups, cancelled, totalOrders, newUsers, totalUsers, gateway, orderTrend] = await Promise.all([
+      orders.aggregate([{ $match: { ...range, status: "Success" } }, { $group: { _id: null, total: { $sum: { $ifNull: ["$amount", "$totalKS"] } }, count: { $sum: 1 } } }]).toArray(),
+      txs.aggregate([{ $match: { ...range, type: "Refund" } }, { $group: { _id: null, total: { $sum: { $abs: "$amount" } }, count: { $sum: 1 } } }]).toArray(),
+      txs.aggregate([{ $match: { ...range, type: "Topup", status: "Completed" } }, { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }]).toArray(),
+      orders.countDocuments({ ...range, status: { $in: ["Cancelled", "Refunded"] } }),
+      orders.countDocuments(range),
+      users.countDocuments({ $or: [{ createdAt: { $gte: start, $lte: end } }, { joinDate: { $gte: start, $lte: end } }] }),
+      users.countDocuments({}),
+      txs.aggregate([{ $match: { ...range, type: "Topup", status: "Completed" } }, { $group: { _id: { $ifNull: ["$paymentMethod", "Unknown"] }, total: { $sum: "$amount" }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]).toArray(),
+      orders.aggregate([{ $match: { ...range, status: "Success" } }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp", timezone: "Asia/Rangoon" } }, revenue: { $sum: { $ifNull: ["$amount", "$totalKS"] } }, orders: { $sum: 1 } } }, { $sort: { _id: 1 } }]).toArray(),
+    ]);
+    const sales = (successOrders[0] as { total?: number; count?: number } | undefined) ?? {};
+    const refund = (refunds[0] as { total?: number; count?: number } | undefined) ?? {};
+    const topup = (topups[0] as { total?: number; count?: number } | undefined) ?? {};
+    const grossRevenue = sales.total ?? 0;
+    const refundTotal = refund.total ?? 0;
+    res.setHeader("Cache-Control", "no-store").json({
+      meta: { period: requested, label, from: start, to: end, generatedAt: new Date().toISOString(), timezone: "Asia/Rangoon" },
+      revenue: { grossRevenue, refundTotal, netRevenue: grossRevenue - refundTotal, orderCount: sales.count ?? 0, topups: { total: topup.total ?? 0, count: topup.count ?? 0 }, refunds: { total: refundTotal, count: refund.count ?? 0 } },
+      users: { newUsers, totalUsers },
+      gateway: gateway.map((item) => ({ method: item["_id"] ?? "Unknown", total: item["total"] ?? 0, count: item["count"] ?? 0 })),
+      trend: orderTrend.map((item) => ({ date: item["_id"], revenue: item["revenue"] ?? 0, orders: item["orders"] ?? 0 })),
+      cancellation: { cancelled, total: totalOrders, rate: totalOrders > 0 ? Math.round(cancelled / totalOrders * 100) : 0 },
+      accountingNote: "Revenue and refund totals are transaction/order summaries, not audited accounting profit. COGS and net profit are not calculated.",
+    });
+  } catch (err) {
+    logger.error({ err }, "admin portal analytics read error");
+    res.status(500).json({ error: "Could not load analytics" });
+  }
+});
+
+router.get("/gateways", adminProductServiceAuth, async (_req, res) => {
+  try {
+    const status = await getCollection<{ _id: string; kpayStatus?: string; waveStatus?: string; ayaStatus?: string; cbStatus?: string; gatewayNote?: string | null }>("systemstatuses");
+    const doc = await status.findOne({ _id: "global" });
+    res.setHeader("Cache-Control", "no-store").json({
+      gateways: {
+        kpay: doc?.kpayStatus ?? "Online",
+        wave: doc?.waveStatus ?? "Online",
+        aya: doc?.ayaStatus ?? "Online",
+        cb: doc?.cbStatus ?? "Online",
+      },
+      note: doc?.gatewayNote ?? null,
+      readOnly: true,
+    });
+  } catch (err) {
+    logger.error({ err }, "admin portal gateways read error");
+    res.status(500).json({ error: "Could not load gateway status" });
+  }
+});
+
 export default router;
