@@ -74,7 +74,7 @@ The original process-local nonce Map was unsafe for multi-instance/serverless re
 - Uses a 120-second nonce record lifetime and a 60-second request timestamp skew window.
 - Caches the in-flight MongoDB connection promise so simultaneous cold-start requests share one connection attempt.
 
-Four API unit tests cover concurrent duplicate claims, unexpired replay rejection, expired nonce reuse and database-unavailable failure. The tests use a deterministic in-memory fake collection; they do not replace a live MongoDB multi-instance integration test.
+Four API unit tests cover concurrent duplicate claims, unexpired replay rejection, expired nonce reuse and database-unavailable failure. Two additional MongoDB integration tests use two independent MongoClient connections against an isolated MongoDB 7 service to verify cross-client concurrent claims and atomic expired-nonce reuse. GitHub Actions run #142 passed both integration tests.
 
 ### Admin A Preview isolation — implemented in draft PR #1
 
@@ -92,7 +92,7 @@ No Vercel environment variable was changed. Configure the Preview-only origin an
 
 The previous production audit reported 32 findings (1 critical, 16 high, 14 moderate, 1 low). The dependency branch upgrades the affected Axios, Multer, Zod and transitive packages including `proxy-addr`, `body-parser`, `follow-redirects`, `qs` and `ip-address`.
 
-The isolated production audit now reports `No known vulnerabilities found`. GitHub Actions run #127 on the consolidated security branch passed frozen-lockfile install, formatting, TypeScript checks, bot tests, API nonce tests (4/4), full workspace build and production dependency audit.
+The isolated production audit now reports `No known vulnerabilities found`. GitHub Actions run #142 on the consolidated security branch passed frozen-lockfile install, formatting, TypeScript checks, bot tests, API nonce unit tests (4/4), MongoDB integration tests (2/2), full workspace build, Vercel serverless bundle build, production-mode health smoke test and production dependency audit.
 
 ## Admin A feature-parity matrix
 
@@ -117,11 +117,11 @@ Admin A is the only planned main web admin. The legacy Telegram admin routes rem
 
 1. **Admin A feature parity:** Orders, users, wallets, transactions, top-up review, analytics, payment gateways, staff, roles/permissions and audit-log UI are not yet integrated into Admin A.
 2. **RBAC:** The Supabase private schema has the admin-side foundation, but Admin A's current Email/Password session is not yet mapped to server-side staff profiles/roles/permissions. Do not trust client-supplied role claims.
-3. **Financial consistency:** Legacy top-up approval writes multiple MongoDB records and must be reviewed for transactionality/idempotency before exposing it to Admin A. Legacy balance adjustment updates the user record separately from the transaction record; reconcile failure cases before reuse.
+3. **Financial consistency:** The source-level write-path audit is documented above. Legacy top-up approval, balance adjustment and order/refund flows still need transactionality/idempotency changes and contract tests before exposing financial writes in Admin A.
 4. **Analytics semantics:** Existing profit/COGS calculations are estimates based on product profit fields, not audited accounting. Label them as estimates if surfaced.
 5. **Media upload validation:** The media route accepts base64 WebP inside the JSON body, so the HMAC body digest covers the uploaded bytes' encoded representation. The handler also checks canonical base64, the size limit and WebP signature before writing to GridFS. Preserve these checks and add route-level tests before expanding media access.
 6. **Secrets:** Vercel metadata shows the expected secret variable names, but the sensitive `MG_PRODUCT_API_SECRET` values could not be compared. Do not assume they match across Admin A, Storefront and API projects.
-7. **Vercel API build:** The API project's preview build logs emit `skip-api-build`; a READY deployment therefore does not prove that the API bundle was built or executed by that Vercel project. The serverless bundle now compiles in GitHub CI run #131. The Vercel API build/ignore configuration and a safe runtime smoke test remain open.
+7. **Vercel API build:** The API project's preview build logs emit `skip-api-build`; a READY deployment therefore does not prove that the API bundle was built or executed by that Vercel project. GitHub CI run #142 successfully compiled the serverless bundle and ran its production-mode `/api/healthz` route. The Vercel API project's build/ignore configuration and a protected-preview runtime smoke test remain open.
 8. **Live business flows:** No live MongoDB customer/wallet/order records were read or mutated for this audit. Payment submission → manual review → wallet credit/order completion and Telegram notification delivery still need a controlled test environment.
 
 ## Phase gates
@@ -133,7 +133,7 @@ Admin A is the only planned main web admin. The legacy Telegram admin routes rem
 - [x] Replace process-local HMAC nonce replay tracking with durable atomic storage in draft PR #24.
 - [x] Add deterministic nonce-claim unit tests.
 - [x] Clear the production dependency audit on the security branch.
-- [x] Verify GitHub CI after the API test step is added (run #127 passed).
+- [x] Verify GitHub CI after the API test step is added (run #142 passed).
 - [x] Compile the Vercel API serverless bundle in GitHub CI (run #131 passed).\n- [ ] Verify Vercel API build configuration and run a non-production runtime smoke test.
 - [ ] Run isolated MongoDB multi-instance replay tests.
 
