@@ -64,7 +64,7 @@ Four API unit tests cover concurrent duplicate claims, unexpired replay rejectio
 
 The previous production audit reported 32 findings (1 critical, 16 high, 14 moderate, 1 low). The dependency branch upgrades the affected Axios, Multer, Zod and transitive packages including `proxy-addr`, `body-parser`, `follow-redirects`, `qs` and `ip-address`.
 
-The isolated production audit now reports `No known vulnerabilities found`. GitHub CI and the API test suite are being rechecked on the consolidated branch before the draft PR is considered ready.
+The isolated production audit now reports `No known vulnerabilities found`. GitHub Actions run #127 on the consolidated security branch passed frozen-lockfile install, formatting, TypeScript checks, bot tests, API nonce tests (4/4), full workspace build and production dependency audit.
 
 ## Findings still requiring implementation or verification
 
@@ -86,7 +86,7 @@ The isolated production audit now reports `No known vulnerabilities found`. GitH
 - [x] Replace process-local HMAC nonce replay tracking with durable atomic storage in draft PR #24.
 - [x] Add deterministic nonce-claim unit tests.
 - [x] Clear the production dependency audit on the security branch.
-- [ ] Verify GitHub CI after the API test step is added.
+- [x] Verify GitHub CI after the API test step is added (run #127 passed).
 - [ ] Verify Vercel API build configuration and run a non-production runtime smoke test.
 - [ ] Run isolated MongoDB multi-instance replay tests.
 
