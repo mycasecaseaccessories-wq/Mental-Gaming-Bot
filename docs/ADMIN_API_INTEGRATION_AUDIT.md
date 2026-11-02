@@ -44,6 +44,22 @@ Legacy admin endpoints remain in the Store API for summary, orders, top-ups, use
 
 The legacy `adminAuth` check uses the configured admin identity / MongoDB admin records; it does not provide the fine-grained permission matrix planned for Admin A. Keep these routes/UI available until Admin A parity and rollback are verified.
 
+## Financial write-path audit — do not expose these actions in Admin A yet
+
+The legacy Telegram admin handlers are useful as a source of current behavior, but their multi-document write paths are not yet safe to reuse as Admin A financial APIs.
+
+- **Top-up approval** (`PATCH /store/admin/topups/:id/approve`): reads the pending transaction and user, computes new balances from the read snapshot, marks the transaction Completed, then separately writes the user's KS/Coin balances and tier. A failure between the two writes can leave a completed top-up without credited balance. Two different pending top-ups for the same user can also read the same old balance and overwrite each other's calculated `$set` values. The duplicate-`txId` check only addresses repeat approval of the same top-up; it does not make the transaction + wallet update atomic.
+- **Balance adjustment** (`PATCH /store/admin/users/:id` with `action=adjustBalance`): the user balance change uses an atomic `findOneAndUpdate($inc)` with a sufficient-balance guard, but the transaction ledger entry is inserted afterward. If that insert fails, the wallet changes without a corresponding ledger entry. Use a MongoDB transaction or a durable outbox/idempotency design before exposing this action in Admin A.
+- **Order status change** (`PATCH /store/admin/orders/:id`): writes the new order status before attempting stock restoration. A stock update failure can leave order status and stock inconsistent. The `Refunded` status branch in this handler does not itself create a refund transaction or credit the user's wallet; do not treat this status change as a completed financial refund.
+- **Audit logging**: the legacy `writeAudit` helper catches and logs failures instead of failing the underlying user action. It is best-effort logging, not a guaranteed financial audit trail.
+- **Warning counters**: user warning actions calculate a new count from a prior read and then set it; concurrent actions can overwrite each other. Use atomic increments/conditional updates if these actions are migrated.
+
+Required before Admin A exposes any financial write:
+1. MongoDB transaction or equivalent atomic/idempotent design covering the transaction record, wallet/order state and audit record.
+2. Unique idempotency key and conditional state transition so retries/concurrent requests cannot double-credit or lose updates.
+3. Contract tests for success, duplicate retry, concurrent requests, mid-write failure and insufficient balance.
+4. Explicit refund semantics (wallet credit, ledger entry, stock handling and notification) separated from a plain order status edit.
+
 ## Phase 1 security work
 
 ### HMAC replay protection — implemented in draft PR #24
