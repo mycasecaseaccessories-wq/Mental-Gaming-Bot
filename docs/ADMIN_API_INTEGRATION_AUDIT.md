@@ -78,6 +78,25 @@ The previous production audit reported 32 findings (1 critical, 16 high, 14 mode
 
 The isolated production audit now reports `No known vulnerabilities found`. GitHub Actions run #127 on the consolidated security branch passed frozen-lockfile install, formatting, TypeScript checks, bot tests, API nonce tests (4/4), full workspace build and production dependency audit.
 
+## Admin A feature-parity matrix
+
+| Admin capability | Current Admin A status | Existing Store API/source |
+|---|---|---|
+| Login/session | Implemented with custom Email + Password, signed session cookie and CSRF | Admin A `server/adminAuth.ts`; keep this login method |
+| Dashboard | UI exists but live order/user/wallet metrics are placeholders | Legacy `GET /store/admin/summary`; not connected to Admin A |
+| Products | Connected through HMAC service proxy | `/store/admin-portal/products` |
+| Catalogs/subcatalogs/images | Connected through HMAC service proxy | `/store/admin-portal/catalogs`, `/store/admin-portal/media` |
+| Orders | Not connected to Admin A | Legacy `GET/PATCH /store/admin/orders` |
+| Users/customer profiles | Not connected to Admin A | Legacy `GET /store/admin/users`, user detail and action routes |
+| Wallet KS/Coin | Not connected to Admin A | MongoDB user balance fields; legacy balance-adjust action |
+| Top-up/deposit review | Not connected to Admin A | Legacy `GET/PATCH /store/admin/topups` approve/reject actions |
+| Transactions | No Admin A transaction history/ledger view | MongoDB `transactions` collection; used by legacy top-up flows |
+| Analytics | Not connected to Admin A | Legacy `GET /store/admin/analytics`; estimated profit/COGS only |
+| Payment methods/gateways | Not connected to Admin A | Legacy config/gateway endpoints |
+| Staff, roles, permissions, audit | Supabase private schema foundation only; no Admin A UI/API enforcement yet | Separate `mental-gaming-admin` Supabase project |
+
+Admin A is the only planned main web admin. The legacy Telegram admin routes remain available during parity work; do not disable them until the equivalent Admin A workflows, tests and rollback are verified.
+
 ## Findings still requiring implementation or verification
 
 1. **Admin A feature parity:** Orders, users, wallets, transactions, top-up review, analytics, payment gateways, staff, roles/permissions and audit-log UI are not yet integrated into Admin A.
