@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 
+process.env.NODE_ENV = "production";
+
 const require = createRequire(import.meta.url);
 const handler = require("../api/[...path].js");
 const server = createServer((req, res) => handler(req, res));
