@@ -5,7 +5,7 @@ import { logger } from "../lib/logger";
 import { adminProductServiceAuth } from "../middlewares/adminProductServiceAuth";
 
 type Row = {
-  _id: ObjectId; userId?: ObjectId; timestamp?: Date; createdAt?: Date; joinDate?: Date;
+  _id: ObjectId; userId?: ObjectId; productId?: ObjectId; name?: string; timestamp?: Date; createdAt?: Date; joinDate?: Date;
   status?: string; type?: string; amount?: number; totalKS?: number; txId?: string;
   paymentMethod?: string; note?: string; screenshotUrl?: string;
   telegramId?: number; username?: string | null; first_name?: string | null; firstName?: string | null;
@@ -41,12 +41,17 @@ router.get("/orders", adminProductServiceAuth, async (req, res) => {
     const page = pageOf(req.query["page"]), limit = 20, status = String(req.query["status"] ?? "Pending");
     if (!["Pending", "Processing", "Success", "Cancelled", "Refunded", "all"].includes(status)) { res.status(400).json({ error: "Invalid status" }); return; }
     const filter = status === "all" ? {} : { status };
-    const orders = await getCollection<Row>("orders"), users = await getCollection<Row>("users");
+    const orders = await getCollection<Row>("orders"), users = await getCollection<Row>("users"), products = await getCollection<Row>("products");
     const [docs, total] = await Promise.all([orders.find(filter).sort({ timestamp: -1 }).skip((page - 1) * limit).limit(limit).toArray(), orders.countDocuments(filter)]);
     const ids = [...new Set(docs.map((d) => d.userId?.toString()).filter((id): id is string => !!id))].map((id) => new ObjectId(id));
-    const userDocs = ids.length ? await users.find({ _id: { $in: ids } } as never).toArray() : [];
-    const map = new Map(userDocs.map((u) => [u._id.toString(), u]));
-    const items = docs.map((o) => ({ id: o._id.toString(), shortId: o.shortId ?? null, status: o.status, productName: o.productName ?? null, productType: o.productType ?? null, amountKS: o.amount ?? o.totalKS ?? 0, timestamp: o.timestamp, user: userLabel(o.userId ? map.get(o.userId.toString()) : undefined) }));
+    const productIds = [...new Set(docs.map((d) => d.productId?.toString()).filter((id): id is string => !!id))].map((id) => new ObjectId(id));
+    const [userDocs, productDocs] = await Promise.all([
+      ids.length ? users.find({ _id: { $in: ids } } as never).toArray() : [],
+      productIds.length ? products.find({ _id: { $in: productIds } } as never).toArray() : [],
+    ]);
+    const userMap = new Map(userDocs.map((u) => [u._id.toString(), u]));
+    const productMap = new Map(productDocs.map((p) => [p._id.toString(), p]));
+    const items = docs.map((o) => ({ id: o._id.toString(), shortId: o.shortId ?? null, status: o.status, productName: o.productName ?? (o.productId ? productMap.get(o.productId.toString())?.name : null) ?? null, productType: o.productType ?? null, amountKS: o.amount ?? o.totalKS ?? 0, timestamp: o.timestamp, user: userLabel(o.userId ? userMap.get(o.userId.toString()) : undefined) }));
     res.setHeader("Cache-Control", "no-store").json({ items, total, page, pages: Math.max(1, Math.ceil(total / limit)) });
   } catch (err) { logger.error({ err }, "admin portal orders read error"); res.status(500).json({ error: "Could not load orders" }); }
 });
