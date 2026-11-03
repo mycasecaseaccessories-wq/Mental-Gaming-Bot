@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - work/phase1-dependency-security
   workflow_dispatch:
     inputs:
       deploy:
@@ -30,6 +31,16 @@ jobs:
   quality:
     name: Quality checks
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -58,8 +69,22 @@ jobs:
       - name: Run bot tests
         run: pnpm run test:bot
 
+      - name: Run API security tests
+        run: pnpm run test:api
+
+      - name: Run API MongoDB integration tests
+        run: pnpm run test:api:integration
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017/mental_gaming_ci?directConnection=true
+
       - name: Build all packages
         run: pnpm run build
+
+      - name: Build Vercel API serverless bundle
+        run: pnpm run build:api-bundle
+
+      - name: Smoke test Vercel API bundle
+        run: pnpm run smoke:api-bundle
 
       - name: Audit production dependencies
         run: pnpm run audit:prod

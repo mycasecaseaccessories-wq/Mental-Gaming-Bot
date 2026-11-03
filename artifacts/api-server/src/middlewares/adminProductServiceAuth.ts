@@ -1,10 +1,12 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
+import { getCollection } from "../lib/mongodb";
+import { logger } from "../lib/logger";
+import { claimAdminPortalNonce, type AdminPortalNonceRecord } from "./adminPortalNonceStore";
 
 const MAX_CLOCK_SKEW_SECONDS = 60;
-const NONCE_LIFETIME_MS = 2 * MAX_CLOCK_SKEW_SECONDS * 1000;
-const MAX_TRACKED_NONCES = 10_000;
-const usedNonces = new Map<string, number>();
+const NONCE_COLLECTION = "admin_portal_nonces";
+let nonceCleanupCounter = 0;
 
 interface SignedRequestParts {
   method: string;
@@ -30,17 +32,6 @@ export function productServiceSigningPayload(parts: SignedRequestParts): string 
 
 export function signProductServiceRequest(secret: string, parts: SignedRequestParts): string {
   return createHmac("sha256", secret).update(productServiceSigningPayload(parts)).digest("hex");
-}
-
-function pruneNonces(now: number): void {
-  for (const [key, expiry] of usedNonces) {
-    if (expiry <= now) usedNonces.delete(key);
-  }
-  while (usedNonces.size >= MAX_TRACKED_NONCES) {
-    const oldest = usedNonces.keys().next().value as string | undefined;
-    if (!oldest) break;
-    usedNonces.delete(oldest);
-  }
 }
 
 function signatureMatches(expectedHex: string, receivedHex: string): boolean {
@@ -70,6 +61,18 @@ function isAllowedPortalRoute(req: Request): boolean {
     return keys.every((key, index) => allowedQuery.has(key) && keys.indexOf(key) === index);
   }
   if (path === `${base}/catalogs`) return method === "GET" && url.search === "";
+  const readOnlyMatch = path.match(/^\/api\/store\/admin-portal\/(summary|orders|users|transactions|topups|analytics|gateways)$/);
+  if (readOnlyMatch && method === "GET") {
+    const route = readOnlyMatch[1];
+    const allowed = route === "summary" || route === "gateways" ? new Set<string>()
+      : route === "analytics" ? new Set(["period"])
+      : route === "orders" ? new Set(["page", "status"])
+      : route === "users" ? new Set(["page", "q"])
+      : route === "transactions" ? new Set(["page", "type", "status"])
+      : new Set(["page"]);
+    const keys = [...url.searchParams.keys()];
+    return keys.every((key, index) => allowed.has(key) && keys.indexOf(key) === index);
+  }
   if (/^\/api\/store\/admin-portal\/products\/[a-f0-9]{24}$/i.test(path)) {
     return method === "PATCH" && url.search === "";
   }
@@ -80,7 +83,11 @@ function isAllowedPortalRoute(req: Request): boolean {
   return false;
 }
 
-export function adminProductServiceAuth(req: Request, res: Response, next: NextFunction): void {
+export async function adminProductServiceAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   const secret = process.env["MG_PRODUCT_API_SECRET"] ?? "";
   if (Buffer.byteLength(secret, "utf8") < 32) {
     res.status(503).json({ error: "Product service authentication is not configured" });
@@ -121,14 +128,40 @@ export function adminProductServiceAuth(req: Request, res: Response, next: NextF
     return;
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
   const now = Date.now();
-  pruneNonces(now);
-  const nonceKey = `${email.trim().toLowerCase()}:${nonce}`;
-  if (usedNonces.has(nonceKey)) {
-    res.status(409).json({ error: "Request already used" });
+  const nonceKey = `${normalizedEmail}:${nonce}`;
+
+  try {
+    const nonces = await getCollection<AdminPortalNonceRecord>(NONCE_COLLECTION);
+    const claimed = await claimAdminPortalNonce(nonces, nonceKey, now);
+    if (!claimed) {
+      res.status(409).json({ error: "Request already used" });
+      return;
+    }
+
+    // Opportunistic cleanup avoids requiring a TTL-index migration. This is
+    // cleanup only; replay protection relies on the atomic insert above.
+    nonceCleanupCounter += 1;
+    if (nonceCleanupCounter >= 100) {
+      nonceCleanupCounter = 0;
+      try {
+        await nonces.deleteMany({ expiresAt: { $lte: new Date(now) } });
+      } catch (cleanupError) {
+        logger.error({ err: cleanupError }, "admin portal nonce cleanup failed");
+      }
+    }
+  } catch (err) {
+    const code = typeof err === "object" && err !== null && "code" in err ? err.code : undefined;
+    if (code === 11000) {
+      res.status(409).json({ error: "Request already used" });
+      return;
+    }
+    logger.error({ err }, "admin portal nonce persistence failed");
+    res.status(503).json({ error: "Admin request verification is temporarily unavailable" });
     return;
   }
-  usedNonces.set(nonceKey, now + NONCE_LIFETIME_MS);
-  res.locals.productServiceAdminEmail = email.trim().toLowerCase();
+
+  res.locals.productServiceAdminEmail = normalizedEmail;
   next();
 }

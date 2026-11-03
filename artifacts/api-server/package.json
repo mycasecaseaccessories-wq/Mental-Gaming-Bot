@@ -7,7 +7,9 @@
     "dev": "export NODE_ENV=development PORT=8080 && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test src/middlewares/adminPortalNonceStore.test.mjs",
+    "test:integration": "node --experimental-strip-types --test src/middlewares/*.integration.test.mjs"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
@@ -19,7 +21,7 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
     "mongodb": "^7.2.0",
-    "multer": "^2.2.0",
+    "multer": "^2.5.0",
     "pino": "^9",
     "pino-http": "^10"
   },

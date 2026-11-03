@@ -5,6 +5,7 @@ import { getCollection } from "../lib/mongodb";
 import { telegramAuth } from "../middlewares/telegramAuth";
 import { adminProductServiceAuth } from "../middlewares/adminProductServiceAuth";
 import adminPortalAssetsRouter from "./adminPortalAssets";
+import adminPortalReadOnlyRouter from "./adminPortalReadOnly";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -508,6 +509,7 @@ adminProductPortalRouter.get("/products", adminProductServiceAuth, listAdminProd
 adminProductPortalRouter.post("/products", adminProductServiceAuth, createAdminProduct);
 adminProductPortalRouter.patch("/products/:id", adminProductServiceAuth, updateAdminProduct);
 adminProductPortalRouter.use(adminPortalAssetsRouter);
+adminProductPortalRouter.use(adminPortalReadOnlyRouter);
 
 // GET /store/admin/topups
 router.get("/admin/topups", telegramAuth, adminAuth, async (req, res) => {
