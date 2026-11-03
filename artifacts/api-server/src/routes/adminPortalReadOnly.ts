@@ -131,7 +131,7 @@ router.get("/analytics", adminProductServiceAuth, async (req, res) => {
     const users = await getCollection<Row>("users");
     const [successOrders, refunds, topups, cancelled, totalOrders, newUsers, totalUsers, gateway, orderTrend] = await Promise.all([
       orders.aggregate([{ $match: { ...range, status: "Success" } }, { $group: { _id: null, total: { $sum: { $ifNull: ["$amount", "$totalKS"] } }, count: { $sum: 1 } } }]).toArray(),
-      txs.aggregate([{ $match: { ...range, type: "Refund" } }, { $group: { _id: null, total: { $sum: { $abs: "$amount" } }, count: { $sum: 1 } } }]).toArray(),
+      txs.aggregate([{ $match: { ...range, type: "Refund", status: "Completed" } }, { $group: { _id: null, total: { $sum: { $abs: "$amount" } }, count: { $sum: 1 } } }]).toArray(),
       txs.aggregate([{ $match: { ...range, type: "Topup", status: "Completed" } }, { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }]).toArray(),
       orders.countDocuments({ ...range, status: { $in: ["Cancelled", "Refunded"] } }),
       orders.countDocuments(range),
