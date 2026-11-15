@@ -53,8 +53,9 @@ function isAllowedPortalRoute(req: Request): boolean {
   const method = req.method.toUpperCase();
   const base = "/api/store/admin-portal";
 
+  // Phase 1 Admin Preview is deliberately read-only. Do not permit product
+  // creation or any mutation through this preview API branch.
   if (path === `${base}/products`) {
-    if (method === "POST") return url.search === "";
     if (method !== "GET") return false;
     const allowedQuery = new Set(["page", "search", "catalogId"]);
     const keys = [...url.searchParams.keys()];
