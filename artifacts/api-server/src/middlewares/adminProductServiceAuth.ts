@@ -74,13 +74,7 @@ function isAllowedPortalRoute(req: Request): boolean {
     const keys = [...url.searchParams.keys()];
     return keys.every((key, index) => allowed.has(key) && keys.indexOf(key) === index);
   }
-  if (/^\/api\/store\/admin-portal\/products\/[a-f0-9]{24}$/i.test(path)) {
-    return method === "PATCH" && url.search === "";
-  }
-  if (/^\/api\/store\/admin-portal\/catalogs\/[a-f0-9]{24}$/i.test(path)) {
-    return method === "PATCH" && url.search === "";
-  }
-  if (path === `${base}/media`) return method === "POST" && url.search === "";
+  // All item-level mutations and media uploads are disabled on this branch.
   return false;
 }
 
