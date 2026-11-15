@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isAllowedPortalRoute } from "./adminProductServiceAuth.ts";
+import { isAllowedPortalRoute } from "./adminProductRoutePolicy.mjs";
 
 function request(method, originalUrl) {
   return { method, originalUrl };
