@@ -41,7 +41,7 @@ function signatureMatches(expectedHex: string, receivedHex: string): boolean {
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
-function isAllowedPortalRoute(req: Request): boolean {
+export function isAllowedPortalRoute(req: Request): boolean {
   let url: URL;
   try {
     url = new URL(req.originalUrl, "http://localhost");
