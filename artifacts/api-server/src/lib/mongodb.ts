@@ -1,10 +1,10 @@
 /**
  * MongoDB native driver client for the API server.
  *
- * Used exclusively for writing WebhookEvent documents — the bot (Mongoose)
- * owns the full schema; the API server only needs raw insert + minimal reads.
+ * Used for API-side MongoDB operations; the bot (Mongoose) owns the full
+ * business schemas. The API uses this client for minimal reads and writes.
  *
- * Connection is lazy-initialized on first use and reused across requests.
+ * Connection is lazy-initialized once and shared across concurrent requests.
  */
 
 import { MongoClient, type Db, type Collection } from "mongodb";
@@ -12,6 +12,7 @@ import { logger } from "./logger";
 
 let _client: MongoClient | null = null;
 let _db: Db | null = null;
+let _dbPromise: Promise<Db> | null = null;
 
 function getMongoUri(): string {
   const uri = process.env["MONGODB_URI"];
@@ -22,20 +23,42 @@ function getMongoUri(): string {
 export async function getDb(): Promise<Db> {
   if (_db) return _db;
 
-  _client = new MongoClient(getMongoUri(), {
-    serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 10000,
-  });
+  // Cache the in-flight connection as well as the connected DB. Without this,
+  // simultaneous cold-start requests can each create a MongoClient and race
+  // to overwrite the module-level client reference.
+  if (!_dbPromise) {
+    const client = new MongoClient(getMongoUri(), {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000,
+    });
+    _client = client;
 
-  await _client.connect();
-  _db = _client.db(); // uses the DB name from the URI
-  logger.info("MongoDB native client connected (API server)");
-  return _db;
+    _dbPromise = client
+      .connect()
+      .then(() => {
+        const db = client.db(); // uses the DB name from the URI
+        _db = db;
+        logger.info("MongoDB native client connected (API server)");
+        return db;
+      })
+      .catch(async (error: unknown) => {
+        if (_client === client) {
+          _client = null;
+          _db = null;
+          _dbPromise = null;
+        }
+        await client.close().catch(() => undefined);
+        throw error;
+      });
+  }
+
+  return _dbPromise;
 }
 
 export async function getClient(): Promise<MongoClient> {
-  if (!_client) await getDb();
-  return _client as MongoClient;
+  await getDb();
+  if (!_client) throw new Error("MongoDB client is not connected");
+  return _client;
 }
 
 export async function getCollection<T extends object>(
@@ -46,9 +69,15 @@ export async function getCollection<T extends object>(
 }
 
 export async function closeDb(): Promise<void> {
-  if (_client) {
-    await _client.close();
+  // Wait for a pending connection to settle before closing its client.
+  if (_dbPromise) await _dbPromise.catch(() => undefined);
+
+  const client = _client;
+  if (client) await client.close();
+
+  if (_client === client) {
     _client = null;
     _db = null;
+    _dbPromise = null;
   }
 }
